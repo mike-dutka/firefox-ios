@@ -246,18 +246,55 @@ class ActivityStreamTest: BaseTestCase {
         XCTAssertFalse(pagecontrolButton.exists, "The Page Control button must not exist. Only 5 elements should be on the page")
 
         loadWebPage("http://example.com")
-        app.buttons["TabToolbar.backButton"].tap()
+        if isiPad() == true {
+            app.buttons["URLBarView.backButton"].tap()
+        } else {
+            app.buttons["TabToolbar.backButton"].tap()
+        }
 
         loadWebPage("http://mozilla.org")
-        app.buttons["TabToolbar.backButton"].tap()
+        if isiPad() == true {
+            app.buttons["URLBarView.backButton"].tap()
+        } else {
+            app.buttons["TabToolbar.backButton"].tap()
+        }
 
-        loadWebPage("http://people.mozilla.org")
-        app.buttons["TabToolbar.backButton"].tap()
+        loadWebPage("http://flipkart.com")
+        if isiPad() == true {
+            app.buttons["URLBarView.backButton"].tap()
+        } else {
+            app.buttons["TabToolbar.backButton"].tap()
+        }
 
         loadWebPage("http://yahoo.com")
-        app.buttons["TabToolbar.backButton"].tap()
+        if isiPad() == true {
+            app.buttons["URLBarView.backButton"].tap()
+        } else {
+            app.buttons["TabToolbar.backButton"].tap()
+        }
 
-        XCTAssert(pagecontrolButton.exists, "The Page Control button must exist if more than 8 elements are displayed.")
+        if isiPad() == true {
+            loadWebPage("http://cvs.com")
+            app.buttons["URLBarView.backButton"].tap()
+
+            loadWebPage("http://walmart.com")
+            app.buttons["URLBarView.backButton"].tap()
+
+            loadWebPage("http://apple.com")
+            app.buttons["URLBarView.backButton"].tap()
+
+            loadWebPage("http://zara.com")
+            app.buttons["URLBarView.backButton"].tap()
+        }
+
+        app.textFields["url"].tap()
+
+        if isiPad() == true {
+            XCTAssert(pagecontrolButton.exists, "The Page Control button must exist if more than 12 elements are displayed.")
+        } else {
+            XCTAssert(pagecontrolButton.exists, "The Page Control button must exist if more than 8 elements are displayed.")
+        }
+
 
         pagecontrolButton.tap()
         pagecontrolButton.tap()
