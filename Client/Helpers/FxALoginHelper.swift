@@ -233,7 +233,6 @@ class FxALoginHelper {
     }
 
     fileprivate func pushRegistrationDidSucceed(apnsToken: String, pushRegistration: PushRegistration) {
-        NSLog("MOOMOO pushRegistrationDidSucceed apnsToken: \(apnsToken) pushRegistration: \(pushRegistration.defaultSubscription)")
         account.pushRegistration = pushRegistration
         readyForSyncing()
     }
