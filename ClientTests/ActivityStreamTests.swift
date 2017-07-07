@@ -57,8 +57,8 @@ extension ActivityStreamTests {
             "page": "NEW_TAB",
             "source": source,
             "action_position": position,
-            "app_version": AppInfo.appVersion,
-            "build": AppInfo.buildNumber,
+            "app_version": AppInfo.appVersion ?? "0.0",
+            "build": AppInfo.buildNumber ?? "0",
             "locale": Locale.current.identifier,
             "release_channel": AppConstants.BuildChannel.rawValue
         ]
@@ -69,8 +69,8 @@ extension ActivityStreamTests {
             "event": state,
             "page": "NEW_TAB",
             "source": source,
-            "app_version": AppInfo.appVersion,
-            "build": AppInfo.buildNumber,
+            "app_version": AppInfo.appVersion ?? "0.0",
+            "build": AppInfo.buildNumber ?? "0",
             "locale": Locale.current.identifier,
             "release_channel": AppConstants.BuildChannel.rawValue
         ]
