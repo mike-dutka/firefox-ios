@@ -54,8 +54,9 @@ class FxALoginHelper {
     // to changing of user settings and push notifications.
     func application(_ application: UIApplication, didLoadProfile profile: Profile) {
         self.profile = profile
+        self.account = profile.getAccount()
 
-        guard let account = profile.getAccount() else {
+        guard let account = self.account else {
             // There's no account, no further action.
             return loginDidFail()
         }
@@ -95,8 +96,6 @@ class FxALoginHelper {
         // By the time we reach here, we haven't registered for APNS
         // Either we've never asked the user, or the user declined, then re-enabled
         // the notification in the Settings app.
-
-        self.account = account
         requestUserNotifications(application)
     }
 
@@ -234,6 +233,7 @@ class FxALoginHelper {
     }
 
     fileprivate func pushRegistrationDidSucceed(apnsToken: String, pushRegistration: PushRegistration) {
+        NSLog("MOOMOO pushRegistrationDidSucceed apnsToken: \(apnsToken) pushRegistration: \(pushRegistration.defaultSubscription)")
         account.pushRegistration = pushRegistration
         readyForSyncing()
     }
@@ -303,7 +303,7 @@ class FxALoginHelper {
         // We need to associate the fxaDeviceId with sync;
         // We can do this anything after the first time we account.advance()
         // but before the first time we sync.
-        if let deviceRegistration = account.deviceRegistration,
+        if let deviceRegistration = account?.deviceRegistration,
             let scratchpadPrefs = profile?.prefs.branch("sync.scratchpad") {
             scratchpadPrefs.setString(deviceRegistration.toJSON().stringValue()!, forKey: PrefDeviceRegistration)
         }
