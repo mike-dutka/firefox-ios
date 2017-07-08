@@ -3,13 +3,15 @@
 
 Mozilla wants to engage with users more. MMA is the project for this purpose. When a user performs a certain UI action (or set of UI actions), she will see a prompt and have a chance to interact with it. For example, if a user uses Firefox 10 times a week, but Firefox is not her default browser, we'll prompt the user the next time when she launches our app, and guide her to set us as default browser.
 
-Starting in Firefox 8.0 on iOS, Mozilla is using a third party framework called "Leanplum" in order to achieve this. Leanplum is a San Francisco company, founded in 2012. We put their SDK in our codebase and sync upstream when there's a major update. Please find it in ``mobile/android/thirdparty/com/leanplum``.
-The SDK is documented at https://www.leanplum.com/docs/android/
+Starting in Firefox 8.0 on iOS, Mozilla is using a third party framework called "Leanplum" in order to achieve this. Leanplum is a San Francisco company, founded in 2012. We put their SDK in our codebase via Carthage
+
+The SDK is documented at https://www.leanplum.com/docs/ios
 
 There are three major component in Leanplum SDK.
-1. Events : Triggers when users perform certain actions. An event will normally trigger a prompt message.
-2. Deep Links : Actions that users can perform to interact with the prompt message.
-3. Messages :  Campaigns that we want to engage with users. Messages is a combination of an Event and a Deep Link.
+1. Events : Events are fired when users perform certain actions. An event or a series of events plus some User Attributes may trigger a Message.
+2. User Attributes: User Attributes are set on a per-user basis, and inform us about an aspect of the user.
+3. Deep Links : Actions that users can perform to interact with the Message.
+4. Messages :  User Interaction points that we want to engage with users that help them use Firefox better.
 
 
 Data collection
