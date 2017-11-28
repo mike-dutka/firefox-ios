@@ -77,7 +77,7 @@ class DefaultPingCentreImpl: PingCentreClient {
     fileprivate let manager: SessionManager
 
     fileprivate let validationQueue: DispatchQueue
-    fileprivate static let queueLabel = "org.mozilla.pingcentre.validationQueue"
+    fileprivate static let queueLabel = "mdut.pingcentre.validationQueue"
 
     init(topic: PingCentreTopic, endpoint: Endpoint, clientID: String,
          validationQueue: DispatchQueue = DispatchQueue(label: queueLabel),

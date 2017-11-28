@@ -877,7 +877,7 @@ open class ConcreteSQLiteDBConnection: SQLiteDBConnection {
             }
         }
 
-        return NSError(domain: "org.mozilla", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
+        return NSError(domain: "mdut", code: status, userInfo: [NSLocalizedDescriptionKey: msg])
     }
 
     /// Open the connection. This is called when the db is created. You should not call it yourself.

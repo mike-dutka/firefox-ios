@@ -9,7 +9,7 @@ import MobileCoreServices
 import WebKit
 
 private let log = Logger.browserLogger
-private let browsingActivityType: String = "org.mozilla.ios.firefox.browsing"
+private let browsingActivityType: String = "mdut.ios.firefox.browsing"
 
 class SpotlightHelper: NSObject {
     fileprivate(set) var activity: NSUserActivity? {

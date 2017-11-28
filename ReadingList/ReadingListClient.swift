@@ -44,7 +44,7 @@ enum ReadingListBatchAddRecordsResult {
     case error(NSError)
 }
 
-private let ReadingListClientUnknownError = NSError(domain: "org.mozilla.ios.Fennec.ReadingListClient", code: -1, userInfo: nil)
+private let ReadingListClientUnknownError = NSError(domain: "mdut.ios.Fennec.ReadingListClient", code: -1, userInfo: nil)
 
 class ReadingListClient {
     var serviceURL: URL
