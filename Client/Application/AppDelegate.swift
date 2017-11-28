@@ -44,6 +44,24 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
 
     var receivedURLs: [URL]?
     var unifiedTelemetry: UnifiedTelemetry?
+    
+    lazy private var blockView: BlockView = {
+        let v = BlockView()
+        v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        return v
+    }()
+    
+    private func hide() {
+        guard blockView.superview == nil else{
+            return
+        }
+        
+        if let win = self.window?.rootViewController?.view {//UIApplication.sharedApplication().keyWindow!
+            blockView.frame = win.bounds
+            win.addSubview(blockView)
+            win.bringSubview(toFront: blockView)
+        }
+    }
 
     @discardableResult func application(_ application: UIApplication, willFinishLaunchingWithOptions launchOptions: [UIApplicationLaunchOptionsKey: Any]?) -> Bool {
         //
@@ -75,6 +93,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
         if DebugSettingsBundleOptions.launchIntoEmailComposer {
             self.window?.rootViewController = UIViewController()
             presentEmailComposerWithLogs()
+            
+            hide()
+            
             return true
         } else {
             return startApplication(application, withLaunchOptions: launchOptions)
@@ -176,6 +197,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
         setUpDeepLinks(application: application)
 
         log.info("startApplication end")
+        
+        hide()
+        
         return true
     }
 
@@ -255,6 +279,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
         })
     }
 
+    func applicationWillResignActive(_ application: UIApplication) {
+        hide()
+    }
+    
     func applicationWillTerminate(_ application: UIApplication) {
         // We have only five seconds here, so let's hope this doesn't take too long.
         self.profile?.shutdown()
