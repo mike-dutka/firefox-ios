@@ -4,7 +4,7 @@
 
 import XCTest
 
-// NOTE: This test should be DISABLED on XCUITEST/UITEST scheme. This test should be run in conjunction with 
+// NOTE: This test should be DISABLED on XCUITEST/UITEST scheme. This test should be run in conjunction with
 // XCode Profiler to measure the memory/CPU load
 class SiteLoadTest: BaseTestCase {
     func testLoadSite() {
@@ -15,13 +15,13 @@ class SiteLoadTest: BaseTestCase {
         var counter = 0
         while Date() < futureDate {
             navigator.goto(URLBarOpen)
-            navigator.openURL(urlString: site[counter % 5])
+            navigator.openURL(site[counter % 5])
             sleep(5)
 
             navigator.nowAt(BrowserTab)
             navigator.goto(TabTray)
 
-            navigator.closeAllTabs()
+            navigator.performAction(Action.AcceptRemovingAllTabs)
             navigator.goto(BrowserTab)
             waitforNoExistence(app.staticTexts["1 tab(s) closed"])
 

@@ -5,12 +5,11 @@
 import UIKit
 import Shared
 import Storage
-import ReadingList
 import WebKit
 
-protocol TabPeekDelegate: class {
+protocol TabPeekDelegate: AnyObject {
     func tabPeekDidAddBookmark(_ tab: Tab)
-    @discardableResult func tabPeekDidAddToReadingList(_ tab: Tab) -> ReadingListClientRecord?
+    @discardableResult func tabPeekDidAddToReadingList(_ tab: Tab) -> ReadingListItem?
     func tabPeekRequestsPresentationOf(_ viewController: UIViewController)
     func tabPeekDidCloseTab(_ tab: Tab)
 }
@@ -35,6 +34,12 @@ class TabPeekViewController: UIViewController, WKNavigationDelegate {
     fileprivate var previewAccessibilityLabel: String!
 
     // Preview action items.
+    override var previewActionItems: [UIPreviewActionItem] {
+        get {
+            return previewActions
+        }
+    }
+
     lazy var previewActions: [UIPreviewActionItem] = {
         var actions = [UIPreviewActionItem]()
 
@@ -115,7 +120,7 @@ class TabPeekViewController: UIViewController, WKNavigationDelegate {
         guard let webView = webView, let url = webView.url, !isIgnoredURL(url) else { return }
         let clonedWebView = WKWebView(frame: webView.frame, configuration: webView.configuration)
         clonedWebView.allowsLinkPreview = false
-        webView.accessibilityLabel = previewAccessibilityLabel
+        clonedWebView.accessibilityLabel = previewAccessibilityLabel
         self.view.addSubview(clonedWebView)
 
         clonedWebView.snp.makeConstraints { make in
@@ -134,7 +139,7 @@ class TabPeekViewController: UIViewController, WKNavigationDelegate {
             return
         }
 
-        guard let displayURL = tab.url?.absoluteString, displayURL.characters.count > 0 else {
+        guard let displayURL = tab.url?.absoluteString, !displayURL.isEmpty else {
             return
         }
 
@@ -161,9 +166,9 @@ class TabPeekViewController: UIViewController, WKNavigationDelegate {
             self.clientPicker = UINavigationController(rootViewController: clientPickerController)
         }
 
-        let result = browserProfile.readingList?.getRecordWithURL(displayURL).successValue!
+        let result = browserProfile.readingList.getRecordWithURL(displayURL).value.successValue
 
-        self.isInReadingList = (result?.url.characters.count ?? 0) > 0
+        self.isInReadingList = !(result?.url.isEmpty ?? true)
         self.ignoreURL = isIgnoredURL(displayURL)
     }
 

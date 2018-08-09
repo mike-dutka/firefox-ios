@@ -7,14 +7,16 @@ import XCTest
 let website1: [String: String] = ["url": "www.mozilla.org", "label": "Internet for people, not profit — Mozilla", "value": "mozilla.org"]
 let website2 = "example.com"
 
+let PDFWebsite = ["url": "http://www.pdf995.com/samples/pdf.pdf"]
+
 class ToolbarTests: BaseTestCase {
     override func setUp() {
         super.setUp()
-        XCUIDevice.shared().orientation = UIDeviceOrientation.landscapeLeft
+        XCUIDevice.shared.orientation = UIDeviceOrientation.landscapeLeft
     }
 
     override func tearDown() {
-        XCUIDevice.shared().orientation = UIDeviceOrientation.portrait
+        XCUIDevice.shared.orientation = UIDeviceOrientation.portrait
         super.tearDown()
     }
 
@@ -33,14 +35,14 @@ class ToolbarTests: BaseTestCase {
         XCTAssertFalse(app.buttons["Reload"].isEnabled)
 
         // Navigate to two pages and press back once so that all buttons are enabled in landscape mode.
-        navigator.openURL(urlString: website1["url"]!)
+        navigator.openURL(website1["url"]!)
         waitForValueContains(app.textFields["url"], value: website1["value"]!)
 
         XCTAssertTrue(app.buttons["URLBarView.backButton"].isEnabled)
         XCTAssertFalse(app.buttons["Forward"].isEnabled)
         XCTAssertTrue(app.buttons["Reload"].isEnabled)
 
-        navigator.openURL(urlString: website2)
+        navigator.openURL(website2)
         waitUntilPageLoad()
         waitForValueContains(app.textFields["url"], value: website2)
         XCTAssertTrue(app.buttons["URLBarView.backButton"].isEnabled)
@@ -76,7 +78,7 @@ class ToolbarTests: BaseTestCase {
     }
 
     func testClearURLTextUsingBackspace() {
-        navigator.openURL(urlString: website1["url"]!)
+        navigator.openURL(website1["url"]!)
         waitForValueContains(app.textFields["url"], value: website1["value"]!)
 
         // Simulate pressing on backspace key should remove the text
@@ -85,5 +87,65 @@ class ToolbarTests: BaseTestCase {
 
         let value = app.textFields["address"].value
         XCTAssertEqual(value as? String, "", "The url has not been removed correctly")
+    }
+
+    func testShowToolbarWhenScrollingDefaultOption() {
+        navigator.goto(SettingsScreen)
+        // Check that the setting is off by default
+        XCTAssertFalse(app.cells.switches["AlwaysShowToolbar"].isSelected)
+    }
+
+    func testShowDoNotShowToolbarWhenScrollingPortrait() {
+        XCUIDevice.shared.orientation = UIDeviceOrientation.portrait
+        // The toolbar should dissapear when scrolling up
+        navigator.openURL(PDFWebsite["url"]!)
+        waitUntilPageLoad()
+
+        // Swipe Up and check that the toolbar is not available and Down and it is available again
+        let toolbarElement = app.buttons["TopTabsViewController.tabsButton"]
+        let element = app/*@START_MENU_TOKEN@*/.webViews/*[[".otherElements[\"Web content\"].webViews",".otherElements[\"contentView\"].webViews",".webViews"],[[[-1,2],[-1,1],[-1,0]]],[0]]@END_MENU_TOKEN@*/.children(matching: .other).element.children(matching: .other).element(boundBy: 0)
+        element.swipeUp()
+        XCTAssertFalse(toolbarElement.isHittable)
+
+        element.swipeDown()
+        XCTAssertTrue(toolbarElement.isHittable)
+
+        // Change the setting
+        navigator.goto(SettingsScreen)
+        navigator.performAction(Action.ToggleShowToolbarWhenScrolling)
+        XCTAssertTrue(toolbarElement.isHittable)
+
+        // The toolbar should not dissapear when scrolling up
+        element.swipeUp()
+        XCTAssertTrue(toolbarElement.isHittable)
+        element.swipeDown()
+        XCTAssertTrue(toolbarElement.isHittable)
+    }
+
+    func testShowDoNotShowToolbarWhenScrollingLandscape() {
+        // The toolbar should dissapear when scrolling up
+        navigator.openURL(PDFWebsite["url"]!)
+        waitUntilPageLoad()
+
+        // Swipe Up and check that the toolbar is not available and Down and it is available again
+        let toolbarElement = app.buttons["TopTabsViewController.tabsButton"]
+        let element = app/*@START_MENU_TOKEN@*/.webViews/*[[".otherElements[\"Web content\"].webViews",".otherElements[\"contentView\"].webViews",".webViews"],[[[-1,2],[-1,1],[-1,0]]],[0]]@END_MENU_TOKEN@*/.children(matching: .other).element.children(matching: .other).element(boundBy: 0)
+        element.swipeUp()
+        XCTAssertFalse(toolbarElement.isHittable)
+
+        element.swipeDown()
+        XCTAssertTrue(toolbarElement.isHittable)
+
+        // Change the setting
+        navigator.goto(SettingsScreen)
+        navigator.performAction(Action.ToggleShowToolbarWhenScrolling)
+        XCTAssertTrue(toolbarElement.isHittable)
+        XCTAssertTrue(toolbarElement.isHittable)
+
+        // The toolbar should not dissapear when scrolling up
+        element.swipeUp()
+        XCTAssertTrue(toolbarElement.isHittable)
+        element.swipeDown()
+        XCTAssertTrue(toolbarElement.isHittable)
     }
 }

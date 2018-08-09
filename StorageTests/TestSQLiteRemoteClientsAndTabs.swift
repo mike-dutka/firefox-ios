@@ -94,10 +94,6 @@ open class MockRemoteClientsAndTabs: RemoteClientsAndTabs {
             }?.client)
     }
 
-    open func getClientWithId(_ clientID: GUID) -> Deferred<Maybe<RemoteClient?>> {
-        return getClient(guid: clientID)
-    }
-
     open func getClientGUIDs() -> Deferred<Maybe<Set<GUID>>> {
         return deferMaybe(Set<GUID>(optFilter(self.clientsAndTabs.map { $0.client.guid })))
     }
@@ -291,13 +287,13 @@ class SQLRemoteClientsAndTabsTests: XCTestCase {
 
         _ = clientsAndTabs.replaceRemoteDevices([device1, device2, device3, device4]).succeeded()
 
-        let devices = clientsAndTabs.db.runQuery("SELECT * FROM \(TableRemoteDevices)", args: nil, factory: remoteDeviceFactory).value.successValue!.asArray()
+        let devices = clientsAndTabs.db.runQuery("SELECT * FROM remote_devices", args: nil, factory: remoteDeviceFactory).value.successValue!.asArray()
         XCTAssertEqual(devices.count, 1) // Fauly devices + local device were not inserted.
 
         let device5 = RemoteDevice(id: "fx5", name: "Device 5", type: "mobile", isCurrentDevice: false, lastAccessTime: 12345678)
         _ = clientsAndTabs.replaceRemoteDevices([device5]).succeeded()
 
-        let newDevices = clientsAndTabs.db.runQuery("SELECT * FROM \(TableRemoteDevices)", args: nil, factory: remoteDeviceFactory).value.successValue!.asArray()
+        let newDevices = clientsAndTabs.db.runQuery("SELECT * FROM remote_devices", args: nil, factory: remoteDeviceFactory).value.successValue!.asArray()
         XCTAssertEqual(newDevices.count, 1) // replaceRemoteDevices wipes the whole list before inserting.
     }
 }

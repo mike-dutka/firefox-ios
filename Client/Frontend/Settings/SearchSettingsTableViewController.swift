@@ -6,11 +6,11 @@ import UIKit
 import SDWebImage
 import Shared
 
-protocol SearchEnginePickerDelegate: class {
+protocol SearchEnginePickerDelegate: AnyObject {
     func searchEnginePicker(_ searchEnginePicker: SearchEnginePicker?, didSelectSearchEngine engine: OpenSearchEngine?)
 }
 
-class SearchSettingsTableViewController: UITableViewController {
+class SearchSettingsTableViewController: ThemedTableViewController {
     fileprivate let SectionDefault = 0
     fileprivate let ItemDefaultEngine = 0
     fileprivate let ItemDefaultSuggestions = 1
@@ -20,14 +20,14 @@ class SearchSettingsTableViewController: UITableViewController {
     fileprivate let NumberOfSections = 2
     fileprivate let IconSize = CGSize(width: OpenSearchEngine.PreferredIconSize, height: OpenSearchEngine.PreferredIconSize)
     fileprivate let SectionHeaderIdentifier = "SectionHeaderIdentifier"
-    
+
     fileprivate var showDeletion = false
-    
+
     var profile: Profile?
     var tabManager: TabManager?
 
     fileprivate var isEditable: Bool {
-        // If the default engine is a custom one, make sure we have more than one since we can't edit the default. 
+        // If the default engine is a custom one, make sure we have more than one since we can't edit the default.
         // Otherwise, enable editing if we have at least one custom engine.
         let customEngineCount = model.orderedEngines.filter({$0.isCustomEngine}).count
         return model.defaultEngine.isCustomEngine ? customEngineCount > 1 : customEngineCount > 0
@@ -45,22 +45,19 @@ class SearchSettingsTableViewController: UITableViewController {
         // So that we push the default search engine controller on selection.
         tableView.allowsSelectionDuringEditing = true
 
-        tableView.register(SettingsTableSectionHeaderFooterView.self, forHeaderFooterViewReuseIdentifier: SectionHeaderIdentifier)
+        tableView.register(ThemedTableSectionHeaderFooterView.self, forHeaderFooterViewReuseIdentifier: SectionHeaderIdentifier)
 
         // Insert Done button if being presented outside of the Settings Nav stack
         if !(self.navigationController is SettingsNavigationController) {
             self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.SettingsSearchDoneButton, style: .done, target: self, action: #selector(self.dismissAnimated))
         }
 
-        let footer = SettingsTableSectionHeaderFooterView(frame: CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 44))
+        let footer = ThemedTableSectionHeaderFooterView(frame: CGRect(width: tableView.bounds.width, height: 44))
         footer.showBottomBorder = false
         tableView.tableFooterView = footer
 
-        tableView.separatorColor = SettingsUX.TableViewSeparatorColor
-        tableView.backgroundColor = SettingsUX.TableViewHeaderBackgroundColor
-
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: Strings.SettingsSearchEditButton, style: .plain, target: self,
-                                                                 action: #selector(SearchSettingsTableViewController.beginEditing))
+                                                                 action: #selector(beginEditing))
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -77,15 +74,14 @@ class SearchSettingsTableViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        var cell: UITableViewCell!
+        let cell = ThemedTableViewCell()
         var engine: OpenSearchEngine!
 
         if indexPath.section == SectionDefault {
             switch indexPath.item {
             case ItemDefaultEngine:
                 engine = model.defaultEngine
-                cell = UITableViewCell(style: UITableViewCellStyle.default, reuseIdentifier: nil)
-                cell.editingAccessoryType = UITableViewCellAccessoryType.disclosureIndicator
+                cell.editingAccessoryType = .disclosureIndicator
                 cell.accessibilityLabel = NSLocalizedString("Default Search Engine", comment: "Accessibility label for default search engine setting.")
                 cell.accessibilityValue = engine.shortName
                 cell.textLabel?.text = engine.shortName
@@ -93,11 +89,10 @@ class SearchSettingsTableViewController: UITableViewController {
                 cell.imageView?.layer.cornerRadius = 4
                 cell.imageView?.layer.masksToBounds = true
             case ItemDefaultSuggestions:
-                cell = UITableViewCell(style: UITableViewCellStyle.default, reuseIdentifier: nil)
                 cell.textLabel?.text = NSLocalizedString("Show Search Suggestions", comment: "Label for show search suggestions setting.")
                 let toggle = UISwitch()
-                toggle.onTintColor = UIConstants.ControlTintColor
-                toggle.addTarget(self, action: #selector(SearchSettingsTableViewController.didToggleSearchSuggestions(_:)), for: UIControlEvents.valueChanged)
+                toggle.onTintColor = UIColor.theme.tableView.controlTint
+                toggle.addTarget(self, action: #selector(didToggleSearchSuggestions), for: .valueChanged)
                 toggle.isOn = model.shouldShowSearchSuggestions
                 cell.editingAccessoryView = toggle
                 cell.selectionStyle = .none
@@ -110,15 +105,13 @@ class SearchSettingsTableViewController: UITableViewController {
             let index = indexPath.item + 1
             if index < model.orderedEngines.count {
                 engine = model.orderedEngines[index]
-
-                cell = UITableViewCell(style: UITableViewCellStyle.default, reuseIdentifier: nil)
                 cell.showsReorderControl = true
 
                 let toggle = UISwitch()
-                toggle.onTintColor = UIConstants.ControlTintColor
+                toggle.onTintColor = UIColor.theme.tableView.controlTint
                 // This is an easy way to get from the toggle control to the corresponding index.
                 toggle.tag = index
-                toggle.addTarget(self, action: #selector(SearchSettingsTableViewController.didToggleEngine(_:)), for: UIControlEvents.valueChanged)
+                toggle.addTarget(self, action: #selector(didToggleEngine), for: .valueChanged)
                 toggle.isOn = model.isEngineEnabled(engine)
 
                 cell.editingAccessoryView = toggle
@@ -130,8 +123,7 @@ class SearchSettingsTableViewController: UITableViewController {
                 cell.imageView?.layer.masksToBounds = true
                 cell.selectionStyle = .none
             } else {
-                cell = UITableViewCell(style: UITableViewCellStyle.default, reuseIdentifier: nil)
-                cell.editingAccessoryType = UITableViewCellAccessoryType.disclosureIndicator
+                cell.editingAccessoryType = .disclosureIndicator
                 cell.accessibilityLabel = Strings.SettingsAddCustomEngineTitle
                 cell.accessibilityIdentifier = "customEngineViewButton"
                 cell.textLabel?.text = Strings.SettingsAddCustomEngine
@@ -139,7 +131,7 @@ class SearchSettingsTableViewController: UITableViewController {
         }
 
         // So that the seperator line goes all the way to the left edge.
-        cell.separatorInset = UIEdgeInsets.zero
+        cell.separatorInset = .zero
 
         return cell
     }
@@ -154,7 +146,7 @@ class SearchSettingsTableViewController: UITableViewController {
         } else {
             // The first engine -- the default engine -- is not shown in the quick search engine list.
             // But the option to add Custom Engine is.
-            return AppConstants.MOZ_CUSTOM_SEARCH_ENGINE ? model.orderedEngines.count : model.orderedEngines.count - 1
+            return model.orderedEngines.count
         }
     }
 
@@ -209,7 +201,7 @@ class SearchSettingsTableViewController: UITableViewController {
     }
 
     override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-        let headerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: SectionHeaderIdentifier) as! SettingsTableSectionHeaderFooterView
+        let headerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: SectionHeaderIdentifier) as! ThemedTableSectionHeaderFooterView
         var sectionTitle: String
         if section == SectionDefault {
             sectionTitle = NSLocalizedString("Default Search Engine", comment: "Title for default search engine settings section.")
@@ -281,14 +273,14 @@ class SearchSettingsTableViewController: UITableViewController {
         }
         navigationItem.rightBarButtonItem?.isEnabled = isEditable
         navigationItem.rightBarButtonItem?.action = editing ?
-            #selector(SearchSettingsTableViewController.finishEditing) : #selector(SearchSettingsTableViewController.beginEditing)
+            #selector(finishEditing) : #selector(beginEditing)
         tableView.reloadData()
     }
 }
 
 // MARK: - Selectors
 extension SearchSettingsTableViewController {
-    func didToggleEngine(_ toggle: UISwitch) {
+    @objc func didToggleEngine(_ toggle: UISwitch) {
         let engine = model.orderedEngines[toggle.tag] // The tag is 1-based.
         if toggle.isOn {
             model.enableEngine(engine)
@@ -297,7 +289,7 @@ extension SearchSettingsTableViewController {
         }
     }
 
-    func didToggleSearchSuggestions(_ toggle: UISwitch) {
+    @objc func didToggleSearchSuggestions(_ toggle: UISwitch) {
         // Setting the value in settings dismisses any opt-in.
         model.shouldShowSearchSuggestions = toggle.isOn
     }
@@ -306,15 +298,15 @@ extension SearchSettingsTableViewController {
         _ = navigationController?.popViewController(animated: true)
     }
 
-    func dismissAnimated() {
+    @objc func dismissAnimated() {
         self.dismiss(animated: true, completion: nil)
     }
 
-    func beginEditing() {
+    @objc func beginEditing() {
         setEditing(true, animated: false)
     }
 
-    func finishEditing() {
+    @objc func finishEditing() {
         setEditing(false, animated: false)
     }
 }
@@ -324,6 +316,7 @@ extension SearchSettingsTableViewController: SearchEnginePickerDelegate {
         if let engine = searchEngine {
             model.defaultEngine = engine
             self.tableView.reloadData()
+            UnifiedTelemetry.recordEvent(category: .action, method: .change, object: .setting, value: "defaultSearchEngine", extras: ["to": engine.engineID ?? "custom"])
         }
         _ = navigationController?.popViewController(animated: true)
     }

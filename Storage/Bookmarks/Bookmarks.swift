@@ -2,7 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import Foundation
 import UIKit
 import Shared
 import Deferred
@@ -10,11 +9,11 @@ import SwiftyJSON
 
 private let log = Logger.syncLogger
 
-public protocol SearchableBookmarks: class {
+public protocol SearchableBookmarks: AnyObject {
     func bookmarksByURL(_ url: URL) -> Deferred<Maybe<Cursor<BookmarkItem>>>
 }
 
-public protocol SyncableBookmarks: class, ResettableSyncStorage, AccountRemovalDelegate {
+public protocol SyncableBookmarks: AnyObject, ResettableSyncStorage, AccountRemovalDelegate {
     // TODO
     func isUnchanged() -> Deferred<Maybe<Bool>>
     func getLocalBookmarksModifications(limit: Int) -> Deferred<Maybe<(deletions: [GUID], additions: [BookmarkMirrorItem])>>
@@ -25,9 +24,7 @@ public protocol SyncableBookmarks: class, ResettableSyncStorage, AccountRemovalD
     func applyBufferUpdatedCompletionOp(_ op: BufferUpdatedCompletionOp) -> Success
 }
 
-public let NotificationBookmarkBufferValidated = Notification.Name("NotificationBookmarkBufferValidated")
-
-public protocol BookmarkBufferStorage: class {
+public protocol BookmarkBufferStorage: AnyObject {
     func isEmpty() -> Deferred<Maybe<Bool>>
     func applyRecords(_ records: [BookmarkMirrorItem]) -> Success
     func doneApplyingRecordsAfterDownload() -> Success
@@ -41,20 +38,20 @@ public protocol BookmarkBufferStorage: class {
     func getUpstreamRecordCount() -> Deferred<Int?>
 }
 
-public protocol MirrorItemSource: class {
+public protocol MirrorItemSource: AnyObject {
     func getMirrorItemWithGUID(_ guid: GUID) -> Deferred<Maybe<BookmarkMirrorItem>>
     func getMirrorItemsWithGUIDs<T: Collection>(_ guids: T) -> Deferred<Maybe<[GUID: BookmarkMirrorItem]>> where T.Iterator.Element == GUID
     func prefetchMirrorItemsWithGUIDs<T: Collection>(_ guids: T) -> Success where T.Iterator.Element == GUID
 }
 
-public protocol BufferItemSource: class {
+public protocol BufferItemSource: AnyObject {
     func getBufferItemWithGUID(_ guid: GUID) -> Deferred<Maybe<BookmarkMirrorItem>>
     func getBufferItemsWithGUIDs<T: Collection>(_ guids: T) -> Deferred<Maybe<[GUID: BookmarkMirrorItem]>> where T.Iterator.Element == GUID
     func getBufferChildrenGUIDsForParent(_ guid: GUID) -> Deferred<Maybe<[GUID]>>
     func prefetchBufferItemsWithGUIDs<T: Collection>(_ guids: T) -> Success where T.Iterator.Element == GUID
 }
 
-public protocol LocalItemSource: class {
+public protocol LocalItemSource: AnyObject {
     func getLocalItemWithGUID(_ guid: GUID) -> Deferred<Maybe<BookmarkMirrorItem>>
     func getLocalItemsWithGUIDs<T: Collection>(_ guids: T) -> Deferred<Maybe<[GUID: BookmarkMirrorItem]>> where T.Iterator.Element == GUID
     func prefetchLocalItemsWithGUIDs<T: Collection>(_ guids: T) -> Success where T.Iterator.Element == GUID

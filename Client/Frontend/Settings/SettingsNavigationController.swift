@@ -7,7 +7,7 @@ import UIKit
 class SettingsNavigationController: UINavigationController {
     var popoverDelegate: PresentingModalViewControllerDelegate?
 
-    func SELdone() {
+    @objc func done() {
         if let delegate = popoverDelegate {
             delegate.dismissPresentedModalViewController(self, animated: true)
         } else {
@@ -16,7 +16,20 @@ class SettingsNavigationController: UINavigationController {
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle {
-        return UIStatusBarStyle.default
+        return ThemeManager.instance.statusBarStyle
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        applyTheme()
+    }
+}
+
+extension SettingsNavigationController: Themeable {
+    func applyTheme() {
+        navigationBar.barTintColor = UIColor.theme.tableView.headerBackground
+        navigationBar.titleTextAttributes = [NSAttributedStringKey.foregroundColor: UIColor.theme.tableView.headerTextDark]
+        setNeedsStatusBarAppearanceUpdate()
     }
 }
 
@@ -26,6 +39,6 @@ protocol PresentingModalViewControllerDelegate {
 
 class ModalSettingsNavigationController: UINavigationController {
     override var preferredStatusBarStyle: UIStatusBarStyle {
-        return UIStatusBarStyle.default
+        return .default
     }
 }

@@ -14,13 +14,9 @@ open class KeyBundle: Hashable {
     let encKey: Data
     let hmacKey: Data
 
-    open class func fromKB(_ kB: Data) -> KeyBundle {
-        let salt = Data()
-        let contextInfo = FxAClient10.KW("oldsync")
-        let len: UInt = 64               // KeyLength + KeyLength, without type nonsense.
-        let derived = (kB as NSData).deriveHKDFSHA256Key(withSalt: salt, contextInfo: contextInfo, length: len)!
-        return KeyBundle(encKey: derived.subdata(in: 0..<KeyLength),
-                         hmacKey: derived.subdata(in: KeyLength..<(2 * KeyLength)))
+    open class func fromKSync(_ kSync: Data) -> KeyBundle {
+        return KeyBundle(encKey: kSync.subdata(in: 0..<KeyLength),
+                         hmacKey: kSync.subdata(in: KeyLength..<(2 * KeyLength)))
     }
 
     open class func random() -> KeyBundle {
@@ -61,8 +57,8 @@ open class KeyBundle: Hashable {
         let (result, digestLen) = _hmac(ciphertext)
         let data = NSMutableData(bytes: result, length: digestLen)
 
-        result.deinitialize()
-        result.deallocate(capacity: digestLen)
+        result.deinitialize(count: digestLen)
+        result.deallocate()
         return data as Data
     }
 
@@ -76,8 +72,8 @@ open class KeyBundle: Hashable {
             hash.appendFormat("%02x", result[i])
         }
 
-        result.deinitialize()
-        result.deallocate(capacity: digestLen)
+        result.deinitialize(count: digestLen)
+        result.deallocate()
         return String(hash)
     }
 
@@ -85,38 +81,36 @@ open class KeyBundle: Hashable {
         let iv = iv ?? Bytes.generateRandomBytes(16)
 
         let (success, b, copied) = self.crypt(cleartext, iv: iv, op: CCOperation(kCCEncrypt))
-        let byteCount = cleartext.count + kCCBlockSizeAES128
         if success == CCCryptorStatus(kCCSuccess) {
             // Hooray!
             let d = Data(bytes: b, count: Int(copied))
-            b.deallocate(bytes: byteCount, alignedTo: MemoryLayout<Void>.size)
+            b.deallocate()
             return (d, iv)
         }
 
-        b.deallocate(bytes: byteCount, alignedTo: MemoryLayout<Void>.size)
+        b.deallocate()
         return nil
     }
 
     // You *must* verify HMAC before calling this.
     open func decrypt(_ ciphertext: Data, iv: Data) -> String? {
         let (success, b, copied) = self.crypt(ciphertext, iv: iv, op: CCOperation(kCCDecrypt))
-        let byteCount = ciphertext.count + kCCBlockSizeAES128
         if success == CCCryptorStatus(kCCSuccess) {
             // Hooray!
             let d = Data(bytes: b, count: Int(copied))
-            let s = NSString(data: d, encoding: String.Encoding.utf8.rawValue)
-            b.deallocate(bytes: byteCount, alignedTo: MemoryLayout<Void>.size)
-            return s as String?
+            let s = String(data: d, encoding: .utf8)
+            b.deallocate()
+            return s
         }
 
-        b.deallocate(bytes: byteCount, alignedTo: MemoryLayout<Void>.size)
+        b.deallocate()
         return nil
     }
 
     fileprivate func crypt(_ input: Data, iv: Data, op: CCOperation) -> (status: CCCryptorStatus, buffer: UnsafeMutableRawPointer, count: Int) {
         let resultSize = input.count + kCCBlockSizeAES128
         var copied: Int = 0
-        let result = UnsafeMutableRawPointer.allocate(bytes: resultSize, alignedTo: MemoryLayout<Void>.size)
+        let result = UnsafeMutableRawPointer.allocate(byteCount: resultSize, alignment: MemoryLayout<Void>.size)
 
         let success: CCCryptorStatus =
         CCCrypt(op,
@@ -179,17 +173,12 @@ open class KeyBundle: Hashable {
                 // record to the server!
                 return nil
             }
+            // Get the most basic kind of encoding: no pretty printing.
+            // This can throw; if so, we return nil.
+            // `rawData` simply calls JSONSerialization.dataWithJSONObject:options:error, which
+            // guarantees UTF-8 encoded output.
 
-            let bytes: Data
-            do {
-                // Get the most basic kind of encoding: no pretty printing.
-                // This can throw; if so, we return nil.
-                // `rawData` simply calls JSONSerialization.dataWithJSONObject:options:error, which
-                // guarantees UTF-8 encoded output.
-                bytes = try json.rawData(options: [])
-            } catch {
-                return nil
-            }
+            guard let bytes: Data = try? json.rawData(options: []) else { return nil }
 
             // Given a valid non-null JSON object, we don't ever expect a round-trip to fail.
             assert(!JSON(bytes).isNull())
@@ -206,14 +195,14 @@ open class KeyBundle: Hashable {
                     let iv = iv.base64EncodedString
 
                     // The payload is stringified JSON. Yes, I know.
-                    let payload: Any = JSON(object: ["ciphertext": ciphertext, "IV": iv, "hmac": hmac]).stringValue()! as Any
+                    let payload: Any = JSON(["ciphertext": ciphertext, "IV": iv, "hmac": hmac]).stringValue()! as Any
                     let obj = ["id": record.id,
                                "sortindex": record.sortindex,
                                // This is how SwiftyJSON wants us to express a null that we want to
                                // serialize. Yes, this is gross.
                                "ttl": record.ttl ?? NSNull(),
                                "payload": payload]
-                    return JSON(object: obj)
+                    return JSON(obj)
                 }
             }
             return nil
@@ -227,11 +216,10 @@ open class KeyBundle: Hashable {
     open var hashValue: Int {
         return "\(self.encKey.base64EncodedString) \(self.hmacKey.base64EncodedString)".hashValue
     }
-}
 
-public func == (lhs: KeyBundle, rhs: KeyBundle) -> Bool {
-    return (lhs.encKey == rhs.encKey) &&
-           (lhs.hmacKey == rhs.hmacKey)
+    public static func ==(lhs: KeyBundle, rhs: KeyBundle) -> Bool {
+        return lhs.encKey == rhs.encKey && lhs.hmacKey == rhs.hmacKey
+    }
 }
 
 open class Keys: Equatable {
@@ -245,13 +233,12 @@ open class Keys: Equatable {
     }
 
     public init(payload: KeysPayload?) {
-        if let payload = payload, payload.isValid() {
-            if let keys = payload.defaultKeys {
-                self.defaultBundle = keys
-                self.collectionKeys = payload.collectionKeys
-                self.valid = true
-                return
-            }
+        if let payload = payload, payload.isValid(),
+            let keys = payload.defaultKeys {
+            self.defaultBundle = keys
+            self.collectionKeys = payload.collectionKeys
+            self.valid = true
+            return
         }
         self.defaultBundle = KeyBundle.invalid
         self.valid = false
@@ -287,6 +274,12 @@ open class Keys: Equatable {
         ])
         return KeysPayload(json)
     }
+
+    public static func ==(lhs: Keys, rhs: Keys) -> Bool {
+        return lhs.valid == rhs.valid &&
+            lhs.defaultBundle == rhs.defaultBundle &&
+            lhs.collectionKeys == rhs.collectionKeys
+    }
 }
 
 /**
@@ -312,8 +305,3 @@ public struct RecordEncrypter<T: CleartextPayloadJSON> {
     }
 }
 
-public func ==(lhs: Keys, rhs: Keys) -> Bool {
-    return lhs.valid == rhs.valid &&
-           lhs.defaultBundle == rhs.defaultBundle &&
-           lhs.collectionKeys == rhs.collectionKeys
-}

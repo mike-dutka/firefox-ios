@@ -7,8 +7,6 @@ import XCGLogger
 import Deferred
 import Shared
 
-public let NotificationDatabaseWasRecreated = Notification.Name("NotificationDatabaseWasRecreated")
-
 private let log = Logger.syncLogger
 
 public typealias Args = [Any?]
@@ -30,6 +28,23 @@ open class BrowserDB {
         }
 
         self.db = SwiftData(filename: file, key: secretKey, prevKey: nil, schema: schema, files: files)
+    }
+
+    // Remove the DB op from the queue (by marking it cancelled), and if it is already running tell sqlite to cancel it.
+    // At any point the operation could complete on another thread, so it is held weakly.
+    // Swift compiler bug: failing to compile WeakRef<Cancellable> here.
+    public func cancel(databaseOperation: WeakRef<AnyObject>) {
+        weak var databaseOperation = databaseOperation.value as? Cancellable
+
+        db.suspendQueue()
+        defer {
+            db.resumeQueue()
+        }
+
+        databaseOperation?.cancel()
+        if databaseOperation?.running ?? false {
+            db.cancel()
+        }
     }
 
     // For testing purposes or other cases where we want to ensure that this `BrowserDB`
@@ -65,7 +80,7 @@ open class BrowserDB {
 
     @discardableResult func checkpoint() -> Success {
         log.debug("Checkpointing a BrowserDB.")
-        
+
         return transaction { connection in
             connection.checkpoint()
         }
@@ -143,7 +158,7 @@ open class BrowserDB {
     func write(_ sql: String, withArgs args: Args? = nil) -> Deferred<Maybe<Int>> {
         return withConnection { connection -> Int in
             try connection.executeChange(sql, withArgs: args)
-            
+
             let modified = connection.numberOfRowsModified
             log.debug("Modified rows: \(modified).")
             return modified
@@ -158,7 +173,7 @@ open class BrowserDB {
         db.reopenIfClosed()
     }
 
-    func run(_ sql: String, withArgs args: Args? = nil) -> Success {
+    public func run(_ sql: String, withArgs args: Args? = nil) -> Success {
         return run([(sql, args)])
     }
 
@@ -183,9 +198,17 @@ open class BrowserDB {
         }
     }
 
-    func runQuery<T>(_ sql: String, args: Args?, factory: @escaping (SDRow) -> T) -> Deferred<Maybe<Cursor<T>>> {
+    public func runQuery<T>(_ sql: String, args: Args?, factory: @escaping (SDRow) -> T) -> Deferred<Maybe<Cursor<T>>> {
         return withConnection { connection -> Cursor<T> in
             connection.executeQuery(sql, factory: factory, withArgs: args)
+        }
+    }
+
+    func runQueryUnsafe<T, U>(_ sql: String, args: Args?, factory: @escaping (SDRow) -> T, block: @escaping (Cursor<T>) throws -> U) -> Deferred<Maybe<U>> {
+        return withConnection { connection -> U in
+            let cursor = connection.executeQueryUnsafe(sql, factory: factory, withArgs: args)
+            defer { cursor.close() }
+            return try block(cursor)
         }
     }
 

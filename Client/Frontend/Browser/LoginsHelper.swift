@@ -12,7 +12,7 @@ import SwiftyJSON
 
 private let log = Logger.browserLogger
 
-class LoginsHelper: TabHelper {
+class LoginsHelper: TabContentScript {
     fileprivate weak var tab: Tab?
     fileprivate let profile: Profile
     fileprivate var snackBar: SnackBar?
@@ -29,11 +29,6 @@ class LoginsHelper: TabHelper {
     required init(tab: Tab, profile: Profile) {
         self.tab = tab
         self.profile = profile
-
-        if let path = Bundle.main.path(forResource: "LoginsHelper", ofType: "js"), let source = try? NSString(contentsOfFile: path, encoding: String.Encoding.utf8.rawValue) as String {
-            let userScript = WKUserScript(source: source, injectionTime: WKUserScriptInjectionTime.atDocumentEnd, forMainFrameOnly: false)
-            tab.webView!.configuration.userContentController.addUserScript(userScript)
-        }
     }
 
     func scriptMessageHandlerName() -> String? {
@@ -47,10 +42,10 @@ class LoginsHelper: TabHelper {
         // Check to see that we're in the foreground before trying to check the logins. We want to
         // make sure we don't try accessing the logins database while we're backgrounded to avoid
         // the system from terminating our app due to background disk access.
-        // 
+        //
         // See https://bugzilla.mozilla.org/show_bug.cgi?id=1307822 for details.
         guard UIApplication.shared.applicationState == .active && !profile.isShutdown else {
-            return 
+            return
         }
 
         // We don't use the WKWebView's URL since the page can spoof the URL by using document.location
@@ -81,22 +76,22 @@ class LoginsHelper: TabHelper {
         for (index, key) in keys.enumerated() {
             let replace = replacements[index]
             let range = string.range(of: key,
-                options: NSString.CompareOptions.literal,
+                options: .literal,
                 range: nil,
                 locale: nil)!
             string.replaceSubrange(range, with: replace)
-            let nsRange = NSRange(location: string.characters.distance(from: string.startIndex, to: range.lowerBound),
-                                  length: replace.characters.count)
+            let nsRange = NSRange(location: string.distance(from: string.startIndex, to: range.lowerBound),
+                                  length: replace.count)
             ranges.append(nsRange)
         }
 
-        var attributes = [String: AnyObject]()
-        attributes[NSFontAttributeName] = UIFont.systemFont(ofSize: 13, weight: UIFontWeightRegular)
-        attributes[NSForegroundColorAttributeName] = UIColor.darkGray
+        var attributes = [NSAttributedStringKey: AnyObject]()
+        attributes[NSAttributedStringKey.font] = UIFont.systemFont(ofSize: 13, weight: UIFont.Weight.regular)
+        attributes[NSAttributedStringKey.foregroundColor] = UIColor.Photon.Grey60
         let attr = NSMutableAttributedString(string: string, attributes: attributes)
-        let font: UIFont = UIFont.systemFont(ofSize: 13, weight: UIFontWeightMedium)
+        let font: UIFont = UIFont.systemFont(ofSize: 13, weight: UIFont.Weight.medium)
         for range in ranges {
-            attr.addAttribute(NSFontAttributeName, value: font, range: range)
+            attr.addAttribute(NSAttributedStringKey.font, value: font, range: range)
         }
         return attr
     }
@@ -117,7 +112,7 @@ class LoginsHelper: TabHelper {
 
         profile.logins
                .getLoginsForProtectionSpace(login.protectionSpace, withUsername: login.username)
-               .uponQueue(DispatchQueue.main) { res in
+               .uponQueue(.main) { res in
             if let data = res.successValue {
                 log.debug("Found \(data.count) logins.")
                 for saved in data {
@@ -154,16 +149,16 @@ class LoginsHelper: TabHelper {
         }
 
         snackBar = TimerSnackBar(text: promptMessage, img: UIImage(named: "key"))
-        let dontSave = SnackButton(title: Strings.LoginsHelperDontSaveButtonTitle, accessibilityIdentifier: "SaveLoginPrompt.dontSaveButton") { bar in
+        let dontSave = SnackButton(title: Strings.LoginsHelperDontSaveButtonTitle, accessibilityIdentifier: "SaveLoginPrompt.dontSaveButton", bold: false) { bar in
             self.tab?.removeSnackbar(bar)
             self.snackBar = nil
             return
         }
-        let save = SnackButton(title: Strings.LoginsHelperSaveLoginButtonTitle, accessibilityIdentifier: "SaveLoginPrompt.saveLoginButton") { bar in
+        let save = SnackButton(title: Strings.LoginsHelperSaveLoginButtonTitle, accessibilityIdentifier: "SaveLoginPrompt.saveLoginButton", bold: true) { bar in
             self.tab?.removeSnackbar(bar)
             self.snackBar = nil
             self.profile.logins.addLogin(login)
-            LeanplumIntegration.sharedInstance.track(eventName: .savedLoginAndPassword)
+            LeanPlumClient.shared.track(event: .savedLoginAndPassword)
         }
         snackBar?.addButton(dontSave)
         snackBar?.addButton(save)
@@ -189,12 +184,12 @@ class LoginsHelper: TabHelper {
         }
 
         snackBar = TimerSnackBar(text: formatted, img: UIImage(named: "key"))
-        let dontSave = SnackButton(title: Strings.LoginsHelperDontSaveButtonTitle, accessibilityIdentifier: "UpdateLoginPrompt.dontSaveButton") { bar in
+        let dontSave = SnackButton(title: Strings.LoginsHelperDontUpdateButtonTitle, accessibilityIdentifier: "UpdateLoginPrompt.donttUpdateButton", bold: false) { bar in
             self.tab?.removeSnackbar(bar)
             self.snackBar = nil
             return
         }
-        let update = SnackButton(title: Strings.LoginsHelperUpdateButtonTitle, accessibilityIdentifier: "UpdateLoginPrompt.updateButton") { bar in
+        let update = SnackButton(title: Strings.LoginsHelperUpdateButtonTitle, accessibilityIdentifier: "UpdateLoginPrompt.updateButton", bold: true) { bar in
             self.tab?.removeSnackbar(bar)
             self.snackBar = nil
             self.profile.logins.updateLoginByGUID(guid, new: new, significant: new.isSignificantlyDifferentFrom(old))
@@ -205,7 +200,7 @@ class LoginsHelper: TabHelper {
     }
 
     fileprivate func requestLogins(_ login: LoginData, requestId: String) {
-        profile.logins.getLoginsForProtectionSpace(login.protectionSpace).uponQueue(DispatchQueue.main) { res in
+        profile.logins.getLoginsForProtectionSpace(login.protectionSpace).uponQueue(.main) { res in
             var jsonObj = [String: Any]()
             if let cursor = res.successValue {
                 log.debug("Found \(cursor.count) logins.")

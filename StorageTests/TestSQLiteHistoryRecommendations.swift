@@ -36,9 +36,9 @@ class TestSQLiteHistoryRecommendations: XCTestCase {
     override func tearDown() {
         // Clear out anything we might have changed on disk
         history.clearHistory().succeeded()
-        db.run("DELETE FROM \(TablePageMetadata)").succeeded()
-        db.run("DELETE FROM \(TableHighlights)").succeeded()
-        db.run("DELETE FROM \(TableActivityStreamBlocklist)").succeeded()
+        db.run("DELETE FROM page_metadata").succeeded()
+        db.run("DELETE FROM highlights").succeeded()
+        db.run("DELETE FROM activity_stream_blocklist").succeeded()
 
         SDWebImageManager.shared().imageCache?.clearDisk()
         SDWebImageManager.shared().imageCache?.clearMemory()
@@ -76,7 +76,7 @@ class TestSQLiteHistoryRecommendations: XCTestCase {
         let siteVisitC1 = SiteVisit(site: siteC, date: oneHourAgo + 1, type: .link)
         let siteVisitC2 = SiteVisit(site: siteC, date: oneHourAgo + 1000, type: .link)
         let siteVisitC3 = SiteVisit(site: siteC, date: oneHourAgo + 2000, type: .link)
-        
+
         let siteVisitD1 = SiteVisit(site: siteD, date: oneHourAgo, type: .link)
         let siteVisitD2 = SiteVisit(site: siteD, date: oneHourAgo + 1000, type: .link)
         let siteVisitD3 = SiteVisit(site: siteD, date: oneHourAgo + 2000, type: .link)
@@ -222,13 +222,13 @@ class TestSQLiteHistoryRecommendations: XCTestCase {
         // add metadata for 2 of the sites
         let metadata = SQLiteMetadata(db: db)
         let pageA = PageMetadata(id: nil, siteURL: siteA.url, mediaURL: "http://image.com",
-                                title: siteA.title, description: "Test Description", type: nil, providerName: nil, mediaDataURI: nil, cacheImages: false)
+                                title: siteA.title, description: "Test Description", type: nil, providerName: nil)
         metadata.storeMetadata(pageA, forPageURL: siteA.url.asURL!, expireAt: Date.now() + 3000).succeeded()
         let pageB = PageMetadata(id: nil, siteURL: siteB.url, mediaURL: "http://image.com",
-                                 title: siteB.title, description: "Test Description", type: nil, providerName: nil, mediaDataURI: nil, cacheImages: false)
+                                 title: siteB.title, description: "Test Description", type: nil, providerName: nil)
         metadata.storeMetadata(pageB, forPageURL: siteB.url.asURL!, expireAt: Date.now() + 3000).succeeded()
         let pageC = PageMetadata(id: nil, siteURL: siteC.url, mediaURL: "http://image.com",
-                                 title: siteC.title, description: "Test Description", type: nil, providerName: nil, mediaDataURI: nil, cacheImages: false)
+                                 title: siteC.title, description: "Test Description", type: nil, providerName: nil)
         metadata.storeMetadata(pageC, forPageURL: siteC.url.asURL!, expireAt: Date.now() + 3000).succeeded()
 
         history.repopulate(invalidateTopSites: true, invalidateHighlights: true).succeeded()
@@ -292,7 +292,7 @@ class TestSQLiteHistoryRecommendationsPerf: XCTestCase {
 
         history.clearHistory().succeeded()
         populateForRecommendationCalculations(history, bookmarks: bookmarks, metadata: metadata, historyCount: count, bookmarkCount: count)
-        self.measureMetrics([XCTPerformanceMetric_WallClockTime], automaticallyStartMeasuring: true) {
+        self.measureMetrics([XCTPerformanceMetric.wallClockTime], automaticallyStartMeasuring: true) {
             for _ in 0...5 {
                 history.repopulate(invalidateTopSites: true, invalidateHighlights: true).succeeded()
             }
@@ -320,13 +320,13 @@ private func populateForRecommendationCalculations(_ history: SQLiteHistory, boo
         let modifiedTime = advanceMicrosecondTimestamp(baseInstantInMicros, by: (1000000 * i))
         let bookmarkSite = Site(url: "http://bookmark-\(i)/", title: "\(i) Bookmark")
         bookmarkSite.guid = "bookmark-\(i)"
-        
+
         addVisitForSite(bookmarkSite, intoHistory: history, from: .local, atTime: modifiedTime)
         addVisitForSite(bookmarkSite, intoHistory: history, from: .remote, atTime: modifiedTime)
         addVisitForSite(bookmarkSite, intoHistory: history, from: .local, atTime: modifiedTime)
         addVisitForSite(bookmarkSite, intoHistory: history, from: .remote, atTime: modifiedTime)
         let pageA = PageMetadata(id: nil, siteURL: bookmarkSite.url, mediaURL: "http://image.com",
-                                 title: bookmarkSite.title, description: "Test Description", type: nil, providerName: nil, mediaDataURI: nil, cacheImages: false)
+                                 title: bookmarkSite.title, description: "Test Description", type: nil, providerName: nil)
         metadata.storeMetadata(pageA, forPageURL: bookmarkSite.url.asURL!, expireAt: Date.now() + 3000).succeeded()
         bookmarks.local.addToMobileBookmarks(URL(string:"http://bookmark-\(i)/")!, title: "\(i) Bookmark", favicon: nil).succeeded()
     }

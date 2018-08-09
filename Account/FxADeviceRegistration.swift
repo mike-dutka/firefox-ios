@@ -67,7 +67,7 @@ open class FxADeviceRegistration: NSObject, NSCoding {
     }
 
     open func toJSON() -> JSON {
-        return JSON(object: [
+        return JSON([
             "id": id,
             "version": version,
             "lastRegistered": lastRegistered,
@@ -81,11 +81,11 @@ open class FxADeviceRegistrator {
         // within the last week, do nothing. We re-register weekly as a sanity check.
         if let registration = account.deviceRegistration, registration.version == DeviceRegistrationVersion &&
             Date.now() < registration.lastRegistered + OneWeekInMilliseconds {
-                return deferMaybe(FxADeviceRegistrationResult.alreadyRegistered)
+                return deferMaybe(.alreadyRegistered)
         }
 
         let pushParams: FxADevicePushParams?
-        if AppConstants.MOZ_FXA_PUSH, let pushRegistration = account.pushRegistration {
+        if let pushRegistration = account.pushRegistration {
             let subscription = pushRegistration.defaultSubscription
             pushParams = FxADevicePushParams(callback: subscription.endpoint.absoluteString, publicKey: subscription.p256dhPublicKey, authKey: subscription.authKey)
         } else {
@@ -93,15 +93,14 @@ open class FxADeviceRegistrator {
         }
 
         let client = client ?? FxAClient10(authEndpoint: account.configuration.authEndpointURL, oauthEndpoint: account.configuration.oauthEndpointURL, profileEndpoint: account.configuration.profileEndpointURL)
-        let name = DeviceInfo.defaultClientName()
         let device: FxADevice
         let registrationResult: FxADeviceRegistrationResult
         if let registration = account.deviceRegistration {
-            device = FxADevice.forUpdate(name, id: registration.id, push: pushParams)
-            registrationResult = FxADeviceRegistrationResult.updated
+            device = FxADevice.forUpdate(account.deviceName, id: registration.id, push: pushParams)
+            registrationResult = .updated
         } else {
-            device = FxADevice.forRegister(name, type: "mobile", push: pushParams)
-            registrationResult = FxADeviceRegistrationResult.registered
+            device = FxADevice.forRegister(account.deviceName, type: "mobile", push: pushParams)
+            registrationResult = .registered
         }
 
         let registeredDevice = client.registerOrUpdate(device: device, withSessionToken: sessionToken)
@@ -132,7 +131,7 @@ open class FxADeviceRegistrator {
         return registration.bind { result in
             switch result {
             case .success(let registration):
-                account.deviceRegistration = registration.value
+                account.deviceRegistration = registration
                 return deferMaybe(registrationResult)
             case .failure(let error):
                 log.error("Device registration failed: \(error.description)")

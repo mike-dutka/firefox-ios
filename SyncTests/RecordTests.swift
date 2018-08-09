@@ -25,12 +25,12 @@ class RecordTests: XCTestCase {
         XCTAssertEqual(input, json.stringValue())
 
         let pairs: [String: Any] = ["foo": "help \(Character(UnicodeScalar(11))) this"]
-        let built = JSON(object: pairs)
+        let built = JSON(pairs)
         XCTAssertEqual(input, built.stringValue())
     }
 
     func testEnvelopeNullTTL() {
-        let p = CleartextPayloadJSON(JSON(object: ["id": "guid"]))
+        let p = CleartextPayloadJSON(JSON(["id": "guid"]))
         let r = Record<CleartextPayloadJSON>(id: "guid", payload: p, modified: Date.now(), sortindex: 15, ttl: nil)
         let k = KeyBundle.random()
         let s = k.serializer({ $0.json })
@@ -74,11 +74,11 @@ class RecordTests: XCTestCase {
     func testEnvelopeJSON() {
         let e = EnvelopeJSON(JSON(parseJSON: "{}"))
         XCTAssertFalse(e.isValid())
-        
+
         let ee = EnvelopeJSON("{\"id\": \"foo\"}")
         XCTAssertFalse(ee.isValid())
         XCTAssertEqual(ee.id, "foo")
-        
+
         let eee = EnvelopeJSON(JSON(parseJSON: "{\"id\": \"foo\", \"collection\": \"bar\", \"payload\": \"baz\"}"))
         XCTAssertTrue(eee.isValid())
         XCTAssertEqual(eee.id, "foo")
@@ -99,27 +99,27 @@ class RecordTests: XCTestCase {
         // This one is invalid because the payload "id" isn't a string.
         // (It'll also fail implicitly because the guid doesn't match the envelope.)
         let badPayloadGUIDPayload: [String: Any] = ["id": 0]
-        let badPayloadGUIDPayloadString = JSON(object: badPayloadGUIDPayload).stringValue()!
+        let badPayloadGUIDPayloadString = JSON(badPayloadGUIDPayload).stringValue()!
         let badPayloadGUIDRecord: [String: Any] = ["id": "abcdefghijkl",
                                                    "collection": "clients",
                                                    "payload": badPayloadGUIDPayloadString]
-        let badPayloadGUIDRecordString = JSON(object: badPayloadGUIDRecord).stringValue()!
+        let badPayloadGUIDRecordString = JSON(badPayloadGUIDRecord).stringValue()!
 
         // This one is invalid because the payload doesn't contain an "id" at all, but it's non-empty.
         // See also `emptyPayload` above.
         // (It'll also fail implicitly because the guid doesn't match the envelope.)
         let noPayloadGUIDPayload: [String: Any] = ["some": "thing"]
-        let noPayloadGUIDPayloadString = JSON(object: noPayloadGUIDPayload).stringValue()!
+        let noPayloadGUIDPayloadString = JSON(noPayloadGUIDPayload).stringValue()!
         let noPayloadGUIDRecord: [String: Any] = ["id": "abcdefghijkl",
                                                   "collection": "clients",
                                                   "payload": noPayloadGUIDPayloadString]
-        let noPayloadGUIDRecordString = JSON(object: noPayloadGUIDRecord).stringValue()!
+        let noPayloadGUIDRecordString = JSON(noPayloadGUIDRecord).stringValue()!
 
         // And this is a valid record.
         let clientBody: [String: Any] = ["id": "abcdefghijkl", "name": "Foobar", "commands": [], "type": "mobile"]
-        let clientBodyString = JSON(object: clientBody).stringValue()!
+        let clientBodyString = JSON(clientBody).stringValue()!
         let clientRecord: [String: Any] = ["id": "abcdefghijkl", "collection": "clients", "payload": clientBodyString]
-        let clientPayload = JSON(object: clientRecord).stringValue()!
+        let clientPayload = JSON(clientRecord).stringValue()!
 
         let cleartextClientsFactory: (String) -> ClientPayload? = {
             (s: String) -> ClientPayload? in
@@ -127,7 +127,7 @@ class RecordTests: XCTestCase {
         }
 
         let clearFactory: (String) -> CleartextPayloadJSON? = {
-            (s: String) -> CleartextPayloadJSON? in       
+            (s: String) -> CleartextPayloadJSON? in
             return CleartextPayloadJSON(s)
         }
 
@@ -170,7 +170,7 @@ class RecordTests: XCTestCase {
     func testEncryptedClientRecord() {
         let b64E = "0A7mU5SZ/tu7ZqwXW1og4qHVHN+zgEi4Xwfwjw+vEJw="
         let b64H = "11GN34O9QWXkjR06g8t0gWE1sGgQeWL0qxxWwl8Dmxs="
-        
+
         let expectedGUID = "0-P9fabp9vJD"
         let expectedSortIndex = 131
         let expectedLastModified: Timestamp = 1326254123650
@@ -515,7 +515,7 @@ class RecordTests: XCTestCase {
 
     func testQuery() {
         let str = "{\"title\":\"Downloads\",\"parentName\":\"\",\"bmkUri\":\"place:transition=7&sort=4\",\"id\":\"7gdp9S1okhKf\",\"parentid\":\"rq6WHyfHkoUV\",\"type\":\"query\"}"
-        
+
         let query = BookmarkType.payloadFromJSON(JSON(parseJSON: str))
         XCTAssertTrue(query is BookmarkQueryPayload)
         let mirror = query?.toMirrorItem(Date.now())
@@ -542,7 +542,7 @@ class RecordTests: XCTestCase {
 
         guard let q = BookmarkType.payloadFromJSON(query) else {
             XCTFail("Failed to generate payload from json: \(query)")
-            return 
+            return
         }
 
         XCTAssertTrue(q is BookmarkQueryPayload)

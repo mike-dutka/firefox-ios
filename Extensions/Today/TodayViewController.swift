@@ -17,7 +17,7 @@ struct TodayStrings {
 }
 
 private struct TodayUX {
-    static let privateBrowsingColor = UIColor(rgb: 0xCE6EFC)
+    static let privateBrowsingColor = UIColor(rgb: 0xcf68ff)
     static let backgroundHightlightColor = UIColor(white: 216.0/255.0, alpha: 44.0/255.0)
     static let linkTextSize: CGFloat = 10.0
     static let labelTextSize: CGFloat = 14.0
@@ -68,7 +68,7 @@ class TodayViewController: UIViewController, NCWidgetProviding {
 
     fileprivate lazy var openCopiedLinkButton: ButtonWithSublabel = {
         let button = ButtonWithSublabel()
-        
+
         button.setTitle(TodayStrings.GoToCopiedLinkLabel, for: .normal)
         button.addTarget(self, action: #selector(onPressOpenClibpoard), for: .touchUpInside)
 
@@ -93,7 +93,7 @@ class TodayViewController: UIViewController, NCWidgetProviding {
         stackView.isLayoutMarginsRelativeArrangement = true
         return stackView
     }()
-    
+
     fileprivate lazy var buttonStackView: UIStackView = {
         let stackView = UIStackView()
         stackView.axis = .horizontal
@@ -148,7 +148,7 @@ class TodayViewController: UIViewController, NCWidgetProviding {
     }
 
     func widgetMarginInsets(forProposedMarginInsets defaultMarginInsets: UIEdgeInsets) -> UIEdgeInsets {
-        return UIEdgeInsets.zero
+        return .zero
     }
 
     func updateCopiedLink() {
@@ -192,7 +192,7 @@ class TodayViewController: UIViewController, NCWidgetProviding {
 
 extension UIButton {
     func setBackgroundColor(_ color: UIColor, forState state: UIControlState) {
-        let colorView = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+        let colorView = UIView(frame: CGRect(width: 1, height: 1))
         colorView.backgroundColor = color
 
         UIGraphicsBeginImageContext(colorView.bounds.size)
@@ -253,7 +253,7 @@ class ButtonWithSublabel: UIButton {
     }
 
     convenience init() {
-        self.init(frame: CGRect.zero)
+        self.init(frame: .zero)
     }
 
     override init(frame: CGRect) {

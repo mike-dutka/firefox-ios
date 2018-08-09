@@ -2,30 +2,42 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import MappaMundi
 import XCTest
 
 class BaseTestCase: XCTestCase {
-    var navigator: Navigator<FxUserState>!
-    var app: XCUIApplication!
+    var navigator: MMNavigator<FxUserState>!
+    let app =  XCUIApplication()
     var userState: FxUserState!
 
-    override func setUp() {
-        super.setUp()
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.terminate()
-        restart(app, args: [LaunchArguments.ClearProfile, LaunchArguments.SkipIntro, LaunchArguments.SkipWhatsNew])
+    // These are used during setUp(). Change them prior to setUp() for the app to launch with different args,
+    // or, use restart() to re-launch with custom args.
+    var launchArguments = [LaunchArguments.ClearProfile, LaunchArguments.SkipIntro, LaunchArguments.SkipWhatsNew, LaunchArguments.StageServer, LaunchArguments.DeviceName]
+
+    func setUpScreenGraph() {
         navigator = createScreenGraph(for: self, with: app).navigator()
         userState = navigator.userState
     }
 
+    func setUpApp() {
+        app.launchArguments = [LaunchArguments.Test] + launchArguments
+        app.launch()
+    }
+
+    override func setUp() {
+        super.setUp()
+        continueAfterFailure = false
+        setUpApp()
+        setUpScreenGraph()
+    }
+
     override func tearDown() {
-        XCUIApplication().terminate()
+        app.terminate()
         super.tearDown()
     }
 
     func restart(_ app: XCUIApplication, args: [String] = []) {
-        XCUIDevice.shared().press(.home)
+        XCUIDevice.shared.press(.home)
         var launchArguments = [LaunchArguments.Test]
         args.forEach { arg in
             launchArguments.append(arg)
@@ -44,8 +56,8 @@ class BaseTestCase: XCTestCase {
         }
     }
 
-    func waitforExistence(_ element: XCUIElement, file: String = #file, line: UInt = #line) {
-        waitFor(element, with: "exists == true", file: file, line: line)
+    func waitforExistence(_ element: XCUIElement, timeout: TimeInterval = 5.0, file: String = #file, line: UInt = #line) {
+        waitFor(element, with: "exists == true", timeout: timeout, file: file, line: line)
     }
 
     func waitforNoExistence(_ element: XCUIElement, timeoutValue: TimeInterval = 5.0, file: String = #file, line: UInt = #line) {
@@ -62,7 +74,7 @@ class BaseTestCase: XCTestCase {
         let result = XCTWaiter().wait(for: [expectation], timeout: timeout)
         if result != .completed {
             let message = description ?? "Expect predicate \(predicateString) for \(element.description)"
-            self.recordFailure(withDescription: message, inFile: file, atLine: line, expected: false)
+            self.recordFailure(withDescription: message, inFile: file, atLine: Int(line), expected: false)
         }
     }
 
@@ -70,7 +82,7 @@ class BaseTestCase: XCTestCase {
         let app = XCUIApplication()
         UIPasteboard.general.string = url
         app.textFields["url"].press(forDuration: 2.0)
-        app.sheets.element(boundBy: 0).buttons.element(boundBy: 0).tap()
+        app.tables["Context Menu"].cells["menu-PasteAndGo"].firstMatch.tap()
 
         if waitForLoadToFinish {
             let finishLoadingTimeout: TimeInterval = 30

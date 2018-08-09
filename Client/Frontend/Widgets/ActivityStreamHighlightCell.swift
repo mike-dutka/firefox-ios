@@ -7,18 +7,16 @@ import Shared
 import Storage
 
 private struct ActivityStreamHighlightCellUX {
-    static let LabelColor = UIAccessibilityDarkerSystemColorsEnabled() ? UIColor.black : UIColor(rgb: 0x353535)
     static let BorderWidth: CGFloat = 0.5
     static let CellSideOffset = 20
     static let TitleLabelOffset = 2
     static let CellTopBottomOffset = 12
-    static let SiteImageViewSize: CGSize = UIDevice.current.userInterfaceIdiom == .pad ? CGSize(width: 99, height: 120) : CGSize(width: 99, height: 90)
+    static let SiteImageViewSize = CGSize(width: 99, height: UIDevice.current.userInterfaceIdiom == .pad ? 120 : 90)
     static let StatusIconSize = 12
     static let FaviconSize = CGSize(width: 45, height: 45)
-    static let DescriptionLabelColor = UIColor(rgb: 0x919191) // Not found in Photon colors
     static let SelectedOverlayColor = UIColor(white: 0.0, alpha: 0.25)
     static let CornerRadius: CGFloat = 3
-    static let BorderColor = UIColor(white: 0, alpha: 0.1)
+    static let BorderColor = UIColor.Photon.Grey30
 }
 
 class ActivityStreamHighlightCell: UICollectionViewCell {
@@ -26,7 +24,7 @@ class ActivityStreamHighlightCell: UICollectionViewCell {
     fileprivate lazy var titleLabel: UILabel = {
         let titleLabel = UILabel()
         titleLabel.font = DynamicFontHelper.defaultHelper.MediumSizeHeavyWeightAS
-        titleLabel.textColor = ActivityStreamHighlightCellUX.LabelColor
+        titleLabel.textColor = UIColor.theme.homePanel.activityStreamCellTitle
         titleLabel.textAlignment = .left
         titleLabel.numberOfLines = 3
         return titleLabel
@@ -35,7 +33,7 @@ class ActivityStreamHighlightCell: UICollectionViewCell {
     fileprivate lazy var descriptionLabel: UILabel = {
         let descriptionLabel = UILabel()
         descriptionLabel.font = DynamicFontHelper.defaultHelper.SmallSizeRegularWeightAS
-        descriptionLabel.textColor = ActivityStreamHighlightCellUX.DescriptionLabelColor
+        descriptionLabel.textColor = UIColor.theme.homePanel.activityStreamCellDescription
         descriptionLabel.textAlignment = .left
         descriptionLabel.numberOfLines = 1
         return descriptionLabel
@@ -44,18 +42,18 @@ class ActivityStreamHighlightCell: UICollectionViewCell {
     fileprivate lazy var domainLabel: UILabel = {
         let descriptionLabel = UILabel()
         descriptionLabel.font = DynamicFontHelper.defaultHelper.SmallSizeRegularWeightAS
-        descriptionLabel.textColor = ActivityStreamHighlightCellUX.DescriptionLabelColor
+        descriptionLabel.textColor = UIColor.theme.homePanel.activityStreamCellDescription
         descriptionLabel.textAlignment = .left
         descriptionLabel.numberOfLines = 1
-        descriptionLabel.setContentCompressionResistancePriority(1000, for: UILayoutConstraintAxis.vertical)
+        descriptionLabel.setContentCompressionResistancePriority(UILayoutPriority(rawValue: 1000), for: .vertical)
         return descriptionLabel
     }()
 
     lazy var siteImageView: UIImageView = {
         let siteImageView = UIImageView()
-        siteImageView.contentMode = UIViewContentMode.scaleAspectFit
+        siteImageView.contentMode = .scaleAspectFit
         siteImageView.clipsToBounds = true
-        siteImageView.contentMode = UIViewContentMode.center
+        siteImageView.contentMode = .center
         siteImageView.layer.cornerRadius = ActivityStreamHighlightCellUX.CornerRadius
         siteImageView.layer.borderColor = ActivityStreamHighlightCellUX.BorderColor.cgColor
         siteImageView.layer.borderWidth = ActivityStreamHighlightCellUX.BorderWidth
@@ -65,7 +63,7 @@ class ActivityStreamHighlightCell: UICollectionViewCell {
 
     fileprivate lazy var statusIcon: UIImageView = {
         let statusIcon = UIImageView()
-        statusIcon.contentMode = UIViewContentMode.scaleAspectFit
+        statusIcon.contentMode = .scaleAspectFit
         statusIcon.clipsToBounds = true
         statusIcon.layer.cornerRadius = ActivityStreamHighlightCellUX.CornerRadius
         return statusIcon
@@ -76,6 +74,18 @@ class ActivityStreamHighlightCell: UICollectionViewCell {
         selectedOverlay.backgroundColor = ActivityStreamHighlightCellUX.SelectedOverlayColor
         selectedOverlay.isHidden = true
         return selectedOverlay
+    }()
+
+    fileprivate lazy var playLabel: UIImageView = {
+        let view = UIImageView()
+        view.image = UIImage.templateImageNamed("play")
+        view.tintColor = .white
+        view.alpha = 0.97
+        view.layer.shadowColor = UIColor.black.cgColor
+        view.layer.shadowOpacity = 0.3
+        view.layer.shadowRadius = 2
+        view.isHidden = true
+        return view
     }()
 
     override var isSelected: Bool {
@@ -98,27 +108,29 @@ class ActivityStreamHighlightCell: UICollectionViewCell {
         contentView.addSubview(titleLabel)
         contentView.addSubview(statusIcon)
         contentView.addSubview(domainLabel)
+        contentView.addSubview(playLabel)
 
         siteImageView.snp.makeConstraints { make in
             make.top.equalTo(contentView)
-            make.leading.trailing.equalTo(contentView)
+            make.leading.equalTo(contentView.safeArea.leading)
+            make.trailing.equalTo(contentView.safeArea.trailing)
             make.centerX.equalTo(contentView)
             make.height.equalTo(ActivityStreamHighlightCellUX.SiteImageViewSize)
         }
 
         selectedOverlay.snp.makeConstraints { make in
-            make.edges.equalTo(contentView)
+            make.edges.equalTo(contentView.safeArea.edges)
         }
 
         domainLabel.snp.makeConstraints { make in
             make.leading.equalTo(siteImageView)
-            make.trailing.equalTo(contentView)
+            make.trailing.equalTo(contentView.safeArea.trailing)
             make.top.equalTo(siteImageView.snp.bottom).offset(5)
         }
 
         titleLabel.snp.makeConstraints { make in
             make.leading.equalTo(siteImageView)
-            make.trailing.equalTo(contentView)
+            make.trailing.equalTo(contentView.safeArea.trailing)
             make.top.equalTo(domainLabel.snp.bottom).offset(5)
         }
 
@@ -132,6 +144,10 @@ class ActivityStreamHighlightCell: UICollectionViewCell {
             make.centerY.equalTo(descriptionLabel.snp.centerY)
             make.leading.equalTo(siteImageView)
         }
+
+        playLabel.snp.makeConstraints { make in
+            make.center.equalTo(siteImageView.snp.center)
+        }
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -143,6 +159,7 @@ class ActivityStreamHighlightCell: UICollectionViewCell {
         self.siteImageView.image = nil
         contentView.backgroundColor = UIColor.clear
         siteImageView.backgroundColor = UIColor.clear
+        playLabel.isHidden = true
     }
 
     func configureWithSite(_ site: Site) {
@@ -162,7 +179,7 @@ class ActivityStreamHighlightCell: UICollectionViewCell {
         }
 
         self.domainLabel.text = site.tileURL.hostSLD
-        self.titleLabel.text = site.title.characters.count <= 1 ? site.url : site.title
+        self.titleLabel.text = site.title.isEmpty ? site.url : site.title
 
         if let bookmarked = site.bookmarked, bookmarked {
             self.descriptionLabel.text = Strings.HighlightBookmarkText
@@ -172,16 +189,21 @@ class ActivityStreamHighlightCell: UICollectionViewCell {
             self.statusIcon.image = UIImage(named: "context_viewed")
         }
     }
-    
+
     func configureWithPocketStory(_ pocketStory: PocketStory) {
         self.siteImageView.sd_setImage(with: pocketStory.imageURL)
         self.siteImageView.contentMode = .scaleAspectFill
-        
+
         self.domainLabel.text = pocketStory.domain
         self.titleLabel.text = pocketStory.title
-        
+
         self.descriptionLabel.text = Strings.PocketTrendingText
         self.statusIcon.image = UIImage(named: "context_pocket")
+    }
+
+    func configureWithPocketVideoStory(_ pocketStory: PocketStory) {
+        playLabel.isHidden = false
+        self.configureWithPocketStory(pocketStory)
     }
 }
 
@@ -195,7 +217,7 @@ class HighlightIntroCell: UICollectionViewCell {
     lazy var titleLabel: UILabel = {
         let textLabel = UILabel()
         textLabel.font = DynamicFontHelper.defaultHelper.MediumSizeBoldFontAS
-        textLabel.textColor = UIColor.black
+        textLabel.textColor = UIColor.theme.homePanel.activityStreamCellTitle
         textLabel.numberOfLines = 1
         textLabel.adjustsFontSizeToFitWidth = true
         textLabel.minimumScaleFactor = 0.8
@@ -205,7 +227,7 @@ class HighlightIntroCell: UICollectionViewCell {
     lazy var descriptionLabel: UILabel = {
         let label = UILabel()
         label.font = DynamicFontHelper.defaultHelper.MediumSizeRegularWeightAS
-        label.textColor = UIColor.darkGray
+        label.textColor = UIColor.theme.homePanel.activityStreamCellDescription
         label.numberOfLines = 0
         return label
     }()
@@ -233,5 +255,5 @@ class HighlightIntroCell: UICollectionViewCell {
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
 }

@@ -45,7 +45,8 @@ class L10nSnapshotTests: L10nBaseSnapshotTests {
 
     func test06PanelsEmptyState() {
         var i = 0
-        navigator.visitNodes(allHomePanels) { nodeName in
+        allHomePanels.forEach { nodeName in
+            navigator.goto(nodeName)
             snapshot("06PanelsEmptyState-\(i)-\(nodeName)")
             i += 1
         }
@@ -134,7 +135,7 @@ class L10nSnapshotTests: L10nBaseSnapshotTests {
     }
 
     func test13ReloadButtonContextMenu() {
-        navigator.toggleOn(userState.trackingProtectionSetting == FxUserState.TrackingProtectionSetting.alwaysOn.rawValue, withAction: Action.ToggleTrackingProtectionSettingAlwaysOn)
+        navigator.toggleOn(userState.trackingProtectionSettingOnNormalMode == true, withAction: Action.ToggleTrackingProtectionSettingOnNormalMode)
         navigator.goto(BrowserTab)
 
         navigator.openURL(loremIpsumURL)
@@ -198,6 +199,7 @@ class L10nSnapshotTests: L10nBaseSnapshotTests {
     func test20BookmarksTableContextMenu() {
         navigator.openURL(loremIpsumURL)
         navigator.performAction(Action.Bookmark)
+        navigator.createNewTab()
         navigator.goto(BookmarksPanelContextMenu)
         snapshot("20BookmarksTableContextMenu-01")
     }
@@ -238,7 +240,7 @@ class L10nSnapshotTests: L10nBaseSnapshotTests {
     func test24BookmarksListTableRowMenu() {
         navigator.openURL(loremIpsumURL)
         navigator.performAction(Action.Bookmark)
-        navigator.goto(BookmarksPanelContextMenu)
+        navigator.goto(HomePanel_Bookmarks)
         app.tables["Bookmarks List"].cells.element(boundBy: 0).swipeLeft()
         snapshot("24BookmarksListTableRowMenu-01")
     }

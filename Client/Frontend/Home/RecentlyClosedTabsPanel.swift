@@ -13,24 +13,25 @@ private let log = Logger.browserLogger
 
 private struct RecentlyClosedPanelUX {
     static let IconSize = CGSize(width: 23, height: 23)
-    static let IconBorderColor = UIColor(white: 0, alpha: 0.1)
+    static let IconBorderColor = UIColor.Photon.Grey30
     static let IconBorderWidth: CGFloat = 0.5
 }
 
 class RecentlyClosedTabsPanel: UIViewController, HomePanel {
     weak var homePanelDelegate: HomePanelDelegate?
-    var profile: Profile!
+    let profile: Profile
 
     fileprivate lazy var recentlyClosedHeader: UILabel = {
         let headerLabel = UILabel()
         headerLabel.text = Strings.RecentlyClosedTabsPanelTitle
+        headerLabel.textColor = UIColor.theme.tableView.headerTextDark
         headerLabel.font = DynamicFontHelper.defaultHelper.DeviceFontHistoryPanel
         headerLabel.textAlignment = .center
-        headerLabel.backgroundColor = .white
+        headerLabel.backgroundColor = UIColor.theme.tableView.headerBackground
         return headerLabel
     }()
 
-    fileprivate var tableViewController = RecentlyClosedTabsPanelSiteTableViewController()
+    fileprivate lazy var tableViewController = RecentlyClosedTabsPanelSiteTableViewController(profile: profile)
 
     fileprivate lazy var historyBackButton: HistoryBackButton = {
         let button = HistoryBackButton()
@@ -38,12 +39,20 @@ class RecentlyClosedTabsPanel: UIViewController, HomePanel {
         return button
     }()
 
+    init(profile: Profile) {
+        self.profile = profile
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        view.backgroundColor = .white
+        view.backgroundColor = UIColor.theme.tableView.headerBackground
 
-        tableViewController.profile = self.profile
         tableViewController.homePanelDelegate = homePanelDelegate
         tableViewController.recentlyClosedTabsPanel = self
 
@@ -84,12 +93,8 @@ class RecentlyClosedTabsPanelSiteTableViewController: SiteTableViewController {
     weak var recentlyClosedTabsPanel: RecentlyClosedTabsPanel?
 
     fileprivate lazy var longPressRecognizer: UILongPressGestureRecognizer = {
-        return UILongPressGestureRecognizer(target: self, action: #selector(RecentlyClosedTabsPanelSiteTableViewController.longPress(_:)))
+        return UILongPressGestureRecognizer(target: self, action: #selector(RecentlyClosedTabsPanelSiteTableViewController.longPress))
     }()
-
-    init() {
-        super.init(nibName: nil, bundle: nil)
-    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -98,12 +103,8 @@ class RecentlyClosedTabsPanelSiteTableViewController: SiteTableViewController {
         self.recentlyClosedTabs = profile.recentlyClosedTabs.tabs
     }
 
-    required init?(coder aDecoder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
     @objc fileprivate func longPress(_ longPressGestureRecognizer: UILongPressGestureRecognizer) {
-        guard longPressGestureRecognizer.state == UIGestureRecognizerState.began else { return }
+        guard longPressGestureRecognizer.state == .began else { return }
         let touchPoint = longPressGestureRecognizer.location(in: tableView)
         guard let indexPath = tableView.indexPathForRow(at: touchPoint) else { return }
         presentContextMenu(for: indexPath)
@@ -117,7 +118,7 @@ class RecentlyClosedTabsPanelSiteTableViewController: SiteTableViewController {
         let tab = recentlyClosedTabs[indexPath.row]
         let displayURL = tab.url.displayURL ?? tab.url
         twoLineCell.setLines(tab.title, detailText: displayURL.absoluteDisplayString)
-        let site: Favicon? = (tab.faviconURL != nil) ? Favicon(url: tab.faviconURL!, type: .guess) : nil
+        let site: Favicon? = (tab.faviconURL != nil) ? Favicon(url: tab.faviconURL!) : nil
         cell.imageView!.layer.borderColor = RecentlyClosedPanelUX.IconBorderColor.cgColor
         cell.imageView!.layer.borderWidth = RecentlyClosedPanelUX.IconBorderWidth
         cell.imageView?.setIcon(site, forURL: displayURL, completed: { (color, url) in
@@ -130,7 +131,7 @@ class RecentlyClosedTabsPanelSiteTableViewController: SiteTableViewController {
         return cell
     }
 
-    func tableView(_ tableView: UITableView, didSelectRowAtIndexPath indexPath: IndexPath) {
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         guard let homePanelDelegate = homePanelDelegate,
               let recentlyClosedTabsPanel = recentlyClosedTabsPanel else {
             log.warning("No site or no URL when selecting row.")
@@ -145,7 +146,7 @@ class RecentlyClosedTabsPanelSiteTableViewController: SiteTableViewController {
     }
 
     // Functions that deal with showing header rows.
-    func numberOfSectionsInTableView(_ tableView: UITableView) -> Int {
+    func numberOfSections(in tableView: UITableView) -> Int {
         return 1
     }
 
@@ -174,5 +175,12 @@ extension RecentlyClosedTabsPanelSiteTableViewController: HomePanelContextMenu {
 
     func getContextMenuActions(for site: Site, with indexPath: IndexPath) -> [PhotonActionSheetItem]? {
         return getDefaultContextMenuActions(for: site, homePanelDelegate: homePanelDelegate)
+    }
+}
+
+extension RecentlyClosedTabsPanel: Themeable {
+    func applyTheme() {
+        historyBackButton.applyTheme()
+        tableViewController.tableView.reloadData()
     }
 }

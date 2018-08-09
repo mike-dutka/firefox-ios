@@ -94,7 +94,7 @@ public typealias TimestampedLoginDeltas = (at: Timestamp, changed: LoginDeltas)
 /**
  * LoginData is a wrapper around NSURLCredential and NSURLProtectionSpace to allow us to add extra fields where needed.
  **/
-public protocol LoginData: class {
+public protocol LoginData: AnyObject {
     var guid: String { get set }                 // It'd be nice if this were read-only.
     var credentials: URLCredential { get }
     var protectionSpace: URLProtectionSpace { get }
@@ -240,7 +240,7 @@ open class Login: CustomStringConvertible, LoginData, LoginUsageData, Equatable 
 
     public init(guid: String, hostname: String, username: String, password: String) {
         self.guid = guid
-        self.credentials = URLCredential(user: username, password: password, persistence: URLCredential.Persistence.none)
+        self.credentials = URLCredential(user: username, password: password, persistence: .none)
 
         // Break down the full url hostname into its scheme/protocol and host components
         let hostnameURL = hostname.asURL

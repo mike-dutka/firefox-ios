@@ -14,6 +14,7 @@ public struct PrefsKeys {
     public static let KeyMailToOption = "MailToOption"
     public static let HasFocusInstalled = "HasFocusInstalled"
     public static let HasPocketInstalled = "HasPocketInstalled"
+    public static let IntroSeen = "IntroViewControllerSeen"
 
     //Activity Stream
     public static let KeyTopSitesCacheIsValid = "topSitesCacheIsValid"
@@ -30,7 +31,10 @@ public struct PrefsKeys {
     public static let KeyCustomSyncOauth = "customSyncOauthServer"
     public static let KeyCustomSyncAuth = "customSyncAuthServer"
     public static let KeyCustomSyncWeb = "customSyncWebServer"
+    public static let UseStageServer = "useStageSyncService"
 
+    public static let AppExtensionTelemetryOpenUrl = "AppExtensionTelemetryOpenUrl"
+    public static let AppExtensionTelemetryEventArray = "AppExtensionTelemetryEvents"
 }
 
 public struct PrefsDefaults {
@@ -128,33 +132,21 @@ open class MockProfilePrefs: Prefs {
     open func objectForKey<T: Any>(_ defaultName: String) -> T? {
         return things[name(defaultName)] as? T
     }
-    
+
     open func timestampForKey(_ defaultName: String) -> Timestamp? {
         return unsignedLongForKey(defaultName)
     }
 
     open func unsignedLongForKey(_ defaultName: String) -> UInt64? {
-        let num = things[name(defaultName)] as? UInt64
-        if let num = num {
-            return num
-        }
-        return nil
+        return things[name(defaultName)] as? UInt64
     }
 
     open func longForKey(_ defaultName: String) -> Int64? {
-        let num = things[name(defaultName)] as? Int64
-        if let num = num {
-            return num
-        }
-        return nil
+        return things[name(defaultName)] as? Int64
     }
 
     open func intForKey(_ defaultName: String) -> Int32? {
-        let num = things[name(defaultName)] as? Int32
-        if let num = num {
-            return num
-        }
-        return nil
+        return things[name(defaultName)] as? Int32
     }
 
     open func stringArrayForKey(_ defaultName: String) -> [String]? {
@@ -187,7 +179,7 @@ open class MockProfilePrefs: Prefs {
 
     open func clearAll() {
         let dictionary = things as! [String: Any]
-        let keysToDelete: [String] = dictionary.keys.filter { $0.startsWith(self.prefix) }
+        let keysToDelete: [String] = dictionary.keys.filter { $0.hasPrefix(self.prefix) }
         things.removeObjects(forKeys: keysToDelete)
     }
 }

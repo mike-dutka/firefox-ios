@@ -22,22 +22,22 @@ private let DefaultParameters =
         minExitVelocity: 800,
         recenterAnimationDuration: 0.15)
 
-protocol SwipeAnimatorDelegate: class {
+protocol SwipeAnimatorDelegate: AnyObject {
     func swipeAnimator(_ animator: SwipeAnimator, viewWillExitContainerBounds: UIView)
 }
 
 class SwipeAnimator: NSObject {
     weak var delegate: SwipeAnimatorDelegate?
     weak var animatingView: UIView?
-    
+
     fileprivate var prevOffset: CGPoint?
     fileprivate let params: SwipeAnimationParameters
-    
+
     fileprivate var panGestureRecogniser: UIPanGestureRecognizer!
 
     var containerCenter: CGPoint {
         guard let animatingView = self.animatingView else {
-            return CGPoint.zero
+            return .zero
         }
         return CGPoint(x: animatingView.frame.width / 2, y: animatingView.frame.height / 2)
     }
@@ -48,7 +48,7 @@ class SwipeAnimator: NSObject {
 
         super.init()
 
-        self.panGestureRecogniser = UIPanGestureRecognizer(target: self, action: #selector(SwipeAnimator.didPan(_:)))
+        self.panGestureRecogniser = UIPanGestureRecognizer(target: self, action: #selector(didPan))
         animatingView.addGestureRecognizer(self.panGestureRecogniser)
         self.panGestureRecogniser.delegate = self
     }
@@ -63,7 +63,7 @@ class SwipeAnimator: NSObject {
 extension SwipeAnimator {
     fileprivate func animateBackToCenter() {
         UIView.animate(withDuration: params.recenterAnimationDuration, animations: {
-            self.animatingView?.transform = CGAffineTransform.identity
+            self.animatingView?.transform = .identity
             self.animatingView?.alpha = 1
         })
     }
@@ -148,7 +148,7 @@ extension SwipeAnimator {
 
 extension SwipeAnimator: UIGestureRecognizerDelegate {
     @objc func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {
-        let cellView = recognizer.view as UIView!
+        let cellView = recognizer.view
         let panGesture = recognizer as! UIPanGestureRecognizer
         let translation = panGesture.translation(in: cellView?.superview)
         return fabs(translation.x) > fabs(translation.y)

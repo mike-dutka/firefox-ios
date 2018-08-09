@@ -27,7 +27,7 @@ class HomePageSettingsUITests: BaseTestCase {
         XCTAssertEqual(valueAfter as? String, websiteUrl1)
 
         // Check that it is actually set by opening a different website and going to Home
-        navigator.openURL(urlString: websiteUrl2)
+        navigator.openURL(websiteUrl2)
         navigator.goto(BrowserTabMenu)
 
         //Now check open home page should load the previously saved home page
@@ -48,7 +48,7 @@ class HomePageSettingsUITests: BaseTestCase {
         XCTAssertEqual("Enter a webpage", valueAfter as! String)
 
         // There is no option to go to Home, instead the website open has the option to be set as HomePageSettings
-        navigator.openURL(urlString: websiteUrl1)
+        navigator.openURL(websiteUrl1)
         navigator.goto(BrowserTabMenu)
         let homePageMenuItem = app.tables["Context Menu"].cells["Open Homepage"]
         XCTAssertFalse(homePageMenuItem.exists)
@@ -56,19 +56,24 @@ class HomePageSettingsUITests: BaseTestCase {
 
     func testClipboard() {
         // Go to a website and copy the url
-        navigator.openURL(urlString: websiteUrl1)
+        navigator.openURL(websiteUrl1)
         app.textFields["url"].press(forDuration: 5)
-        app.buttons["Copy Address"].tap()
-
+        waitforExistence(app.tables["Context Menu"])
+        app.tables["Context Menu"].cells["menu-Copy-Link"].tap()
         // Go to HomePage settings and paste it using the option Used Copied Link
         navigator.goto(HomePageSettings)
         XCTAssertTrue(app.cells["Use Copied Link"].isEnabled)
         app.cells["Use Copied Link"].tap()
 
         // Check that the webpage has been correclty copied into the correct field
-        let value = app.textFields["HomePageSettingTextField"].value
-        XCTAssertEqual(value as? String, "https://\(websiteUrl1)/en-US/",
-                       "The webpage typed does not match with the one saved")
+        let value = app.textFields["HomePageSettingTextField"].value as! String
+
+        if ((value == "https://\(websiteUrl1)/en-US/")) {
+            XCTAssertEqual(value, "https://\(websiteUrl1)/en-US/",
+                "The webpage typed does not match with the one saved")
+        } else {
+            XCTAssertTrue(value.contains("https://\(websiteUrl1)/en-US/?v="), "The webpage typed does not match with the one saved")
+        }
     }
 
     func testDisabledClipboard() {

@@ -9,7 +9,6 @@ import Storage
 
 private struct TopSiteCellUX {
     static let TitleHeight: CGFloat = 20
-    static let TitleTextColor = UIColor.black
     static let TitleFont = DynamicFontHelper.defaultHelper.SmallSizeRegularWeightAS
     static let SelectedOverlayColor = UIColor(white: 0.0, alpha: 0.25)
     static let CellCornerRadius: CGFloat = 4
@@ -19,13 +18,13 @@ private struct TopSiteCellUX {
     static let BorderColor = UIColor(white: 0, alpha: 0.1)
     static let BorderWidth: CGFloat = 0.5
     static let PinIconSize: CGFloat = 12
-    static let PinColor = UIColor.Defaults.Grey60
+    static let PinColor = UIColor.Photon.Grey60
 }
 
 /*
  *  The TopSite cell that appears in the ASHorizontalScrollView.
  */
-class TopSiteItemCell: UICollectionViewCell {
+class TopSiteItemCell: UICollectionViewCell, Themeable {
 
     var url: URL?
 
@@ -38,7 +37,6 @@ class TopSiteItemCell: UICollectionViewCell {
     lazy var pinImageView: UIImageView = {
         let imageView = UIImageView()
         imageView.image = UIImage.templateImageNamed("pin_small")
-        imageView.tintColor = TopSiteCellUX.PinColor
         return imageView
     }()
 
@@ -47,8 +45,6 @@ class TopSiteItemCell: UICollectionViewCell {
         titleLabel.layer.masksToBounds = true
         titleLabel.textAlignment = .center
         titleLabel.font = TopSiteCellUX.TitleFont
-        titleLabel.textColor = TopSiteCellUX.TitleTextColor
-        titleLabel.backgroundColor = UIColor.clear
         return titleLabel
     }()
 
@@ -57,20 +53,17 @@ class TopSiteItemCell: UICollectionViewCell {
         view.layer.cornerRadius = TopSiteCellUX.CellCornerRadius
         view.layer.masksToBounds = true
         view.layer.borderWidth = TopSiteCellUX.BorderWidth
-        view.layer.borderColor = TopSiteCellUX.BorderColor.cgColor
         return view
     }()
 
     lazy var selectedOverlay: UIView = {
         let selectedOverlay = UIView()
-        selectedOverlay.backgroundColor = TopSiteCellUX.OverlayColor
         selectedOverlay.isHidden = true
         return selectedOverlay
     }()
 
     lazy var titleBorder: CALayer = {
         let border = CALayer()
-        border.backgroundColor = TopSiteCellUX.BorderColor.cgColor
         return border
     }()
 
@@ -171,8 +164,18 @@ class TopSiteItemCell: UICollectionViewCell {
                 self?.imageView.backgroundColor = color
             }
         })
+
+        applyTheme()
     }
 
+    func applyTheme() {
+        imageView.tintColor = TopSiteCellUX.PinColor
+        faviconBG.layer.borderColor = TopSiteCellUX.BorderColor.cgColor
+        selectedOverlay.backgroundColor = TopSiteCellUX.OverlayColor
+        titleBorder.backgroundColor = TopSiteCellUX.BorderColor.cgColor
+        titleLabel.backgroundColor = UIColor.clear
+        titleLabel.textColor = UIColor.theme.homePanel.topSiteDomain
+    }
 }
 
 // An empty cell to show when a row is incomplete
@@ -195,7 +198,7 @@ private struct ASHorizontalScrollCellUX {
     static let TopSiteEmptyCellIdentifier = "TopSiteItemEmptyCell"
 
     static let TopSiteItemSize = CGSize(width: 75, height: 75)
-    static let BackgroundColor = UIColor.white
+    static let BackgroundColor = UIColor.Photon.White100
     static let PageControlRadius: CGFloat = 3
     static let PageControlSize = CGSize(width: 30, height: 15)
     static let PageControlOffset: CGFloat = 12
@@ -210,7 +213,7 @@ class ASHorizontalScrollCell: UICollectionViewCell {
     lazy var collectionView: UICollectionView = {
         let layout  = HorizontalFlowLayout()
         layout.itemSize = ASHorizontalScrollCellUX.TopSiteItemSize
-        let collectionView = UICollectionView(frame: CGRect.zero, collectionViewLayout: layout)
+        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.register(TopSiteItemCell.self, forCellWithReuseIdentifier: ASHorizontalScrollCellUX.TopSiteCellIdentifier)
         collectionView.backgroundColor = UIColor.clear
         collectionView.showsHorizontalScrollIndicator = false
@@ -220,7 +223,7 @@ class ASHorizontalScrollCell: UICollectionViewCell {
 
     lazy fileprivate var pageControl: FilledPageControl = {
         let pageControl = FilledPageControl()
-        pageControl.tintColor = UIColor.gray
+        pageControl.tintColor = UIColor.Photon.Grey50
         pageControl.indicatorRadius = ASHorizontalScrollCellUX.PageControlRadius
         pageControl.isUserInteractionEnabled = true
         pageControl.isAccessibilityElement = true
@@ -231,7 +234,7 @@ class ASHorizontalScrollCell: UICollectionViewCell {
     }()
 
     lazy fileprivate var pageControlPress: UITapGestureRecognizer = {
-        let press = UITapGestureRecognizer(target: self, action: #selector(ASHorizontalScrollCell.handlePageTap(_:)))
+        let press = UITapGestureRecognizer(target: self, action: #selector(handlePageTap))
    //     press.delegate = self
         return press
     }()
@@ -257,7 +260,7 @@ class ASHorizontalScrollCell: UICollectionViewCell {
         pageControl.addGestureRecognizer(self.pageControlPress)
 
         collectionView.snp.makeConstraints { make in
-            make.edges.equalTo(contentView)
+            make.edges.equalTo(contentView.safeArea.edges)
         }
 
         pageControl.snp.makeConstraints { make in
@@ -283,7 +286,7 @@ class ASHorizontalScrollCell: UICollectionViewCell {
         }
     }
 
-    func handlePageTap(_ gesture: UITapGestureRecognizer) {
+    @objc func handlePageTap(_ gesture: UITapGestureRecognizer) {
         guard pageControl.pageCount > 1 else {
             return
         }
@@ -293,8 +296,25 @@ class ASHorizontalScrollCell: UICollectionViewCell {
         } else {
             pageControl.progress = CGFloat(pageControl.currentPage - 1)
         }
-        let swipeCoordinate = CGFloat(pageControl.currentPage) * self.collectionView.frame.size.width
-        self.collectionView.setContentOffset(CGPoint(x: swipeCoordinate, y: 0), animated: true)
+
+        moveToPage(pageControl.currentPage, animated: true)
+    }
+
+    func moveToPage(_ pageNumber: Int, animated: Bool = false) {
+        if pageNumber < 0 || pageNumber >= pageControl.pageCount {
+            return
+        }
+        pageControl.progress = CGFloat(pageNumber)
+        let swipeCoordinate = CGFloat(pageNumber) * self.collectionView.frame.size.width
+        self.collectionView.setContentOffset(CGPoint(x: swipeCoordinate, y: 0), animated: animated)
+    }
+
+    func moveToInitialPage() {
+        if UIApplication.shared.userInterfaceLayoutDirection == .rightToLeft {
+            moveToPage(pageControl.pageCount-1)
+        } else {
+            moveToPage(0)
+        }
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -322,9 +342,9 @@ class HorizontalFlowLayout: UICollectionViewLayout {
     override func prepare() {
         super.prepare()
         if boundsSize != self.collectionView?.frame.size {
-            self.collectionView?.setContentOffset(CGPoint.zero, animated: false)
+            self.collectionView?.setContentOffset(.zero, animated: false)
         }
-        boundsSize = self.collectionView?.frame.size ?? CGSize.zero
+        boundsSize = self.collectionView?.frame.size ?? .zero
         cachedAttributes = nil
         register(EmptyTopsiteDecorationCell.self, forDecorationViewOfKind: ASHorizontalScrollCellUX.TopSiteEmptyCellIdentifier)
     }
@@ -339,7 +359,7 @@ class HorizontalFlowLayout: UICollectionViewLayout {
         let width = size.width
         let height = size.height
         guard width != 0 else {
-            return (size: CGSize.zero, cellSize: self.itemSize, cellInsets: self.insets)
+            return (size: .zero, cellSize: self.itemSize, cellInsets: self.insets)
         }
 
         let horizontalItemsCount = maxHorizontalItemsCount(width: width)
@@ -455,15 +475,28 @@ class HorizontalFlowLayout: UICollectionViewLayout {
 
         let columnPosition = row % horizontalItemsCount
         let rowPosition = (row / horizontalItemsCount) % verticalItemsCount
-        let itemPage = Int(floor(Double(row)/Double(itemsPerPage)))
+
+        let itemPage: Int
+        if UIApplication.shared.userInterfaceLayoutDirection == .leftToRight {
+            itemPage = Int(floor(Double(row)/Double(itemsPerPage)))
+        } else {
+            // For RTL we invert the page position
+            let pageCount = Int(ceil(Double(cellCount)/Double(itemsPerPage)))
+            itemPage = pageCount - Int(floor(Double(row)/Double(itemsPerPage))) - 1
+        }
 
         let attr = UICollectionViewLayoutAttributes(forCellWith: indexPath)
         var frame = CGRect.zero
-        frame.origin.x = CGFloat(itemPage) * bounds.size.width + CGFloat(columnPosition) * (itemSize.width + insets.left) + insets.left
+        if UIApplication.shared.userInterfaceLayoutDirection == .leftToRight {
+            frame.origin.x = CGFloat(itemPage) * bounds.size.width + CGFloat(columnPosition) * (itemSize.width + insets.left) + insets.left
+        } else {
+            // For RTL all we have to do is invert the colum
+            frame.origin.x = CGFloat(itemPage) * bounds.size.width + CGFloat(horizontalItemsCount - 1 - columnPosition) * (itemSize.width + insets.left) + insets.left
+        }
         frame.origin.y = CGFloat(rowPosition) * (itemSize.height + insets.top) + insets.top
         frame.size = itemSize
         attr.frame = frame
-        
+
         return attr
     }
 }
@@ -472,7 +505,7 @@ class HorizontalFlowLayout: UICollectionViewLayout {
     Defines the number of items to show in topsites for different size classes.
 */
 private struct ASTopSiteSourceUX {
-    static let verticalItemsForTraitSizes = [UIUserInterfaceSizeClass.compact: 1, UIUserInterfaceSizeClass.regular: 2, UIUserInterfaceSizeClass.unspecified: 0]
+    static let verticalItemsForTraitSizes: [UIUserInterfaceSizeClass: Int] = [.compact: 1, .regular: 2, .unspecified: 0]
     static let maxNumberOfPages = 2
     static let CellIdentifier = "TopSiteItemCell"
 }
@@ -483,7 +516,7 @@ protocol ASHorizontalLayoutDelegate {
 }
 
 /*
- This Delegate/DataSource is used to manage the ASHorizontalScrollCell's UICollectionView. 
+ This Delegate/DataSource is used to manage the ASHorizontalScrollCell's UICollectionView.
  This is left generic enough for it to be re used for other parts of Activity Stream.
  */
 

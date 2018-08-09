@@ -77,11 +77,11 @@ open class DisplayURICommand: Command {
             return succeed()
         }
 
-        guard let getClientWithId = synchronizer.localClients?.getClientWithId(sender) else {
+        guard let sender = synchronizer.localClients?.getClient(guid: sender) else {
             return display()
         }
 
-        return getClientWithId >>== { client in
+        return sender >>== { client in
             return display(client?.name)
         }
     }
@@ -162,8 +162,8 @@ open class ClientsSynchronizer: TimestampedSingleCollectionSynchronizer, Synchro
     open func getOurClientRecord() -> Record<ClientPayload> {
         let guid = self.scratchpad.clientGUID
         let formfactor = formFactorString()
-        
-        let json = JSON(object: [
+
+        let json = JSON([
             "id": guid,
             "fxaDeviceId": self.scratchpad.fxaDeviceId,
             "version": AppInfo.appVersion,
@@ -184,7 +184,7 @@ open class ClientsSynchronizer: TimestampedSingleCollectionSynchronizer, Synchro
     fileprivate func formFactorString() -> String {
         let userInterfaceIdiom = UIDevice.current.userInterfaceIdiom
         var formfactor: String
-        
+
         switch userInterfaceIdiom {
         case .phone:
             formfactor = SyncFormFactorFormat.phone.rawValue
@@ -193,7 +193,7 @@ open class ClientsSynchronizer: TimestampedSingleCollectionSynchronizer, Synchro
         default:
             formfactor = SyncFormFactorFormat.phone.rawValue
         }
-        
+
         return formfactor
     }
 
@@ -373,7 +373,8 @@ open class ClientsSynchronizer: TimestampedSingleCollectionSynchronizer, Synchro
             >>== { self.processCommandsFromRecord(ours, withServer: storageClient) }
             >>== { (shouldUpload, commands) in
                 let isFirstSync = self.lastFetched == 0
-                return self.maybeUploadOurRecord(shouldUpload || self.why == .didLogin, ifUnmodifiedSince: ours?.modified, toServer: storageClient)
+                let ourRecordDidChange = self.why == .didLogin || self.why == .clientNameChanged
+                return self.maybeUploadOurRecord(shouldUpload || ourRecordDidChange, ifUnmodifiedSince: ours?.modified, toServer: storageClient)
                     >>> { self.uploadClientCommands(toLocalClients: localClients, withServer: storageClient) }
                     >>> {
                         log.debug("Running \(commands.count) commands.")

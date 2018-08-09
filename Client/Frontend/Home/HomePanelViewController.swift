@@ -2,7 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import Foundation
 import Shared
 import SnapKit
 import UIKit
@@ -11,15 +10,11 @@ import Storage
 private struct HomePanelViewControllerUX {
     // Height of the top panel switcher button toolbar.
     static let ButtonContainerHeight: CGFloat = 40
-    static let ButtonContainerBorderColor = UIColor.black.withAlphaComponent(0.1)
-    static let BackgroundColorPrivateMode = UIConstants.PrivateModeAssistantToolbarBackgroundColor
-    static let ToolbarButtonDeselectedColorNormalMode = UIColor(white: 0.2, alpha: 0.5)
-    static let ToolbarButtonDeselectedColorPrivateMode = UIColor(white: 0.9, alpha: 1)
     static let ButtonHighlightLineHeight: CGFloat = 2
     static let ButtonSelectionAnimationDuration = 0.2
 }
 
-protocol HomePanelViewControllerDelegate: class {
+protocol HomePanelViewControllerDelegate: AnyObject {
     func homePanelViewController(_ homePanelViewController: HomePanelViewController, didSelectURL url: URL, visitType: VisitType)
     func homePanelViewController(_ HomePanelViewController: HomePanelViewController, didSelectPanel panel: Int)
     func homePanelViewControllerDidRequestToSignIn(_ homePanelViewController: HomePanelViewController)
@@ -27,15 +22,15 @@ protocol HomePanelViewControllerDelegate: class {
     func homePanelViewControllerDidRequestToOpenInNewTab(_ url: URL, isPrivate: Bool)
 }
 
-protocol HomePanel: class {
-    weak var homePanelDelegate: HomePanelDelegate? { get set }
+protocol HomePanel: AnyObject, Themeable {
+    var homePanelDelegate: HomePanelDelegate? { get set }
 }
 
 struct HomePanelUX {
     static let EmptyTabContentOffset = -180
 }
 
-protocol HomePanelDelegate: class {
+protocol HomePanelDelegate: AnyObject {
     func homePanelDidRequestToSignIn(_ homePanel: HomePanel)
     func homePanelDidRequestToCreateAccount(_ homePanel: HomePanel)
     func homePanelDidRequestToOpenInNewTab(_ url: URL, isPrivate: Bool)
@@ -52,6 +47,7 @@ enum HomePanelType: Int {
     case bookmarks = 1
     case history = 2
     case readingList = 3
+    case downloads = 4
 
     var localhostURL: URL {
         return URL(string: "#panel=\(self.rawValue)", relativeTo: UIConstants.AboutHomePage as URL)!
@@ -80,8 +76,8 @@ class HomePanelViewController: UIViewController, UITextFieldDelegate, HomePanelD
     }
 
     override func viewDidLoad() {
-        view.backgroundColor = UIConstants.AppBackgroundColor
-        
+        view.backgroundColor = UIColor.theme.browser.background
+
         buttonContainerView.axis = .horizontal
         buttonContainerView.alignment = .fill
         buttonContainerView.distribution = .fillEqually
@@ -91,10 +87,10 @@ class HomePanelViewController: UIViewController, UITextFieldDelegate, HomePanelD
         buttonContainerView.accessibilityLabel = NSLocalizedString("Panel Chooser", comment: "Accessibility label for the Home panel's top toolbar containing list of the home panels (top sites, bookmarsk, history, remote tabs, reading list).")
         view.addSubview(buttonContainerView)
         buttonContainerView.addSubview(highlightLine)
-        
+
         self.buttonContainerBottomBorderView = UIView()
         self.view.addSubview(buttonContainerBottomBorderView)
-        buttonContainerBottomBorderView.backgroundColor = HomePanelViewControllerUX.ButtonContainerBorderColor
+        buttonContainerBottomBorderView.backgroundColor = UIColor.theme.homePanel.buttonContainerBorder
 
         controllerContainerView = UIView()
         view.addSubview(controllerContainerView)
@@ -120,12 +116,12 @@ class HomePanelViewController: UIViewController, UITextFieldDelegate, HomePanelD
         updateButtons()
 
         // Gesture recognizer to dismiss the keyboard in the URLBarView when the buttonContainerView is tapped
-        let dismissKeyboardGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(HomePanelViewController.dismissKeyboard(_:)))
+        let dismissKeyboardGestureRecognizer = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
         dismissKeyboardGestureRecognizer.cancelsTouchesInView = false
         buttonContainerView.addGestureRecognizer(dismissKeyboardGestureRecognizer)
     }
 
-    func dismissKeyboard(_ gestureRecognizer: UITapGestureRecognizer) {
+    @objc func dismissKeyboard(_ gestureRecognizer: UITapGestureRecognizer) {
         view.window?.rootViewController?.view.endEditing(true)
     }
 
@@ -177,7 +173,7 @@ class HomePanelViewController: UIViewController, UITextFieldDelegate, HomePanelD
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle {
-        return UIStatusBarStyle.lightContent
+        return .lightContent
     }
 
     fileprivate func hideCurrentPanel() {
@@ -202,10 +198,15 @@ class HomePanelViewController: UIViewController, UITextFieldDelegate, HomePanelD
         panel.didMove(toParentViewController: self)
     }
 
-    func tappedButton(_ sender: UIButton!) {
+    @objc func tappedButton(_ sender: UIButton!) {
         for (index, button) in buttons.enumerated() where button == sender {
             selectedPanel = HomePanelType(rawValue: index)
             delegate?.homePanelViewController(self, didSelectPanel: index)
+            if selectedPanel == .bookmarks {
+                UnifiedTelemetry.recordEvent(category: .action, method: .view, object: .bookmarksPanel, value: .homePanelTabButton)
+            } else if selectedPanel == .downloads {
+                UnifiedTelemetry.recordEvent(category: .action, method: .view, object: .downloadsPanel, value: .homePanelTabButton)
+            }
             break
         }
     }
@@ -213,9 +214,9 @@ class HomePanelViewController: UIViewController, UITextFieldDelegate, HomePanelD
     fileprivate func updateButtons() {
         for panel in panels {
             let button = UIButton()
-            button.addTarget(self, action: #selector(HomePanelViewController.tappedButton(_:)), for: .touchUpInside)
+            button.addTarget(self, action: #selector(tappedButton), for: .touchUpInside)
             if let image = UIImage.templateImageNamed("panelIcon\(panel.imageName)") {
-                button.setImage(image, for: UIControlState.normal)
+                button.setImage(image, for: .normal)
             }
             button.imageEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 4, right: 0)
             button.accessibilityLabel = panel.accessibilityLabel
@@ -224,7 +225,7 @@ class HomePanelViewController: UIViewController, UITextFieldDelegate, HomePanelD
             self.buttonContainerView.addArrangedSubview(button)
         }
     }
-    
+
     func updateButtonTints() {
         var selectedbutton: UIView?
         for (index, button) in self.buttons.enumerated() {
@@ -242,7 +243,7 @@ class HomePanelViewController: UIViewController, UITextFieldDelegate, HomePanelD
         // Calling this before makes sure that only the highlightline animates and not the homepanels
         self.view.setNeedsUpdateConstraints()
         self.view.layoutIfNeeded()
-        UIView.animate(withDuration: HomePanelViewControllerUX.ButtonSelectionAnimationDuration, delay: 0.0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0.0, options: [], animations: { _ in
+        UIView.animate(withDuration: HomePanelViewControllerUX.ButtonSelectionAnimationDuration, delay: 0.0, usingSpringWithDamping: 0.85, initialSpringVelocity: 0.0, options: [], animations: {
             self.highlightLine.snp.remakeConstraints { make in
                 make.leading.equalTo(button.snp.leading)
                 make.trailing.equalTo(button.snp.trailing)
@@ -281,7 +282,7 @@ class HomePanelViewController: UIViewController, UITextFieldDelegate, HomePanelD
     func homePanelDidRequestToSignIn(_ homePanel: HomePanel) {
         delegate?.homePanelViewControllerDidRequestToSignIn(self)
     }
-    
+
     func homePanelDidRequestToOpenInNewTab(_ url: URL, isPrivate: Bool) {
         delegate?.homePanelViewControllerDidRequestToOpenInNewTab(url, isPrivate: isPrivate)
     }
@@ -289,12 +290,25 @@ class HomePanelViewController: UIViewController, UITextFieldDelegate, HomePanelD
 
 // MARK: UIAppearance
 extension HomePanelViewController: Themeable {
-    func applyTheme(_ theme: Theme) {
-        buttonContainerView.backgroundColor = UIColor.HomePanel.ToolbarBackground.colorFor(theme)
-        view.backgroundColor = UIColor.HomePanel.ToolbarBackground.colorFor(theme)
-        buttonTintColor = UIColor.HomePanel.ToolbarTint.colorFor(theme)
-        buttonSelectedTintColor = UIColor.HomePanel.ToolbarHighlight.colorFor(theme)
-        highlightLine.backgroundColor = UIColor.HomePanel.ToolbarHighlight.colorFor(theme)
+    func applyTheme() {
+        func apply(_ vc: UIViewController) -> Bool {
+            guard let vc = vc as? Themeable else { return false }
+            vc.applyTheme()
+            return true
+        }
+
+        childViewControllers.forEach {
+            if !apply($0) {
+                // BookmarksPanel is nested in a UINavigationController, go one layer deeper
+                $0.childViewControllers.forEach { _ = apply($0) }
+            }
+        }
+
+        buttonContainerView.backgroundColor = UIColor.theme.homePanel.toolbarBackground
+        view.backgroundColor = UIColor.theme.homePanel.toolbarBackground
+        buttonTintColor = UIColor.theme.homePanel.toolbarTint
+        buttonSelectedTintColor = UIColor.theme.homePanel.toolbarHighlight
+        highlightLine.backgroundColor = UIColor.theme.homePanel.toolbarHighlight
         updateButtonTints()
     }
 }

@@ -64,7 +64,8 @@ class FxAPushMessageTest: XCTestCase {
             deviceRegistration: nil,
             declinedEngines: nil,
             stateKeyLabel: "xxx",
-            state: SeparatedState())
+            state: SeparatedState(),
+            deviceName: "My iPhone")
 
         let registration = PushRegistration(uaid: "uaid", secret: "secret", subscription: subscription)
 
@@ -90,7 +91,8 @@ class FxAPushMessageTest: XCTestCase {
             deviceRegistration: nil,
             declinedEngines: nil,
             stateKeyLabel: "xxx",
-            state: SeparatedState())
+            state: SeparatedState(),
+            deviceName: "My iPhone")
 
         profile.setAccount(account)
 
@@ -150,6 +152,6 @@ class FxAPushMessageTest: XCTestCase {
             expectation.fulfill()
         }
         wait(for: [expectation], timeout: 10)
-        
+
     }
 }

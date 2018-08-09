@@ -16,7 +16,7 @@ open class DeviceInfo {
         let mirror = Mirror(reflecting: machine)
         var identifier = ""
 
-        // Parses the string for the model name via NSUTF8StringEncoding, refer to 
+        // Parses the string for the model name via NSUTF8StringEncoding, refer to
         // http://stackoverflow.com/questions/26028918/ios-how-to-determine-iphone-model-in-swift
         for child in mirror.children.enumerated() {
             if let value = child.1.value as? Int8, value != 0 {
@@ -29,6 +29,11 @@ open class DeviceInfo {
     /// Return the client name, which can be either "Fennec on Stefan's iPod" or simply "Stefan's iPod" if the application display name cannot be obtained.
     open class func defaultClientName() -> String {
         let format = NSLocalizedString("%@ on %@", tableName: "Shared", comment: "A brief descriptive name for this app on this device, used for Send Tab and Synced Tabs. The first argument is the app name. The second argument is the device name.")
+
+        if (ProcessInfo.processInfo.arguments.contains(LaunchArguments.DeviceName)) {
+            return String(format: format, AppInfo.displayName, "iOS")
+        }
+
         return String(format: format, AppInfo.displayName, UIDevice.current.name)
     }
 
@@ -61,9 +66,7 @@ open class DeviceInfo {
     open class func hasConnectivity() -> Bool {
         let status = Reach().connectionStatus()
         switch status {
-        case .online(.wwan):
-            return true
-        case .online(.wiFi):
+        case .online(.wwan), .online(.wiFi):
             return true
         default:
             return false

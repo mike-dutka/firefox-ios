@@ -33,14 +33,14 @@ class TabScrollingController: NSObject {
 
     // Constraint-based animation is causing PDF docs to flicker. This is used to bypass this animation.
     var isTabShowingPDF: Bool {
-        return (tab?.mimeType ?? "") == MimeType.PDF.rawValue
+        return (tab?.mimeType ?? "") == MIMEType.PDF
     }
 
     weak var header: UIView?
     weak var footer: UIView?
     weak var urlBar: URLBarView?
+    weak var readerModeBar: ReaderModeBarView?
     weak var snackBars: UIView?
-    weak var webViewContainerToolbar: UIView?
 
     var footerBottomConstraint: Constraint?
     var headerTopConstraint: Constraint?
@@ -65,19 +65,23 @@ class TabScrollingController: NSObject {
     }
 
     fileprivate lazy var panGesture: UIPanGestureRecognizer = {
-        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(TabScrollingController.handlePan(_:)))
+        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan))
         panGesture.maximumNumberOfTouches = 1
         panGesture.delegate = self
         return panGesture
     }()
 
     fileprivate var scrollView: UIScrollView? { return tab?.webView?.scrollView }
-    fileprivate var contentOffset: CGPoint { return scrollView?.contentOffset ?? CGPoint.zero }
-    fileprivate var contentSize: CGSize { return scrollView?.contentSize ?? CGSize.zero }
+    fileprivate var contentOffset: CGPoint { return scrollView?.contentOffset ?? .zero }
+    fileprivate var contentSize: CGSize { return scrollView?.contentSize ?? .zero }
     fileprivate var scrollViewHeight: CGFloat { return scrollView?.frame.height ?? 0 }
-    fileprivate var topScrollHeight: CGFloat { return header?.frame.height ?? 0 }
+    fileprivate var topScrollHeight: CGFloat {
+        guard let headerHeight = header?.frame.height else { return 0 }
+        guard let readerModeHeight = readerModeBar?.frame.height else { return headerHeight }
+        return headerHeight + readerModeHeight
+    }
     fileprivate var bottomScrollHeight: CGFloat { return footer?.frame.height ?? 0 }
-    fileprivate var snackBarsFrame: CGRect { return snackBars?.frame ?? CGRect.zero }
+    fileprivate var snackBarsFrame: CGRect { return snackBars?.frame ?? .zero }
 
     fileprivate var lastContentOffset: CGFloat = 0
     fileprivate var scrollDirection: ScrollDirection = .down
@@ -202,8 +206,6 @@ private extension TabScrollingController {
             if gesture.state == .ended || gesture.state == .cancelled {
                 lastContentOffset = 0
             }
-            
-            showOrHideWebViewContainerToolbar()
         }
     }
 
@@ -229,6 +231,7 @@ private extension TabScrollingController {
 
         let alpha = 1 - abs(headerTopOffset / topScrollHeight)
         urlBar?.updateAlphaForSubviews(alpha)
+        readerModeBar?.updateAlphaForSubviews(alpha)
     }
 
     func isHeaderDisplayedForGivenOffset(_ offset: CGFloat) -> Bool {
@@ -260,6 +263,7 @@ private extension TabScrollingController {
             self.headerTopOffset = headerOffset
             self.footerBottomOffset = footerOffset
             self.urlBar?.updateAlphaForSubviews(alpha)
+            self.readerModeBar?.updateAlphaForSubviews(alpha)
             self.header?.superview?.layoutIfNeeded()
         }
 
@@ -273,14 +277,6 @@ private extension TabScrollingController {
 
     func checkScrollHeightIsLargeEnoughForScrolling() -> Bool {
         return (UIScreen.main.bounds.size.height + 2 * UIConstants.ToolbarHeight) < scrollView?.contentSize.height ?? 0
-    }
-    
-    func showOrHideWebViewContainerToolbar() {
-        if contentOffset.y >= webViewContainerToolbar?.frame.height ?? 0 {
-            webViewContainerToolbar?.isHidden = true
-        } else {
-            webViewContainerToolbar?.isHidden = false
-        }
     }
 }
 
@@ -317,7 +313,7 @@ extension TabScrollingController: UIScrollViewDelegate {
         if isZoomedOut {
             scrollView.zoomScale = scrollView.minimumZoomScale
         } else if roundNum(scrollView.zoomScale) > roundNum(self.lastZoomedScale) && self.lastZoomedScale != 0 {
-            //When we have manually zoomed in we want to preserve that scale. 
+            //When we have manually zoomed in we want to preserve that scale.
             //But sometimes when we rotate a larger zoomScale is appled. In that case apply the lastZoomedScale
             scrollView.zoomScale = self.lastZoomedScale
         }
@@ -329,16 +325,13 @@ extension TabScrollingController: UIScrollViewDelegate {
 
     func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
         self.isUserZoom = false
-        showOrHideWebViewContainerToolbar()
-    }
-
-    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        showOrHideWebViewContainerToolbar()
     }
 
     func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
-        showToolbars(animated: true)
-        webViewContainerToolbar?.isHidden = false
+        if toolbarState == .collapsed {
+            showToolbars(animated: true)
+            return false
+        }
         return true
     }
 }

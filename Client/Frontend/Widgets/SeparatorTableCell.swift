@@ -16,11 +16,11 @@ class SeparatorTableCell: UITableViewCell {
     override init(style: UITableViewCellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
 
-        self.selectionStyle = UITableViewCellSelectionStyle.none
+        self.selectionStyle = .none
         self.indentationWidth = 0
-        self.separatorInset = UIEdgeInsets.zero
-        self.layoutMargins = UIEdgeInsets.zero
-        self.backgroundColor = UIConstants.PanelBackgroundColor    // So we get a gentle white and grey stripe.
+        self.separatorInset = .zero
+        self.layoutMargins = .zero
+        self.backgroundColor = UIColor.theme.tableView.rowBackground    // So we get a gentle white and grey stripe.
     }
 
     required init?(coder aDecoder: NSCoder) {

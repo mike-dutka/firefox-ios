@@ -42,7 +42,7 @@ open class UserAgent {
         let currentFirefoxVersion = AppInfo.appVersion
         let lastFirefoxVersion = defaults.string(forKey: "LastFirefoxVersionNumber")
         let lastFirefoxBuildNumber = defaults.string(forKey: "LastFirefoxBuildNumber")
-        
+
         if let firefoxUA = defaults.string(forKey: "UserAgent") {
             if (!checkiOSVersion || (lastiOSVersion == currentiOSVersion))
                 && (!checkFirefoxVersion || (lastFirefoxVersion == currentFirefoxVersion)
@@ -80,14 +80,14 @@ open class UserAgent {
         let webKitVersionRegex = try! NSRegularExpression(pattern: "AppleWebKit/([^ ]+) ", options: [])
 
         let match = webKitVersionRegex.firstMatch(in: userAgent, options: [],
-            range: NSRange(location: 0, length: userAgent.characters.count))
+            range: NSRange(location: 0, length: userAgent.count))
 
         if match == nil {
             print("Error: Unable to determine WebKit version in UA.")
             return userAgent     // Fall back to Safari's.
         }
 
-        let webKitVersion = (userAgent as NSString).substring(with: match!.rangeAt(1))
+        let webKitVersion = (userAgent as NSString).substring(with: match!.range(at: 1))
 
         // Insert "FxiOS/<version>" before the Mobile/ section.
         let mobileRange = (userAgent as NSString).range(of: "Mobile/")
@@ -119,12 +119,15 @@ open class UserAgent {
 
         // Strip mobile section
         let mobileRegex = try! NSRegularExpression(pattern: " FxiOS/[^ ]+ Mobile/[^ ]+", options: [])
-        
+
         guard let mobileMatch = mobileRegex.firstMatch(in: userAgent as String, options: [], range: NSRange(location: 0, length: userAgent.length)) else {
             print("Error: Unable to find Mobile section in UA.")
             return String(userAgent)
         }
-        userAgent.replaceCharacters(in: mobileMatch.range, with: "")
+
+        // The iOS major version is equal to the Safari major version
+        let majoriOSVersion = (UIDevice.current.systemVersion as NSString).components(separatedBy: ".")[0]
+        userAgent.replaceCharacters(in: mobileMatch.range, with: " Version/\(majoriOSVersion).0")
 
         return String(userAgent)
     }

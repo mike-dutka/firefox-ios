@@ -13,6 +13,7 @@ class NoImageModeTests: KIFTestCase {
     override func setUp() {
         super.setUp()
         webRoot = SimplePageServer.start()
+        BrowserUtils.configEarlGrey()
         BrowserUtils.dismissFirstRunUI()
     }
 
@@ -23,27 +24,27 @@ class NoImageModeTests: KIFTestCase {
 
     private func checkHiding(isOn: Bool) {
         let url = "\(webRoot!)/hide-images-test.html"
-        TrackingProtectionTests.checkIfImageLoaded(url: url, shouldBlockImage: isOn)
+        checkIfImageLoaded(url: url, shouldBlockImage: isOn)
         BrowserUtils.resetToAboutHome()
     }
 
     func testHideImage() {
         checkHiding(isOn: false)
 
-        EarlGrey.select(elementWithMatcher: grey_accessibilityLabel("Menu")).perform(grey_tap())
-        EarlGrey.select(elementWithMatcher: grey_allOf([grey_accessibilityID("menu-NoImageMode"),
+        EarlGrey.selectElement(with: grey_accessibilityLabel("Menu")).perform(grey_tap())
+        EarlGrey.selectElement(with: grey_allOf([grey_accessibilityID("menu-NoImageMode"),
                                                        grey_accessibilityLabel("Hide Images")]))
             .perform(grey_tap())
-        EarlGrey.select(elementWithMatcher: GREYMatchers.matcher(forText:"Hide Images")).assert(grey_enabled())
+        //Need to tap out of the browser tab menu to dismiss it (there is close button in iphone but not ipad)
+        EarlGrey.selectElement(with: grey_accessibilityID("url")).perform(grey_tap())
 
         checkHiding(isOn: true)
 
-        EarlGrey.select(elementWithMatcher: grey_accessibilityLabel("Menu")).perform(grey_tap())
-        EarlGrey.select(elementWithMatcher: grey_allOf([grey_accessibilityID("menu-NoImageMode"),
-                                                       grey_accessibilityLabel("Show Images")]))
+        EarlGrey.selectElement(with: grey_accessibilityLabel("Menu")).perform(grey_tap())
+        EarlGrey.selectElement(with: grey_allOf([grey_accessibilityID("menu-NoImageMode"),
+                                                       grey_accessibilityLabel("Hide Images")]))
         .perform(grey_tap())
-        EarlGrey.select(elementWithMatcher: GREYMatchers.matcher(forText:"Show Images")).assert(grey_enabled())
+        EarlGrey.selectElement(with: grey_accessibilityID("url")).perform(grey_tap())
     }
-
 }
 

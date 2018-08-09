@@ -132,7 +132,7 @@ class ErrorPageHelper {
     class func register(_ server: WebServer, certStore: CertStore?) {
         self.certStore = certStore
 
-        server.registerHandlerForMethod("GET", module: "errors", resource: "error.html", handler: { (request) -> GCDWebServerResponse! in
+        server.registerHandlerForMethod("GET", module: "errors", resource: "error.html", handler: { (request) -> GCDWebServerResponse? in
             guard let url = request?.url.originalURLFromErrorURL else {
                 return GCDWebServerResponse(statusCode: 404)
             }
@@ -201,12 +201,12 @@ class ErrorPageHelper {
             return response
         })
 
-        server.registerHandlerForMethod("GET", module: "errors", resource: "NetError.css", handler: { (request) -> GCDWebServerResponse! in
+        server.registerHandlerForMethod("GET", module: "errors", resource: "NetError.css", handler: { (request) -> GCDWebServerResponse? in
             let path = Bundle(for: self).path(forResource: "NetError", ofType: "css")!
             return GCDWebServerDataResponse(data: try? Data(contentsOf: URL(fileURLWithPath: path)), contentType: "text/css")
         })
 
-        server.registerHandlerForMethod("GET", module: "errors", resource: "CertError.css", handler: { (request) -> GCDWebServerResponse! in
+        server.registerHandlerForMethod("GET", module: "errors", resource: "CertError.css", handler: { (request) -> GCDWebServerResponse? in
             let path = Bundle(for: self).path(forResource: "CertError", ofType: "css")!
             return GCDWebServerDataResponse(data: try? Data(contentsOf: URL(fileURLWithPath: path)), contentType: "text/css")
         })
@@ -215,10 +215,21 @@ class ErrorPageHelper {
     func showPage(_ error: NSError, forUrl url: URL, inWebView webView: WKWebView) {
         // Don't show error pages for error pages.
         if url.isErrorPageURL {
-            if let previousURL = url.originalURLFromErrorURL,
-               let index = ErrorPageHelper.redirecting.index(of: previousURL) {
-                ErrorPageHelper.redirecting.remove(at: index)
+            if let previousURL = url.originalURLFromErrorURL {
+                // If the previous URL is a local file URL that we know exists,
+                // just load it in the web view. This works around an issue
+                // where we are unable to redirect to a `file://` URL during
+                // session restore.
+                if previousURL.isFileURL, FileManager.default.fileExists(atPath: previousURL.path) {
+                    webView.loadFileURL(previousURL, allowingReadAccessTo: previousURL)
+                    return
+                }
+
+                if let index = ErrorPageHelper.redirecting.index(of: previousURL) {
+                    ErrorPageHelper.redirecting.remove(at: index)
+                }
             }
+
             return
         }
 
@@ -255,7 +266,7 @@ class ErrorPageHelper {
     }
 }
 
-extension ErrorPageHelper: TabHelper {
+extension ErrorPageHelper: TabContentScript {
     static func name() -> String {
         return "ErrorPageHelper"
     }
