@@ -51,7 +51,7 @@ class BlockView: UIView {
         self.addGestureRecognizer(tapUpdateRecognizer)
     }
     
-    func handleAction() {
+    @objc func handleAction() {
         guard let pwd = UserDefaults.standard.string(forKey: kPasswdKey), (pwd.isEmpty == false) else {
             handleSetPassword()
             return
@@ -75,7 +75,7 @@ class BlockView: UIView {
         })
     }
     
-    func handleSetPassword(){
+    @objc func handleSetPassword(){
         let alert = UIAlertController(title: "Set PIN", message: "", preferredStyle: .alert)
         
         var oldPasswd: String?
