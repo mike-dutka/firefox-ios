@@ -186,6 +186,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
         
         return true
     }
+    
+    func applicationWillResignActive(_ application: UIApplication) {
+        hide()
+    }
 
     func applicationWillTerminate(_ application: UIApplication) {
         // We have only five seconds here, so let's hope this doesn't take too long.
