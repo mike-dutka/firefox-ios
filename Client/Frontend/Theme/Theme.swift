@@ -38,7 +38,7 @@ class TableViewColor {
     var headerTextLight: UIColor { return UIColor.Photon.Grey50 }
     // Used for table headers in home panel tables
     var headerTextDark: UIColor { return UIColor.Photon.Grey90 }
-    var rowActionAccessory: UIColor { return UIColor.Photon.Blue50 }
+    var rowActionAccessory: UIColor { return UIColor.Photon.Blue40 }
     var controlTint: UIColor { return rowActionAccessory }
     var syncText: UIColor { return defaultTextAndTint }
     var errorText: UIColor { return UIColor.Photon.Red50 }
@@ -48,15 +48,32 @@ class TableViewColor {
 class ActionMenuColor {
     var foreground: UIColor { return defaultTextAndTint }
     var iPhoneBackgroundBlurStyle: UIBlurEffectStyle { return UIBlurEffectStyle.light }
-    var iPhoneBackground: UIColor { return UIColor.theme.browser.background.withAlphaComponent(0.7) }
+    var iPhoneBackground: UIColor { return UIColor.theme.browser.background.withAlphaComponent(0.9) }
     var closeButtonBackground: UIColor { return defaultBackground }
 }
 
 class URLBarColor {
-    var border: UIColor { return UIColor.Photon.Grey50 }
-    var activeBorder: UIColor { return UIColor.Photon.Blue50A30 }
-    var tint: UIColor { return UIColor.Photon.Blue50A30 }
-    var textSelectionHighlight: UIColor { return UIColor.Defaults.iOSTextHighlightBlue }
+    var border: UIColor { return UIColor.Photon.Grey90A10 }
+    func activeBorder(_ isPrivate: Bool) -> UIColor { 
+        return !isPrivate ? UIColor.Photon.Blue40A30 : UIColor.Defaults.MobilePrivatePurple
+    }
+    var tint: UIColor { return UIColor.Photon.Blue40A30 }
+
+    // This text selection color is used in two ways:
+    // 1) <UILabel>.background = textSelectionHighlight.withAlphaComponent(textSelectionHighlightAlpha)
+    // To simulate text highlighting when the URL bar is tapped once, this is a background color to create a simulated selected text effect. The color will have an alpha applied when assigning it to the background.
+    // 2) <UITextField>.tintColor = textSelectionHighlight.
+    // When the text is in edit mode (tapping URL bar second time), this is assigned to the to set the selection (and cursor) color. The color is assigned directly to the tintColor.
+    typealias TextSelectionHighlight = (labelMode: UIColor, textFieldMode: UIColor?)
+    func textSelectionHighlight(_ isPrivate: Bool) -> TextSelectionHighlight {
+        if isPrivate {
+            let color = UIColor.Defaults.MobilePrivatePurple
+            return (labelMode: color.withAlphaComponent(0.25), textFieldMode: color)
+        } else {
+            return (labelMode: UIColor.Defaults.iOSTextHighlightBlue, textFieldMode: nil)
+        }
+    }
+
     var readerModeButtonSelected: UIColor { return UIColor.Photon.Blue40 }
     var readerModeButtonUnselected: UIColor { return UIColor.Photon.Grey50 }
     var pageOptionsSelected: UIColor { return readerModeButtonSelected }
@@ -76,8 +93,13 @@ class ToolbarButtonColor {
 }
 
 class LoadingBarColor {
-    var start: UIColor { return UIColor.Photon.Blue50A30 }
-    var end: UIColor { return UIColor.Photon.Blue50 }
+    func start(_ isPrivate: Bool) -> UIColor {
+        return !isPrivate ? UIColor.Photon.Blue40A30 : UIColor.Photon.Magenta60A30
+    }
+
+    func end(_ isPrivate: Bool) -> UIColor {
+        return !isPrivate ? UIColor.Photon.Teal60 : UIColor.Photon.Purple60
+    }
 }
 
 class TabTrayColor {
@@ -88,7 +110,7 @@ class TabTrayColor {
     var toolbar: UIColor { return defaultBackground }
     var toolbarButtonTint: UIColor { return defaultTextAndTint }
     var privateModeLearnMore: UIColor { return UIColor.Photon.Purple60 }
-    var privateModePurple: UIColor { return UIColor.Defaults.MobilePrivatePurple }
+    var privateModePurple: UIColor { return UIColor.Photon.Purple60 }
     var privateModeButtonOffTint: UIColor { return toolbarButtonTint }
     var privateModeButtonOnTint: UIColor { return UIColor.Photon.Grey10 }
     var cellCloseButton: UIColor { return UIColor.Photon.Grey50 }
@@ -103,8 +125,9 @@ class TopTabsColor {
     var tabBackgroundUnselected: UIColor { return UIColor.Photon.Grey80 }
     var tabForegroundSelected: UIColor { return UIColor.Photon.Grey90 }
     var tabForegroundUnselected: UIColor { return UIColor.Photon.Grey40 }
-    var selectedLineNormalMode: UIColor { return UIColor.Photon.Blue60 }
-    var selectedLinePrivateMode: UIColor { return UIColor.Photon.Purple50 }
+    func tabSelectedIndicatorBar(_ isPrivate: Bool) -> UIColor {
+        return !isPrivate ? UIColor.Photon.Blue40 : UIColor.Photon.Purple60
+    }
     var buttonTint: UIColor { return UIColor.Photon.Grey40 }
     var privateModeButtonOffTint: UIColor { return buttonTint }
     var privateModeButtonOnTint: UIColor { return UIColor.Photon.Grey10 }
@@ -121,20 +144,20 @@ class TextFieldColor {
 
 class HomePanelColor {
     var toolbarBackground: UIColor { return defaultBackground }
-    var toolbarHighlight: UIColor { return UIColor.Photon.Blue50 }
+    var toolbarHighlight: UIColor { return UIColor.Photon.Blue40 }
     var toolbarTint: UIColor { return UIColor.Photon.Grey50 }
 
     var panelBackground: UIColor { return UIColor.Photon.White100 }
+
     var separator: UIColor { return defaultSeparator }
     var border: UIColor { return UIColor.Photon.Grey60 }
     var buttonContainerBorder: UIColor { return separator }
-    var backgroundColorPrivateMode: UIColor { return UIColor.Photon.Grey50 }
     
     var welcomeScreenText: UIColor { return UIColor.Photon.Grey50 }
     var bookmarkIconBorder: UIColor { return UIColor.Photon.Grey30 }
     var bookmarkFolderBackground: UIColor { return UIColor.Photon.Grey10.withAlphaComponent(0.3) } 
     var bookmarkFolderText: UIColor { return UIColor.Photon.Grey80 } 
-    var bookmarkCurrentFolderText: UIColor { return UIColor.theme.general.highlightBlue }
+    var bookmarkCurrentFolderText: UIColor { return UIColor.Photon.Blue40 }
     var bookmarkBackNavCellBackground: UIColor { return UIColor.clear }
     
     var siteTableHeaderBorder: UIColor { return UIColor.Photon.Grey30.withAlphaComponent(0.8) }
@@ -152,23 +175,25 @@ class HomePanelColor {
     
     var historyHeaderIconsBackground: UIColor { return UIColor.Photon.White100 }
 
-    var searchSuggestionPilBackground: UIColor { return UIColor.Photon.White100 }
-    var searchSuggestionPillForeground: UIColor { return UIColor.theme.general.highlightBlue }
+    var searchSuggestionPillBackground: UIColor { return UIColor.Photon.White100 }
+    var searchSuggestionPillForeground: UIColor { return UIColor.Photon.Blue40 }
 }
 
 class SnackBarColor {
     var highlight: UIColor { return UIColor.Defaults.iOSTextHighlightBlue.withAlphaComponent(0.9) }
-    var highlightText: UIColor { return UIColor.Photon.Blue60 }
+    var highlightText: UIColor { return UIColor.Photon.Blue40 }
     var border: UIColor { return UIColor.Photon.Grey30 }
-    var title: UIColor { return UIColor.Photon.Blue50 }
+    var title: UIColor { return UIColor.Photon.Blue40 }
 }
 
 class GeneralColor {
+    var faviconBackground: UIColor { return UIColor.clear }
     var passcodeDot: UIColor { return UIColor.Photon.Grey60 }
-    var highlightBlue: UIColor { return UIColor.Photon.Blue50 }
+    var highlightBlue: UIColor { return UIColor.Photon.Blue40 }
     var destructiveRed: UIColor { return UIColor.Photon.Red50 }
     var separator: UIColor { return defaultSeparator }
     var settingsTextPlaceholder: UIColor? { return nil }
+    var controlTint: UIColor { return UIColor.Photon.Blue40 }
 }
 
 protocol Theme {

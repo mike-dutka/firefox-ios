@@ -267,8 +267,8 @@ class LoginManagerTests: KIFTestCase {
         tester().wait(forTimeInterval: 10)
         tester().waitForViewWithAccessibilityValue("a0.com/")
     }
-
-    func testOpenAndFillFromPrivateContext() {
+    // This test is disabled until bug 1486243 is fixed
+    /*func testOpenAndFillFromPrivateContext() {
         if BrowserUtils.iPad() {
             EarlGrey.selectElement(with: grey_accessibilityID("TopTabsViewController.tabsButton"))
                 .perform(grey_tap())
@@ -305,7 +305,7 @@ class LoginManagerTests: KIFTestCase {
 
         tester().wait(forTimeInterval: 10)
         tester().waitForViewWithAccessibilityValue("a0.com/")
-    }
+    }*/
 
     func testDetailUsernameMenuOptions() {
         openLoginManager()
@@ -407,7 +407,8 @@ class LoginManagerTests: KIFTestCase {
         tester().scrollView(withAccessibilityIdentifier: "Login List", byFractionOfSizeHorizontal: 0, vertical: 1)
         tester().scrollView(withAccessibilityIdentifier: "Login List", byFractionOfSizeHorizontal: 0, vertical: 1)
         tester().scrollView(withAccessibilityIdentifier: "Login List", byFractionOfSizeHorizontal: 0, vertical: 1)
-
+        tester().wait(forTimeInterval: 1)
+        tester().waitForAnimationsToFinish()
         XCTAssertTrue(list.cellForRow(at: firstInEachSection[0])!.isSelected)
 
         firstInEachSection.forEach { path in
@@ -447,6 +448,7 @@ class LoginManagerTests: KIFTestCase {
         tester().waitForView(withAccessibilityLabel: "Settings")
         tester().wait(forTimeInterval: 2) // Wait for the list to be updated
         list = tester().waitForView(withAccessibilityIdentifier: "Login List") as! UITableView
+        tester().wait(forTimeInterval: 1)
         var newLoginCount = countOfRowsInTableView(list)
         XCTAssertEqual(oldLoginCount - 1, newLoginCount)
 
@@ -468,7 +470,7 @@ class LoginManagerTests: KIFTestCase {
         tester().waitForAnimationsToFinish()
 
         tester().waitForView(withAccessibilityLabel: "Edit")
-
+        tester().wait(forTimeInterval: 1)
         newLoginCount = countOfRowsInTableView(list)
         XCTAssertEqual(oldLoginCount - 4, newLoginCount)
         closeLoginManager()
@@ -590,7 +592,7 @@ class LoginManagerTests: KIFTestCase {
         tester().waitForView(withAccessibilityLabel: "password")
 
         let list = tester().waitForView(withAccessibilityIdentifier: "Login Detail List") as! UITableView
-
+        tester().waitForAnimationsToFinish()
         tester().tapView(withAccessibilityLabel: "Edit")
 
         // Check that we've selected the username field
@@ -665,6 +667,7 @@ class LoginManagerTests: KIFTestCase {
         tester().waitForView(withAccessibilityLabel: "password")
 
         XCTAssertTrue(tester().viewExistsWithLabelPrefixedBy("Last modified"))
+        tester().wait(forTimeInterval: 1)
         tester().tapView(withAccessibilityLabel: "Logins")
         closeLoginManager()
     }
@@ -678,7 +681,7 @@ class LoginManagerTests: KIFTestCase {
         tester().waitForView(withAccessibilityLabel: "password")
 
         let list = tester().waitForView(withAccessibilityIdentifier: "Login Detail List") as! UITableView
-
+        tester().wait(forTimeInterval: 1)
         tester().tapView(withAccessibilityLabel: "Edit")
 
         // Check that we've selected the username field

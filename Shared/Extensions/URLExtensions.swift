@@ -186,6 +186,10 @@ extension URL {
     }
 
     public var displayURL: URL? {
+        if self.absoluteString.starts(with: "blob:") {
+            return URL(string: "blob:")
+        }
+
         if self.isFileURL {
             return URL(string: "file://\(self.lastPathComponent)")
         }
@@ -290,6 +294,10 @@ extension URL {
         // iOS forwards hostless URLs (e.g., http://:6571) to localhost.
         guard let host = host, !host.isEmpty else {
             return true
+        }
+
+        if AppConstants.IsRunningTest, path.contains("test-fixture/") {
+            return false
         }
 
         return host.lowercased() == "localhost" || host == "127.0.0.1"

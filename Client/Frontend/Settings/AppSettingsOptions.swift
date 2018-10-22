@@ -110,8 +110,6 @@ class SyncNowSetting: WithAccountSetting {
 
     override var accessoryType: UITableViewCellAccessoryType { return .none }
 
-    override var style: UITableViewCellStyle { return .value1 }
-
     override var image: UIImage? {
         guard let syncStatus = profile.syncManager.syncDisplayState else {
             return syncIcon
@@ -518,6 +516,17 @@ class ExportBrowserDataSetting: HiddenSetting {
     }
 }
 
+class ExportLogDataSetting: HiddenSetting {
+    override var title: NSAttributedString? {
+        // Not localized for now.
+        return NSAttributedString(string: "Debug: copy log files to app container", attributes: [NSAttributedStringKey.foregroundColor: UIColor.theme.tableView.rowText])
+    }
+
+    override func onClick(_ navigationController: UINavigationController?) {
+        Logger.copyPreviousLogsToDocuments();
+    }
+}
+
 /*
  FeatureSwitchSetting is a boolean switch for features that are enabled via a FeatureSwitch.
  These are usually features behind a partial release and not features released to the entire population.
@@ -599,7 +608,7 @@ class VersionSetting: Setting {
     }
 }
 
-// Opens the the license page in a new tab
+// Opens the license page in a new tab
 class LicenseAndAcknowledgementsSetting: Setting {
     override var title: NSAttributedString? {
         return NSAttributedString(string: NSLocalizedString("Licenses", comment: "Settings item that opens a tab containing the licenses. See http://mzl.la/1NSAWCG"), attributes: [NSAttributedStringKey.foregroundColor: UIColor.theme.tableView.rowText])
@@ -693,7 +702,7 @@ class SendAnonymousUsageDataSetting: BoolSetting {
     }
 }
 
-// Opens the the SUMO page in a new tab
+// Opens the SUMO page in a new tab
 class OpenSupportPageSetting: Setting {
     init(delegate: SettingsDelegate?) {
         super.init(title: NSAttributedString(string: NSLocalizedString("Help", comment: "Show the SUMO support page from the Support section in the settings. see http://mzl.la/1dmM8tZ"), attributes: [NSAttributedStringKey.foregroundColor: UIColor.theme.tableView.rowText]),
@@ -856,7 +865,7 @@ class ClearPrivateDataSetting: Setting {
         self.profile = settings.profile
         self.tabManager = settings.tabManager
 
-        let clearTitle = Strings.SettingsClearPrivateDataSectionName
+        let clearTitle = Strings.SettingsDataManagementSectionName
         super.init(title: NSAttributedString(string: clearTitle, attributes: [NSAttributedStringKey.foregroundColor: UIColor.theme.tableView.rowText]))
     }
 
@@ -897,7 +906,7 @@ class ChinaSyncServiceSetting: WithoutAccountSetting {
 
     override func onConfigureCell(_ cell: UITableViewCell) {
         super.onConfigureCell(cell)
-        let control = UISwitch()
+        let control = UISwitchThemed()
         control.onTintColor = UIColor.theme.tableView.controlTint
         control.addTarget(self, action: #selector(switchValueChanged), for: .valueChanged)
         control.isOn = prefs.boolForKey(prefKey) ?? BrowserProfile.isChinaEdition
@@ -950,7 +959,7 @@ class StageSyncServiceDebugSetting: WithoutAccountSetting {
 
     override func onConfigureCell(_ cell: UITableViewCell) {
         super.onConfigureCell(cell)
-        let control = UISwitch()
+        let control = UISwitchThemed()
         control.onTintColor = UIColor.theme.tableView.controlTint
         control.addTarget(self, action: #selector(switchValueChanged), for: .valueChanged)
         control.isOn = prefs.boolForKey(prefKey) ?? false
@@ -1002,6 +1011,27 @@ class NewTabPageSetting: Setting {
 
     override func onClick(_ navigationController: UINavigationController?) {
         let viewController = NewTabContentSettingsViewController(prefs: profile.prefs)
+        viewController.profile = profile
+        navigationController?.pushViewController(viewController, animated: true)
+    }
+}
+
+@available(iOS 12.0, *)
+class SiriPageSetting: Setting {
+    let profile: Profile
+
+    override var accessoryType: UITableViewCellAccessoryType { return .disclosureIndicator }
+
+    override var accessibilityIdentifier: String? { return "SiriSettings" }
+
+    init(settings: SettingsTableViewController) {
+        self.profile = settings.profile
+
+        super.init(title: NSAttributedString(string: Strings.SettingsSiriSectionName, attributes: [NSAttributedStringKey.foregroundColor: UIColor.theme.tableView.rowText]))
+    }
+
+    override func onClick(_ navigationController: UINavigationController?) {
+        let viewController = SiriSettingsViewController(prefs: profile.prefs)
         viewController.profile = profile
         navigationController?.pushViewController(viewController, animated: true)
     }

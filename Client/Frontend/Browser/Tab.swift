@@ -11,6 +11,16 @@ import XCGLogger
 
 fileprivate var debugTabCount = 0
 
+func mostRecentTab(inTabs tabs: [Tab]) -> Tab? {
+    var recent = tabs.first
+    tabs.forEach { tab in
+        if let time = tab.lastExecutedTime, time > (recent?.lastExecutedTime ?? 0) {
+            recent = tab
+        }
+    }
+    return recent
+}
+
 protocol TabContentScript {
     static func name() -> String
     func scriptMessageHandlerName() -> String?
@@ -134,7 +144,7 @@ class Tab: NSObject {
     var screenshotUUID: UUID?
 
     // If this tab has been opened from another, its parent will point to the tab from which it was opened
-    var parent: Tab?
+    weak var parent: Tab?
 
     fileprivate var contentScriptManager = TabContentScriptManager()
     private(set) var userScriptManager: UserScriptManager?
@@ -159,7 +169,11 @@ class Tab: NSObject {
         debugTabCount += 1
     }
 
-    class func toTab(_ tab: Tab) -> RemoteTab? {
+    class func toRemoteTab(_ tab: Tab) -> RemoteTab? {
+        if tab.isPrivate {
+            return nil
+        }
+
         if let displayURL = tab.url?.displayURL, RemoteTab.shouldIncludeURL(displayURL) {
             let history = Array(tab.historyList.filter(RemoteTab.shouldIncludeURL).reversed())
             return RemoteTab(clientGUID: nil,
@@ -239,7 +253,7 @@ class Tab: NSObject {
             var jsonDict = [String: AnyObject]()
             jsonDict["history"] = urls as AnyObject?
             jsonDict["currentPage"] = currentPage as AnyObject?
-            guard let json = JSON(jsonDict).stringValue() else {
+            guard let json = JSON(jsonDict).stringify() else {
                 return
             }
             let escapedJSON = json.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)!
@@ -274,7 +288,7 @@ class Tab: NSObject {
         #endif
     }
 
-    func close() {
+    func closeAndRemovePrivateBrowsingData() {
         webView?.removeObserver(self, forKeyPath: KVOConstants.URL.rawValue)
 
         if let webView = webView {
@@ -282,16 +296,14 @@ class Tab: NSObject {
         }
 
         contentScriptManager.helpers.removeAll()
-        webView?.navigationDelegate = nil
-        webView?.removeFromSuperview()
-        webView = nil
-    }
 
-    func closeAndRemovePrivateBrowsingData() {
-        close()
         if isPrivate {
             removeAllBrowsingData()
         }
+
+        webView?.navigationDelegate = nil
+        webView?.removeFromSuperview()
+        webView = nil
     }
 
     func removeAllBrowsingData(completionHandler: @escaping () -> Void = {}) {

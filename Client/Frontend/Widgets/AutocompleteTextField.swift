@@ -24,6 +24,7 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
     // The textfields "text" property only contains the entered text, while this label holds the autocomplete text
     // This makes sure that the autocomplete doesnt mess with keyboard suggestions provided by third party keyboards.
     private var autocompleteTextLabel: UILabel?
+    private var clearButton: UIButton?
     private var hideCursor: Bool = false
 
     private let copyShortcutKey = "c"
@@ -41,7 +42,7 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
     fileprivate var notifyTextChanged: (() -> Void)?
     private var lastReplacement: String?
 
-    var textSelectionColor = UIColor.theme.urlbar.textSelectionHighlight
+    static var textSelectionColor = URLBarColor.TextSelectionHighlight(labelMode: UIColor(), textFieldMode: nil)
 
     override var text: String? {
         didSet {
@@ -161,17 +162,22 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
 
         // Clear the current completion, then set the text without the attributed style.
         let text = (self.text ?? "") + (self.autocompleteTextLabel?.text ?? "")
-        removeCompletion()
+        let didRemoveCompletion = removeCompletion()
         self.text = text
         hideCursor = false
         // Move the cursor to the end of the completion.
-        selectedTextRange = textRange(from: endOfDocument, to: endOfDocument)
+        if didRemoveCompletion {
+            selectedTextRange = textRange(from: endOfDocument, to: endOfDocument)
+        }
     }
 
-    /// Removes the autocomplete-highlighted
-    fileprivate func removeCompletion() {
+    /// Removes the autocomplete-highlighted. Returns true if a completion was actually removed
+    @objc @discardableResult fileprivate func removeCompletion() -> Bool {
+        let hasActiveCompletion = isSelectionActive
         autocompleteTextLabel?.removeFromSuperview()
+        clearButton?.removeFromSuperview()
         autocompleteTextLabel = nil
+        return hasActiveCompletion
     }
 
     // `shouldChangeCharactersInRange` is called before the text changes, and textDidChange is called after.
@@ -198,13 +204,29 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
 
         let suggestionText = String(suggestion[suggestion.index(suggestion.startIndex, offsetBy: normalized.count)...])
         let autocompleteText = NSMutableAttributedString(string: suggestionText)
-        autocompleteText.addAttribute(NSAttributedStringKey.backgroundColor, value: textSelectionColor, range: NSRange(location: 0, length: suggestionText.count))
+
+        let color = AutocompleteTextField.textSelectionColor.labelMode
+        autocompleteText.addAttribute(NSAttributedStringKey.backgroundColor, value: color, range: NSRange(location: 0, length: suggestionText.count))
+
         autocompleteTextLabel?.removeFromSuperview() // should be nil. But just in case
         autocompleteTextLabel = createAutocompleteLabelWith(autocompleteText)
         if let l = autocompleteTextLabel {
             addSubview(l)
             hideCursor = true
             forceResetCursor()
+        }
+
+        self.clearButton?.removeFromSuperview()
+        if text.isEmpty {
+            let clearButton = createClearButton()
+            self.clearButton = clearButton
+            addSubview(clearButton)
+            clearButton.snp.makeConstraints { make in
+                make.height.centerY.equalToSuperview()
+                make.width.equalTo(40)
+                // Without this offset, the button moves 5 pixels when switching from UILabel mode to UITextField mode
+                make.right.equalToSuperview().offset(5)
+            }
         }
     }
 
@@ -228,6 +250,15 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
         frame.size.height = self.frame.size.height - 1
         label.frame = frame
         return label
+    }
+
+    private func createClearButton() -> UIButton {
+        let button = UIButton()
+        button.setImage(UIImage.templateImageNamed("topTabs-closeTabs"), for: .normal)
+        button.tintColor = self.textColor
+        button.backgroundColor = backgroundColor
+        button.addTarget(self, action: #selector(removeCompletion), for: .touchUpInside)
+        return button
     }
 
     func textFieldDidBeginEditing(_ textField: UITextField) {
@@ -298,13 +329,10 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
         applyCompletion()
         super.touchesBegan(touches, with: event)
     }
-
 }
 
 extension AutocompleteTextField: MenuHelperInterface {
-
     @objc func menuHelperPasteAndGo() {
         autocompleteDelegate?.autocompletePasteAndGo(self)
     }
-
 }

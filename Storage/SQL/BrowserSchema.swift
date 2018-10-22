@@ -41,6 +41,8 @@ let TableHighlights = "highlights"
 
 let TableRemoteDevices = "remote_devices" // Added in v29.
 
+let MatViewAwesomebarBookmarksWithFavicons = "matview_awesomebar_bookmarks_with_favicons"
+
 let ViewBookmarksBufferOnMirror = "view_bookmarksBuffer_on_mirror"
 let ViewBookmarksBufferWithDeletionsOnMirror = "view_bookmarksBuffer_with_deletions_on_mirror"
 let ViewBookmarksBufferStructureOnMirror = "view_bookmarksBufferStructure_on_mirror"
@@ -48,8 +50,7 @@ let ViewBookmarksLocalOnMirror = "view_bookmarksLocal_on_mirror"
 let ViewBookmarksLocalStructureOnMirror = "view_bookmarksLocalStructure_on_mirror"
 let ViewAllBookmarks = "view_all_bookmarks"
 let ViewAwesomebarBookmarks = "view_awesomebar_bookmarks"
-let TempTableAwesomebarBookmarks = "awesomebar_bookmarks_temp_table"
-let ViewAwesomebarBookmarksWithIcons = "view_awesomebar_bookmarks_with_favicons"
+let ViewAwesomebarBookmarksWithFavicons = "view_awesomebar_bookmarks_with_favicons"
 
 let ViewHistoryVisits = "view_history_visits"
 let ViewWidestFaviconsForSites = "view_favicons_widest"
@@ -99,6 +100,8 @@ private let AllTables: [String] = [
     TableSyncCommands,
     TableClients,
     TableTabs,
+
+    MatViewAwesomebarBookmarksWithFavicons,
 ]
 
 private let AllViews: [String] = [
@@ -112,7 +115,7 @@ private let AllViews: [String] = [
     ViewBookmarksLocalStructureOnMirror,
     ViewAllBookmarks,
     ViewAwesomebarBookmarks,
-    ViewAwesomebarBookmarksWithIcons,
+    ViewAwesomebarBookmarksWithFavicons,
     ViewHistoryVisits,
 ]
 
@@ -143,7 +146,7 @@ private let log = Logger.syncLogger
  * We rely on SQLiteHistory having initialized the favicon table first.
  */
 open class BrowserSchema: Schema {
-    static let DefaultVersion = 36    // Bug 1476881.
+    static let DefaultVersion = 38    // Bug 1486583.
 
     public var name: String { return "BROWSER" }
     public var version: Int { return BrowserSchema.DefaultVersion }
@@ -357,6 +360,21 @@ open class BrowserSchema: Schema {
             visitCount INTEGER,
             visitDate DATETIME,
             is_bookmarked INTEGER
+        )
+        """
+
+    let awesomebarBookmarksWithFaviconsCreate = """
+        CREATE TABLE IF NOT EXISTS matview_awesomebar_bookmarks_with_favicons (
+            guid TEXT,
+            url TEXT,
+            title TEXT,
+            description TEXT,
+            visitDate DATETIME,
+            iconID INTEGER,
+            iconURL TEXT,
+            iconDate REAL,
+            iconType INTEGER,
+            iconWidth INTEGER
         )
         """
 
@@ -690,7 +708,8 @@ open class BrowserSchema: Schema {
             -- Timestamps in ms.
             date_created INTEGER NOT NULL,
             date_modified INTEGER NOT NULL,
-            last_access_time INTEGER
+            last_access_time INTEGER,
+            availableCommands TEXT
         )
         """
 
@@ -858,6 +877,9 @@ open class BrowserSchema: Schema {
             clientsTableCreate,
             tabsTableCreate,
             historyFTSCreate,
+
+            // "Materialized Views" (Tables)
+            awesomebarBookmarksWithFaviconsCreate,
 
             // Indices.
             indexBufferStructureParentIdx,
@@ -1339,6 +1361,28 @@ open class BrowserSchema: Schema {
             // Rebuild the FTS index for the `history_fts` table.
             if !self.run(db, queries: [
                 historyFTSRebuild,
+                ]) {
+                return false
+            }
+        }
+
+        if from < 37 && to >= 37 {
+            // Only need to add this column if we're coming from *after* v29.
+            // Otherwise, this column would already have been created during
+            // v29.
+            if from > 29 {
+                if !self.run(db, queries: [
+                    "ALTER TABLE remote_devices ADD availableCommands TEXT",
+                    ]) {
+                    return false
+                }
+            }
+        }
+
+        if from < 38 && to >= 38 {
+            // Create the "materialized view" table `matview_awesomebar_bookmarks_with_favicons`.
+            if !self.run(db, queries: [
+                awesomebarBookmarksWithFaviconsCreate,
                 ]) {
                 return false
             }

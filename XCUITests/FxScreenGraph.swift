@@ -307,7 +307,7 @@ func createScreenGraph(for test: XCTestCase, with app: XCUIApplication) -> MMScr
 
     map.addScreenState(URLBarLongPressMenu) { screenState in
         let menu = app.tables["Context Menu"].firstMatch
-        screenState.onEnterWaitFor(element: menu)
+        //screenState.onEnterWaitFor(element: menu)
 
         screenState.gesture(forAction: Action.LoadURLByPasting, Action.LoadURL) { userState in
             UIPasteboard.general.string = userState.url ?? defaultURL
@@ -393,11 +393,11 @@ func createScreenGraph(for test: XCTestCase, with app: XCUIApplication) -> MMScr
         screenState.dismissOnUse = true
         // Would like to use app.otherElements.deviceStatusBars.networkLoadingIndicators.element
         // but this means exposing some of SnapshotHelper to another target.
-        if !(app.progressIndicators.element(boundBy: 0).exists) {
+        /*if !(app.progressIndicators.element(boundBy: 0).exists) {
             screenState.onEnterWaitFor("exists != true", element: app.progressIndicators.element(boundBy: 0), if: "waitForLoading == true")
         } else {
             screenState.onEnterWaitFor(element: app.progressIndicators.element(boundBy: 0), if: "waitForLoading == false")
-        }
+        }*/
 
         screenState.noop(to: BrowserTab, if: "waitForLoading == true")
         screenState.noop(to: BasicAuthDialog, if: "waitForLoading == false")
@@ -724,11 +724,11 @@ func createScreenGraph(for test: XCTestCase, with app: XCUIApplication) -> MMScr
     if !isTablet {
         map.addScreenState(TabTrayLongPressMenu) { screenState in
             screenState.dismissOnUse = true
-            screenState.tap(app.buttons["toolbarTabButtonLongPress.newTab"], forAction: Action.OpenNewTabLongPressTabsButton, transitionTo: NewTabScreen)
-            screenState.tap(app.buttons["toolbarTabButtonLongPress.newPrivateTab"], forAction: Action.OpenPrivateTabLongPressTabsButton, transitionTo: NewTabScreen) { userState in
+            screenState.tap(app.cells["quick_action_new_tab"], forAction: Action.OpenNewTabLongPressTabsButton, transitionTo: NewTabScreen)
+            screenState.tap(app.cells["tab_close"], forAction: Action.CloseTabFromTabTrayLongPressMenu, Action.CloseTab, transitionTo: HomePanelsScreen)
+            screenState.tap(app.cells["nav-tabcounter"], forAction: Action.OpenPrivateTabLongPressTabsButton, transitionTo: NewTabScreen) { userState in
                 userState.isPrivate = !userState.isPrivate
             }
-            screenState.tap(app.buttons["toolbarTabButtonLongPress.closeTab"], forAction: Action.CloseTabFromTabTrayLongPressMenu, Action.CloseTab, transitionTo: HomePanelsScreen)
         }
     }
 
@@ -768,6 +768,7 @@ func createScreenGraph(for test: XCTestCase, with app: XCUIApplication) -> MMScr
     map.addScreenState(BrowserTab) { screenState in
         makeURLBarAvailable(screenState)
         screenState.tap(app.buttons["TabLocationView.pageOptionsButton"], to: PageOptionsMenu)
+        screenState.tap(app.buttons["TabToolbar.menuButton"], to: BrowserTabMenu)
 
         makeToolBarAvailable(screenState)
         let link = app.webViews.element(boundBy: 0).links.element(boundBy: 0)
@@ -784,6 +785,18 @@ func createScreenGraph(for test: XCTestCase, with app: XCUIApplication) -> MMScr
         if !isTablet {
             let tabsButton = app.buttons["TabToolbar.tabsButton"]
             screenState.press(tabsButton, to: TabTrayLongPressMenu)
+        }
+
+        if isTablet {
+            screenState.tap(app.buttons["TopTabsViewController.tabsButton"], to: TabTray)
+        } else {
+            screenState.gesture(to: TabTray) {
+                if (app.buttons["TabToolbar.tabsButton"].exists) {
+                    app.buttons["TabToolbar.tabsButton"].tap()
+                } else {
+                    app.buttons["URLBarView.tabsButton"].tap()
+                }
+            }
         }
 
         screenState.tap(app.buttons["Private Mode"], forAction: Action.TogglePrivateModeFromTabBarBrowserTab) { userState in
@@ -821,7 +834,6 @@ func createScreenGraph(for test: XCTestCase, with app: XCUIApplication) -> MMScr
     map.addScreenState(PageOptionsMenu) {screenState in
         screenState.tap(app.tables["Context Menu"].cells["menu-FindInPage"], to: FindInPage)
         screenState.tap(app.tables["Context Menu"].cells["menu-Bookmark"], forAction: Action.BookmarkThreeDots, Action.Bookmark)
-        screenState.tap(app.tables["Context Menu"].cells["action_remove"], forAction: Action.CloseTabFromPageOptions, Action.CloseTab, transitionTo: HomePanelsScreen, if: "tablet != true")
         screenState.tap(app.tables.cells["action_pin"], forAction: Action.PinToTopSitesPAM)
         screenState.tap(app.tables.cells["menu-Copy-Link"], forAction: Action.CopyAddressPAM)
         screenState.backAction = cancelBackAction

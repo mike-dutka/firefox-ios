@@ -5,10 +5,17 @@
 import MappaMundi
 import XCTest
 
+func path(forTestPage page: String) -> String {
+    return "http://localhost:6571/test-fixture/\(page)"
+}
+
 class BaseTestCase: XCTestCase {
     var navigator: MMNavigator<FxUserState>!
     let app =  XCUIApplication()
     var userState: FxUserState!
+
+    // leave empty for non-specific tests
+    var specificForPlatform: UIUserInterfaceIdiom?
 
     // These are used during setUp(). Change them prior to setUp() for the app to launch with different args,
     // or, use restart() to re-launch with custom args.
@@ -34,6 +41,11 @@ class BaseTestCase: XCTestCase {
     override func tearDown() {
         app.terminate()
         super.tearDown()
+    }
+
+    var skipPlatform: Bool {
+        guard let platform = specificForPlatform else { return false }
+        return UIDevice.current.userInterfaceIdiom != platform
     }
 
     func restart(_ app: XCUIApplication, args: [String] = []) {
@@ -107,6 +119,24 @@ class BaseTestCase: XCTestCase {
         let progressIndicator = app.progressIndicators.element(boundBy: 0)
 
         waitforNoExistence(progressIndicator, timeoutValue: 20.0)
+    }
+}
+
+class IpadOnlyTestCase: BaseTestCase {
+    override func setUp() {
+        specificForPlatform = .pad
+        if iPad() {
+            super.setUp()
+        }
+    }
+}
+
+class IphoneOnlyTestCase: BaseTestCase {
+    override func setUp() {
+        specificForPlatform = .phone
+        if !iPad() {
+            super.setUp()
+        }
     }
 }
 

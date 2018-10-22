@@ -51,6 +51,10 @@ class AppSettingsTableViewController: SettingsTableViewController {
                         titleText: NSLocalizedString("Save Logins", comment: "Setting to enable the built-in password manager")),
             ]
 
+        if #available(iOS 12.0, *) {
+            generalSettings.insert(SiriPageSetting(settings: self), at: 5)
+        }
+
         let accountChinaSyncSetting: [Setting]
         if !BrowserProfile.isChinaEdition {
             accountChinaSyncSetting = []
@@ -120,6 +124,7 @@ class AppSettingsTableViewController: SettingsTableViewController {
                 LicenseAndAcknowledgementsSetting(),
                 YourRightsSetting(),
                 ExportBrowserDataSetting(settings: self),
+                ExportLogDataSetting(settings: self),
                 DeleteExportedDataSetting(settings: self),
                 EnableBookmarkMergingSetting(settings: self),
                 ForceCrashSetting(settings: self)

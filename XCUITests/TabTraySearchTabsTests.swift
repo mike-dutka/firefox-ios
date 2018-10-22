@@ -8,7 +8,7 @@ class TabTraySearchTabsTests: BaseTestCase {
 
     func testSearchTabs() {
         // Open two tabs and go to tab tray
-        navigator.openURL(firstURL)
+        navigator.openURL(path(forTestPage: "test-mozilla-org.html"))
         waitUntilPageLoad()
         navigator.openNewURL(urlString: secondURL )
         navigator.goto(TabTray)
@@ -39,15 +39,15 @@ class TabTraySearchTabsTests: BaseTestCase {
     func testSearchTabsPrivateMode() {
         navigator.performAction(Action.TogglePrivateMode)
         // Open two tabs to check that the search works
-        navigator.openNewURL(urlString: firstURL)
+        navigator.openNewURL(urlString: path(forTestPage: "test-mozilla-org.html"))
         waitUntilPageLoad()
-        navigator.openNewURL(urlString: secondURL)
+        navigator.openNewURL(urlString: path(forTestPage: "test-example.html"))
         navigator.goto(TabTray)
         searchTabs(tabTitleOrUrl: "internet")
         XCTAssertEqual(app.collectionViews.cells.count, 1)
     }
-
-    func testDragAndDropTabToSearchTabField() {
+    // Test disabled because the DragAndDrop is off for master and 14.x
+    /*func testDragAndDropTabToSearchTabField() {
         navigator.openURL(firstURL)
         navigator.goto(TabTray)
         waitforExistence(app.textFields["Search Tabs"])
@@ -55,10 +55,10 @@ class TabTraySearchTabsTests: BaseTestCase {
         waitForValueContains(app.textFields["Search Tabs"], value: "mozilla.org")
         let searchValue = app.textFields["Search Tabs"].value
         XCTAssertEqual(searchValue as! String, fullFirstURL)
-    }
+    }*/
 
     func testSearchFieldClearedAfterVisingWebsite() {
-        navigator.openURL(firstURL)
+        navigator.openURL(path(forTestPage: "test-mozilla-org.html"))
         navigator.goto(TabTray)
         searchTabs(tabTitleOrUrl: "mozilla")
         app.collectionViews.cells["Internet for people, not profit — Mozilla"].tap()

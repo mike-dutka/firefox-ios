@@ -22,31 +22,35 @@ pipeline {
             steps {
                 dir('SyncIntegrationTests') {
                     sh 'pipenv install'
-                    sh 'pipenv check -i 36351' // Ignoring vulnerability due to https://github.com/pyupio/safety-db/issues/2272
-                    sh 'pipenv run pytest ' +
-                        '--color=yes ' +
-                        '--junit-xml=results/junit.xml ' +
-                        '--html=results/index.html'
+                    sh 'pipenv check'
+                    // sh 'pipenv run pytest ' +
+                        //'--color=yes ' +
+                        //'--junit-xml=results/junit.xml ' +
+                        //'--html=results/index.html'
                 }
             }
         }
     }
     post {
-        always {
-            archiveArtifacts 'SyncIntegrationTests/results/*'
-            junit 'SyncIntegrationTests/results/*.xml'
-            publishHTML(target: [
-                allowMissing: false,
-                alwaysLinkToLastBuild: true,
-                keepAll: true,
-                reportDir: 'SyncIntegrationTests/results',
-                reportFiles: 'index.html',
-                reportName: 'HTML Report'])
-        }
+        //always {
+            //archiveArtifacts 'SyncIntegrationTests/results/*'
+            //junit 'SyncIntegrationTests/results/*.xml'
+            //publishHTML(target: [
+                //allowMissing: false,
+                //alwaysLinkToLastBuild: true,
+                //keepAll: true,
+                //reportDir: 'SyncIntegrationTests/results',
+                //reportFiles: 'index.html',
+                //reportName: 'HTML Report'])
+        //}
         failure {
-            slackSend(
-                color: 'danger',
-                message: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+            script {
+                if (env.BRANCH_NAME == 'master') {
+                    slackSend(
+                        color: 'danger',
+                        message: "FAILED: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]' (${env.BUILD_URL})")
+                }
+            }
         }
         fixed {
             slackSend(

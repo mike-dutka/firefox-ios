@@ -172,38 +172,29 @@ fileprivate struct SQLiteFrecentHistory: FrecentHistory {
         self.db = db
         self.prefs = prefs
 
-        let empty = "DELETE FROM \(TempTableAwesomebarBookmarks)"
-        let create = """
-            CREATE TEMP TABLE IF NOT EXISTS \(TempTableAwesomebarBookmarks) (
-                guid TEXT, url TEXT, title TEXT, description TEXT,
-                faviconID INT, visitDate DATE
-            )
-            """
+        let empty = "DELETE FROM \(MatViewAwesomebarBookmarksWithFavicons)"
 
         let insert = """
-            INSERT INTO \(TempTableAwesomebarBookmarks)
+            INSERT INTO \(MatViewAwesomebarBookmarksWithFavicons)
             SELECT
-                b.guid AS guid, b.url AS url, b.title AS title,
-                b.description AS description, b.faviconID AS faviconID,
-                h.visitDate AS visitDate
-            FROM view_awesomebar_bookmarks b LEFT JOIN view_history_visits h ON
-                b.url = h.url
+                guid, url, title, description, visitDate,
+                iconID, iconURL, iconDate, iconType, iconWidth
+            FROM \(ViewAwesomebarBookmarksWithFavicons)
             """
 
         _ = db.transaction { connection in
-            try connection.executeChange(create)
             try connection.executeChange(empty)
             try connection.executeChange(insert)
         }
     }
 
     func getSites(whereURLContains filter: String?, historyLimit limit: Int, bookmarksLimit: Int) -> Deferred<Maybe<Cursor<Site>>> {
-        let factory = SQLiteHistory.basicHistoryColumnFactory
+        let factory = SQLiteHistory.iconHistoryColumnFactory
 
         let params = FrecencyQueryParams.urlCompletion(bookmarksLimit: bookmarksLimit, whereURLContains: filter ?? "", groupClause: "GROUP BY historyID ")
         let (query, args) = getFrecencyQuery(historyLimit: limit, params: params)
 
-        return db.runQuery(query, args: args, factory: factory)
+        return db.runQueryConcurrently(query, args: args, factory: factory)
     }
 
     private func updateTopSitesCacheQueryOld() -> (String, Args?) {
@@ -243,8 +234,9 @@ fileprivate struct SQLiteFrecentHistory: FrecentHistory {
             SELECT
                 historyID, url, title, guid, domain_id, domain,
                 localVisitDate, remoteVisitDate, localVisitCount, remoteVisitCount,
-                NULL AS iconID, NULL AS iconURL, NULL AS iconDate, NULL AS iconType, NULL AS iconWidth, frecencies
-            FROM siteFrecency
+                iconID, iconURL, iconDate, iconType, iconWidth, frecencies
+            FROM siteFrecency LEFT JOIN view_history_id_favicon ON
+                siteFrecency.historyID = view_history_id_favicon.id
             """
 
         return (insertQuery, args)
@@ -296,6 +288,7 @@ fileprivate struct SQLiteFrecentHistory: FrecentHistory {
 
         let args: Args
         let whereClause: String
+        let bookmarksWhereClause: String
         let whereFragment = (whereData == nil) ? "" : " AND (\(whereData!))"
 
         if let urlFilter = urlFilter?.trimmingCharacters(in: .whitespaces), !urlFilter.isEmpty {
@@ -304,7 +297,8 @@ fileprivate struct SQLiteFrecentHistory: FrecentHistory {
             let (filterFragment, filterArgs) = computeWhereFragmentWithFilter(urlFilter, perWordFragment: perWordFragment, perWordArgs: perWordArgs)
 
             // No deleted item has a URL, so there is no need to explicitly add that here.
-            whereClause = "WHERE (\(filterFragment))\(whereFragment)"
+            whereClause = " WHERE (\(filterFragment))\(whereFragment)"
+            bookmarksWhereClause = " WHERE (\(filterFragment))\(whereFragment)"
 
             if includeBookmarks {
                 // We'll need them twice: once to filter history, and once to filter bookmarks.
@@ -314,6 +308,7 @@ fileprivate struct SQLiteFrecentHistory: FrecentHistory {
             }
         } else {
             whereClause = " WHERE (history.is_deleted = 0)\(whereFragment)"
+            bookmarksWhereClause = (whereData == nil) ? "" : " WHERE (\(whereData!))"
             args = []
         }
 
@@ -393,9 +388,8 @@ fileprivate struct SQLiteFrecentHistory: FrecentHistory {
                 -- Need this column for UNION
                 0 as maxFrecency,
                 1 AS is_bookmarked
-            FROM \(TempTableAwesomebarBookmarks)
-            -- The columns match, so we can reuse this.
-            \(whereClause)
+            FROM \(MatViewAwesomebarBookmarksWithFavicons)
+            \(bookmarksWhereClause)
             GROUP BY url
             ORDER BY visitDate DESC LIMIT \(bookmarksLimit)
             """
@@ -404,7 +398,17 @@ fileprivate struct SQLiteFrecentHistory: FrecentHistory {
             return (historySQL, args)
         }
 
-        let allSQL = "SELECT * FROM (SELECT * FROM (\(historySQL)) UNION SELECT * FROM (\(bookmarksSQL))) ORDER BY is_bookmarked DESC, frecencies DESC"
+        let allSQL = """
+            SELECT *
+            FROM (
+                SELECT * FROM (\(historySQL))
+                UNION
+                SELECT * FROM (\(bookmarksSQL))
+            ) AS hb
+            LEFT OUTER JOIN view_favicons_widest ON view_favicons_widest.siteID = hb.historyID
+            ORDER BY is_bookmarked DESC, frecencies DESC
+            """
+
         return (allSQL, args)
     }
 
@@ -456,7 +460,7 @@ fileprivate struct SQLiteFrecentHistory: FrecentHistory {
             }
         } else {
             ftsWhereClause = " WHERE (history.is_deleted = 0)\(whereFragment)"
-            bookmarksWhereClause = " WHERE (history.is_deleted = 0)\(whereFragment)"
+            bookmarksWhereClause = (whereData == nil) ? "" : " WHERE (\(whereData!))"
             args = []
         }
 
@@ -538,7 +542,7 @@ fileprivate struct SQLiteFrecentHistory: FrecentHistory {
                 -- Need this column for UNION
                 0 as maxFrecency,
                 1 AS is_bookmarked
-            FROM \(TempTableAwesomebarBookmarks)
+            FROM \(MatViewAwesomebarBookmarksWithFavicons)
             \(bookmarksWhereClause)
             GROUP BY url
             ORDER BY visitDate DESC LIMIT \(bookmarksLimit)
@@ -548,7 +552,16 @@ fileprivate struct SQLiteFrecentHistory: FrecentHistory {
             return (historySQL, args)
         }
 
-        let allSQL = "SELECT * FROM (SELECT * FROM (\(historySQL)) UNION SELECT * FROM (\(bookmarksSQL))) ORDER BY is_bookmarked DESC, frecencies DESC"
+        let allSQL = """
+            SELECT *
+            FROM (
+                SELECT * FROM (\(historySQL))
+                UNION
+                SELECT * FROM (\(bookmarksSQL))
+            ) AS hb
+            LEFT OUTER JOIN view_favicons_widest ON view_favicons_widest.siteID = hb.historyID
+            ORDER BY is_bookmarked DESC, frecencies DESC
+            """
         return (allSQL, args)
     }
 
@@ -595,7 +608,7 @@ fileprivate struct SQLiteFrecentHistory: FrecentHistory {
                     domains.id = history.domain_id
                 INNER JOIN visits ON
                     visits.siteID = history.id
-            WHERE (history.is_deleted = 0) AND ((domains.showOnTopSites IS 1) AND (domains.domain NOT LIKE 'r.%') AND (domains.domain NOT LIKE 'google.%') )
+            WHERE (history.is_deleted = 0) AND ((domains.showOnTopSites IS 1) AND (domains.domain NOT LIKE 'r.%') AND (domains.domain NOT LIKE 'google.%')) AND (history.url LIKE 'http%')
             GROUP BY historyID
             """
 
@@ -872,7 +885,7 @@ extension SQLiteHistory: BrowserHistory {
             ORDER BY latestVisits.latestVisitDate DESC
             """
 
-        return db.runQuery(sql, args: nil, factory: SQLiteHistory.iconHistoryColumnFactory)
+        return db.runQueryConcurrently(sql, args: nil, factory: SQLiteHistory.iconHistoryColumnFactory)
     }
 
     fileprivate func getFilteredSitesByVisitDateWithLimit(_ limit: Int,
@@ -915,7 +928,7 @@ extension SQLiteHistory: BrowserHistory {
             """
 
         let factory = includeIcon ? SQLiteHistory.iconHistoryColumnFactory : SQLiteHistory.basicHistoryColumnFactory
-        return db.runQuery(sql, args: args, factory: factory)
+        return db.runQueryConcurrently(sql, args: args, factory: factory)
     }
 
 }
@@ -930,7 +943,7 @@ extension SQLiteHistory: Favicons {
             """
 
         let args: Args = [url]
-        return db.runQuery(sql, args: args, factory: SQLiteHistory.iconColumnFactory)
+        return db.runQueryConcurrently(sql, args: args, factory: SQLiteHistory.iconColumnFactory)
     }
 
     func getFaviconsForBookmarkedURL(_ url: String) -> Deferred<Maybe<Cursor<Favicon?>>> {
@@ -946,7 +959,7 @@ extension SQLiteHistory: Favicons {
             """
 
         let args: Args = [url]
-        return db.runQuery(sql, args: args, factory: SQLiteHistory.iconColumnFactory)
+        return db.runQueryConcurrently(sql, args: args, factory: SQLiteHistory.iconColumnFactory)
     }
 
     public func getSitesForURLs(_ urls: [String]) -> Deferred<Maybe<Cursor<Site?>>> {
@@ -958,7 +971,7 @@ extension SQLiteHistory: Favicons {
             """
 
         let args: Args = []
-        return db.runQuery(sql, args: args, factory: SQLiteHistory.iconHistoryColumnFactory)
+        return db.runQueryConcurrently(sql, args: args, factory: SQLiteHistory.iconHistoryColumnFactory)
     }
 
     public func clearAllFavicons() -> Success {
@@ -1062,7 +1075,7 @@ extension SQLiteHistory: SyncableHistory {
         let query = "SELECT id FROM history WHERE guid = ?"
         let factory: (SDRow) -> Int = { return $0["id"] as! Int }
 
-        return db.runQuery(query, args: args, factory: factory)
+        return db.runQueryConcurrently(query, args: args, factory: factory)
             >>== { cursor in
                 if cursor.count == 0 {
                     return deferMaybe(NoSuchRecordError(guid: guid))
@@ -1111,7 +1124,7 @@ extension SQLiteHistory: SyncableHistory {
                 title: row["title"] as! String
             )
         }
-        return db.runQuery(select, args: args, factory: factory) >>== { cursor in
+        return db.runQueryConcurrently(select, args: args, factory: factory) >>== { cursor in
             return deferMaybe(cursor[0])
         }
     }
@@ -1244,7 +1257,7 @@ extension SQLiteHistory: SyncableHistory {
         }
 
         let args: Args = [limit]
-        return db.runQuery(sql, args: args, factory: placeFactory) >>> { deferMaybe(places) }
+        return db.runQueryConcurrently(sql, args: args, factory: placeFactory) >>> { deferMaybe(places) }
     }
 
     private func attachVisitsTo(places: [Int: Place], visitLimit: Int) -> Deferred<Maybe<[(Place, [Visit])]>> {

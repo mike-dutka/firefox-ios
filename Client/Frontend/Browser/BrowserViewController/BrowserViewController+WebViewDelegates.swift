@@ -8,6 +8,90 @@ import Shared
 
 private let log = Logger.browserLogger
 
+/// List of schemes that are allowed to be opened in new tabs.
+private let schemesAllowedToBeOpenedAsPopups = ["http", "https", "javascript", "data", "about"]
+
+extension BrowserViewController: WKUIDelegate {
+    func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        guard let parentTab = tabManager[webView] else { return nil }
+
+        guard navigationAction.isAllowed, shouldRequestBeOpenedAsPopup(navigationAction.request) else {
+            print("Denying popup from request: \(navigationAction.request)")
+            return nil
+        }
+
+        if let currentTab = tabManager.selectedTab {
+            screenshotHelper.takeScreenshot(currentTab)
+        }
+
+        // If the page uses `window.open()` or `[target="_blank"]`, open the page in a new tab.
+        // IMPORTANT!!: WebKit will perform the `URLRequest` automatically!! Attempting to do
+        // the request here manually leads to incorrect results!!
+        let newTab = tabManager.addPopupForParentTab(parentTab, configuration: configuration)
+
+        return newTab.webView
+    }
+
+    fileprivate func shouldRequestBeOpenedAsPopup(_ request: URLRequest) -> Bool {
+        // Treat `window.open("")` the same as `window.open("about:blank")`.
+        if request.url?.absoluteString.isEmpty ?? false {
+            return true
+        }
+
+        if let scheme = request.url?.scheme?.lowercased(), schemesAllowedToBeOpenedAsPopups.contains(scheme) {
+            return true
+        }
+
+        return false
+    }
+
+    fileprivate func shouldDisplayJSAlertForWebView(_ webView: WKWebView) -> Bool {
+        // Only display a JS Alert if we are selected and there isn't anything being shown
+        return ((tabManager.selectedTab == nil ? false : tabManager.selectedTab!.webView == webView)) && (self.presentedViewController == nil)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        let messageAlert = MessageAlert(message: message, frame: frame, completionHandler: completionHandler)
+        if shouldDisplayJSAlertForWebView(webView) {
+            present(messageAlert.alertController(), animated: true, completion: nil)
+        } else if let promptingTab = tabManager[webView] {
+            promptingTab.queueJavascriptAlertPrompt(messageAlert)
+        } else {
+            // This should never happen since an alert needs to come from a web view but just in case call the handler
+            // since not calling it will result in a runtime exception.
+            completionHandler()
+        }
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        let confirmAlert = ConfirmPanelAlert(message: message, frame: frame, completionHandler: completionHandler)
+        if shouldDisplayJSAlertForWebView(webView) {
+            present(confirmAlert.alertController(), animated: true, completion: nil)
+        } else if let promptingTab = tabManager[webView] {
+            promptingTab.queueJavascriptAlertPrompt(confirmAlert)
+        } else {
+            completionHandler(false)
+        }
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+        let textInputAlert = TextInputAlert(message: prompt, frame: frame, completionHandler: completionHandler, defaultText: defaultText)
+        if shouldDisplayJSAlertForWebView(webView) {
+            present(textInputAlert.alertController(), animated: true, completion: nil)
+        } else if let promptingTab = tabManager[webView] {
+            promptingTab.queueJavascriptAlertPrompt(textInputAlert)
+        } else {
+            completionHandler(nil)
+        }
+    }
+
+    func webViewDidClose(_ webView: WKWebView) {
+        if let tab = tabManager[webView] {
+            self.tabManager.removeTabAndUpdateSelectedIndex(tab)
+        }
+    }
+}
+
 extension WKNavigationAction {
     /// Allow local requests only if the request is privileged.
     var isAllowed: Bool {
@@ -36,6 +120,8 @@ extension BrowserViewController: WKNavigationDelegate {
                 hideReaderModeBar(animated: false)
             }
         }
+
+        Profiler.shared?.begin(bookend: .load_url)
     }
 
     // Recognize an Apple Maps URL. This will trigger the native app. But only if a search query is present. Otherwise
@@ -140,12 +226,14 @@ extension BrowserViewController: WKNavigationDelegate {
             return
         }
 
-        UIApplication.shared.open(url, options: [:]) { openedURL in
-            // Do not show error message for JS navigated links or redirect as it's not the result of a user action.
-            if !openedURL, navigationAction.navigationType == .linkActivated {
-                let alert = UIAlertController(title: Strings.UnableToOpenURLErrorTitle, message: Strings.UnableToOpenURLError, preferredStyle: .alert)
-                alert.addAction(UIAlertAction(title: Strings.OKString, style: .default, handler: nil))
-                self.present(alert, animated: true, completion: nil)
+        if !(url.scheme?.contains("firefox") ?? true) {
+            UIApplication.shared.open(url, options: [:]) { openedURL in
+                // Do not show error message for JS navigated links or redirect as it's not the result of a user action.
+                if !openedURL, navigationAction.navigationType == .linkActivated {
+                    let alert = UIAlertController(title: Strings.UnableToOpenURLErrorTitle, message: Strings.UnableToOpenURLError, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: Strings.OKString, style: .default, handler: nil))
+                    self.present(alert, animated: true, completion: nil)
+                }
             }
         }
         decisionHandler(.cancel)
@@ -193,7 +281,10 @@ extension BrowserViewController: WKNavigationDelegate {
 
         // If the content type is not HTML, create a temporary document so it can be downloaded and
         // shared to external applications later. Otherwise, clear the old temporary document.
-        if let tab = tabManager[webView] {
+        // NOTE: This should only happen if the request/response came from the main frame, otherwise
+        // we may end up overriding the "Share Page With..." action to share a temp file that is not
+        // representative of the contents of the web view.
+        if navigationResponse.isForMainFrame, let tab = tabManager[webView] {
             if response.mimeType != MIMEType.HTML, let request = request {
                 tab.temporaryDocument = TemporaryDocument(preflightResponse: response, request: request)
             } else {

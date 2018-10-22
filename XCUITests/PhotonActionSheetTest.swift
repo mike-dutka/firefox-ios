@@ -5,6 +5,7 @@
 import XCTest
 
 class PhotonActionSheetTest: BaseTestCase {
+    // Smoketest
     func testPinToTop() {
         navigator.openURL("http://example.com")
         waitUntilPageLoad()
@@ -12,14 +13,16 @@ class PhotonActionSheetTest: BaseTestCase {
         navigator.performAction(Action.PinToTopSitesPAM)
 
         // Navigate to topsites to verify that the site has been pinned
-        navigator.goto(NewTabScreen)
+        navigator.nowAt(BrowserTab)
+        navigator.performAction(Action.OpenNewTabFromTabTray)
 
         // Verify that the site is pinned to top
+        waitforExistence(app.cells["example"])
         let cell = app.cells["example"]
         waitforExistence(cell)
 
         // Remove pin
-        cell.press(forDuration: 2)
+        app.cells["example"].press(forDuration: 2)
         app.cells["action_unpin"].tap()
 
         // Check that it has been unpinned
@@ -34,6 +37,7 @@ class PhotonActionSheetTest: BaseTestCase {
         waitforExistence(app.buttons["Copy"])
     }
 
+    // Smoketest
     func testShareOptionIsShownFromShortCut() {
         navigator.goto(BrowserTab)
         waitUntilPageLoad()
@@ -107,6 +111,7 @@ class PhotonActionSheetTest: BaseTestCase {
         waitforExistence(app.buttons["Copy"])
     }
 
+    // Smoketest
     func testSharePageWithShareSheetOptions() {
         openNewShareSheet()
         XCTAssertTrue(app.staticTexts["Open in Firefox"].exists)

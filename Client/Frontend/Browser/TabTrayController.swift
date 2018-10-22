@@ -57,7 +57,7 @@ class TabTrayController: UIViewController {
         return toolbar
     }()
 
-    lazy var searchBar: UITextField = {
+    lazy var searchBar: SearchBarTextField = {
         let searchBar = SearchBarTextField()
         searchBar.backgroundColor = UIColor.theme.tabTray.searchBackground
         searchBar.leftView = UIImageView(image: UIImage(named: "quickSearch"))
@@ -92,6 +92,7 @@ class TabTrayController: UIViewController {
     fileprivate(set) internal var privateMode: Bool = false {
         didSet {
             toolbar.applyUIMode(isPrivate: privateMode)
+            searchBar.applyUIMode(isPrivate: privateMode)
         }
     }
 
@@ -119,8 +120,8 @@ class TabTrayController: UIViewController {
         super.init(nibName: nil, bundle: nil)
 
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewFlowLayout())
-        tabDisplayManager = TabDisplayManager(collectionView: self.collectionView, tabManager: self.tabManager, tabDisplayer: self)
         collectionView.register(TabCell.self, forCellWithReuseIdentifier: TabCell.Identifier)
+        tabDisplayManager = TabDisplayManager(collectionView: self.collectionView, tabManager: self.tabManager, tabDisplayer: self, reuseID: TabCell.Identifier)
         collectionView.dataSource = tabDisplayManager
         collectionView.delegate = tabLayoutDelegate
         collectionView.contentInset = UIEdgeInsets(top: TabTrayControllerUX.SearchBarHeight, left: 0, bottom: 0, right: 0)
@@ -136,15 +137,17 @@ class TabTrayController: UIViewController {
     }
 
     deinit {
+        tabManager.removeDelegate(self.tabDisplayManager)
+        tabManager.removeDelegate(self)
         tabDisplayManager.removeObservers()
         tabDisplayManager = nil
     }
 
     func focusTab() {
-        guard let currentTab = tabManager.selectedTab, let index = self.tabDisplayManager.tabStore.index(of: currentTab) else {
+        guard let currentTab = tabManager.selectedTab, let index = self.tabDisplayManager.tabStore.index(of: currentTab), let rect = self.collectionView.layoutAttributesForItem(at: IndexPath(item: index, section: 0))?.frame else {
             return
         }
-        self.collectionView.scrollToItem(at: IndexPath(item: index, section: 0), at: .bottom, animated: false)
+        self.collectionView.scrollRectToVisible(rect, animated: false)
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -165,12 +168,12 @@ class TabTrayController: UIViewController {
         collectionView.backgroundColor = UIColor.theme.tabTray.background
         collectionView.keyboardDismissMode = .onDrag
 
-        if #available(iOS 11.0, *) {
-            collectionView.dragInteractionEnabled = true
-            collectionView.dragDelegate = tabDisplayManager
-            collectionView.dropDelegate = tabDisplayManager
-        }
-
+        // XXX: Bug 1485064 - Temporarily disable drag-and-drop in tabs tray
+        if #available(iOS 11.0, *), LeanPlumClient.shared.enableDragDrop.boolValue() {
+             collectionView.dragInteractionEnabled = true
+             collectionView.dragDelegate = tabDisplayManager
+             collectionView.dropDelegate = tabDisplayManager
+         }
 
         searchBarHolder.addSubview(roundedSearchBarHolder)
         searchBarHolder.addSubview(searchBar)
@@ -254,6 +257,11 @@ class TabTrayController: UIViewController {
     }
 
     @objc func didTogglePrivateMode() {
+        if tabDisplayManager.isDragging {
+            return
+        }
+        toolbar.isUserInteractionEnabled = false
+
         let scaleDownTransform = CGAffineTransform(scaleX: 0.9, y: 0.9)
 
         let newOffset = CGPoint(x: 0.0, y: collectionView.contentOffset.y)
@@ -273,6 +281,16 @@ class TabTrayController: UIViewController {
         tabDisplayManager.isPrivate = !tabDisplayManager.isPrivate
         tabManager.willSwitchTabMode(leavingPBM: privateMode)
         privateMode = !privateMode
+
+        if privateMode, privateTabsAreEmpty() {
+            UIView.animate(withDuration: 0.2) {
+                self.searchBarHolder.alpha = 0
+            }
+        } else {
+            UIView.animate(withDuration: 0.2) {
+                self.searchBarHolder.alpha = 1
+            }
+        }
 
         if tabDisplayManager.searchActive {
             self.didPressCancel()
@@ -316,6 +334,7 @@ class TabTrayController: UIViewController {
                 toView.removeFromSuperview()
             }
             self.collectionView.alpha = 1
+            self.toolbar.isUserInteractionEnabled = true
         }
     }
 
@@ -328,7 +347,13 @@ class TabTrayController: UIViewController {
     }
 
     func openNewTab(_ request: URLRequest? = nil) {
-        self.tabManager.addTabAndSelect(request, isPrivate: tabDisplayManager.isPrivate)
+        if tabDisplayManager.isDragging {
+            return
+        }
+        // We dismiss the tab tray once we are done. So no need to re-enable the toolbar
+        toolbar.isUserInteractionEnabled = false
+
+        tabManager.selectTab(tabManager.addTab(request, isPrivate: tabDisplayManager.isPrivate))
         self.tabDisplayManager.performTabUpdates {
             self.emptyPrivateTabsView.isHidden = !self.privateTabsAreEmpty()
             self.dismissTabTray()
@@ -339,31 +364,34 @@ class TabTrayController: UIViewController {
 }
 
 extension TabTrayController: TabManagerDelegate {
-    func tabManager(_ tabManager: TabManager, didSelectedTabChange selected: Tab?, previous: Tab?) {}
-
+    func tabManager(_ tabManager: TabManager, didSelectedTabChange selected: Tab?, previous: Tab?, isRestoring: Bool) {}
+    func tabManager(_ tabManager: TabManager, didAddTab tab: Tab, isRestoring: Bool) {}
+    func tabManager(_ tabManager: TabManager, didRemoveTab tab: Tab, isRestoring: Bool) {
+        if privateMode, privateTabsAreEmpty() {
+            UIView.animate(withDuration: 0.2) {
+                self.searchBarHolder.alpha = 0
+            }
+        }
+    }
     func tabManager(_ tabManager: TabManager, willAddTab tab: Tab) {}
-
-    func tabManager(_ tabManager: TabManager, didAddTab tab: Tab) {}
-
     func tabManager(_ tabManager: TabManager, willRemoveTab tab: Tab) {}
-
-    func tabManager(_ tabManager: TabManager, didRemoveTab tab: Tab) {}
 
     func tabManagerDidRestoreTabs(_ tabManager: TabManager) {
         self.emptyPrivateTabsView.isHidden = !self.privateTabsAreEmpty()
     }
 
-    func tabManagerDidAddTabs(_ tabManager: TabManager) {}
+    func tabManagerDidAddTabs(_ tabManager: TabManager) {
+        if privateMode {
+            UIView.animate(withDuration: 0.2) {
+                self.searchBarHolder.alpha = 1
+            }
+        }
+    }
 
     func tabManagerDidRemoveAllTabs(_ tabManager: TabManager, toast: ButtonToast?) {
-        guard let toast = toast, privateMode else {
-            return
-        }
-        view.addSubview(toast)
-        toast.showToast(makeConstraints: { make in
-            make.left.right.equalTo(self.view)
-            make.bottom.equalTo(self.toolbar.snp.top)
-        })
+        // No need to handle removeAll toast in TabTray.
+        // When closing all normal tabs we automatically focus a tab and show the BVC. Which will handle the Toast.
+        // We don't show the removeAll toast in PBM
     }
 }
 
@@ -430,7 +458,7 @@ extension TabTrayController: TabDisplayer {
     }
 
     func cellFactory(for cell: UICollectionViewCell, using tab: Tab) -> UICollectionViewCell {
-        guard let tabCell = cell as? TabCell else { return UICollectionViewCell() }
+        guard let tabCell = cell as? TabCell else { return cell }
         tabCell.animator.delegate = self
         tabCell.delegate = self
         let selected = tab == tabManager.selectedTab
@@ -457,7 +485,14 @@ extension TabTrayController {
                 self.dismissTabTray()
             }
         } else {
-            self.emptyPrivateTabsView.isHidden = !self.privateTabsAreEmpty()
+            emptyPrivateTabsView.isHidden = !self.privateTabsAreEmpty()
+            if !emptyPrivateTabsView.isHidden {
+                // Fade in the empty private tabs message. This slow fade allows time for the closing tab animations to complete.
+                emptyPrivateTabsView.alpha = 0
+                UIView.animate(withDuration: 0.5, delay: 0.2, options: .curveEaseIn, animations: {
+                    self.emptyPrivateTabsView.alpha = 1
+                }, completion: nil)
+            }
         }
     }
 
@@ -485,11 +520,13 @@ extension TabTrayController {
     @objc func appDidBecomeActiveNotification() {
         // Re-show any components that might have been hidden because they were being displayed
         // as part of a private mode tab
-        UIView.animate(withDuration: 0.2, delay: 0, options: [], animations: {
+        UIView.animate(withDuration: 0.2) {
             self.collectionView.alpha = 1
-            self.searchBarHolder.alpha = 1
-        },
-        completion: nil)
+
+            if self.privateMode, !self.privateTabsAreEmpty() {
+                self.searchBarHolder.alpha = 1
+            }
+        }
     }
 }
 
@@ -608,20 +645,6 @@ extension TabTrayController: UIViewControllerPreviewingDelegate {
         tabManager.selectTab(tpvc.tab)
         navigationController?.popViewController(animated: true)
         delegate?.tabTrayDidDismiss(self)
-    }
-}
-
-extension TabTrayController: ClientPickerViewControllerDelegate {
-
-    func clientPickerViewController(_ clientPickerViewController: ClientPickerViewController, didPickClients clients: [RemoteClient]) {
-        if let item = clientPickerViewController.shareItem {
-            _ = self.profile.sendItems([item], toClients: clients)
-        }
-        clientPickerViewController.dismiss(animated: true, completion: nil)
-    }
-
-    func clientPickerViewControllerDidCancel(_ clientPickerViewController: ClientPickerViewController) {
-        clientPickerViewController.dismiss(animated: true, completion: nil)
     }
 }
 
@@ -857,6 +880,19 @@ fileprivate class EmptyPrivateTabsView: UIView {
 
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+}
+
+extension TabTrayController: ClientPickerViewControllerDelegate {
+    func clientPickerViewController(_ clientPickerViewController: ClientPickerViewController, didPickClients clients: [RemoteClient]) {
+        if let item = clientPickerViewController.shareItem {
+            _ = self.profile.sendItem(item, toClients: clients)
+        }
+        clientPickerViewController.dismiss(animated: true, completion: nil)
+    }
+
+    func clientPickerViewControllerDidCancel(_ clientPickerViewController: ClientPickerViewController) {
+        clientPickerViewController.dismiss(animated: true, completion: nil)
     }
 }
 
@@ -1134,8 +1170,12 @@ class TabCell: UICollectionViewCell {
     }
 }
 
-class SearchBarTextField: UITextField {
+class SearchBarTextField: UITextField, PrivateModeUI {
     static let leftInset = CGFloat(18)
+
+    func applyUIMode(isPrivate: Bool) {
+        tintColor = UIColor.theme.urlbar.textSelectionHighlight(isPrivate).textFieldMode
+    }
 
     override func textRect(forBounds bounds: CGRect) -> CGRect {
         return bounds.insetBy(dx: SearchBarTextField.leftInset, dy: 0)

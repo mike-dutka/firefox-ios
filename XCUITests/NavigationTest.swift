@@ -296,8 +296,10 @@ class NavigationTest: BaseTestCase {
         XCTAssertTrue (desktopViewElement.exists, "Desktop view is not available after coming from another site in mobile view")
      }
      */
+
+    // Smoketest
     func testLongPressLinkOptions() {
-        navigator.openURL(website_2["url"]!)
+        navigator.openURL(path(forTestPage: "test-example.html"))
         app.webViews.links[website_2["link"]!].press(forDuration: 2)
         waitforExistence(app.sheets[website_2["moreLinkLongPressUrl"]!])
         XCTAssertTrue(app.buttons["Open in New Tab"].exists, "The option is not shown")
@@ -309,7 +311,7 @@ class NavigationTest: BaseTestCase {
 
     func testLongPressLinkOptionsPrivateMode() {
         navigator.toggleOn(userState.isPrivate, withAction: Action.TogglePrivateMode)
-        navigator.openURL(website_2["url"]!)
+        navigator.openURL(path(forTestPage: "test-example.html"))
         app.webViews.links[website_2["link"]!].press(forDuration: 2)
         waitforExistence(app.sheets[website_2["moreLinkLongPressUrl"]!])
         XCTAssertFalse(app.buttons["Open in New Tab"].exists, "The option is not shown")
@@ -344,7 +346,7 @@ class NavigationTest: BaseTestCase {
     }
 
     private func longPressLinkOptions(optionSelected: String) {
-        navigator.openURL(website_2["url"]!)
+        navigator.openURL(path(forTestPage: "test-example.html"))
         waitUntilPageLoad()
         app.webViews.links[website_2["link"]!].press(forDuration: 2)
         app.buttons[optionSelected].tap()
@@ -396,6 +398,7 @@ class NavigationTest: BaseTestCase {
         XCTAssertEqual(app.textFields["url"].value! as? String, "www.example.com/", "After canceling the menu user is in a different website")
     }
 
+    // Smoketest
     func testPopUpBlocker() {
         // Check that it is enabled by default
         navigator.goto(SettingsScreen)
@@ -428,6 +431,7 @@ class NavigationTest: BaseTestCase {
         XCTAssertNotEqual("1", numTabsAfter as? String, "Several tabs are open")
     }
 
+    // Smoketest
     func testSSL() {
         navigator.openURL("https://expired.badssl.com/")
         waitforExistence(app.buttons["Advanced"], timeout: 10)

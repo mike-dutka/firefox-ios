@@ -192,7 +192,7 @@ class BoolSetting: Setting {
     override func onConfigureCell(_ cell: UITableViewCell) {
         super.onConfigureCell(cell)
 
-        let control = UISwitch()
+        let control = UISwitchThemed()
         control.onTintColor = UIConstants.SystemBlueColor
         control.addTarget(self, action: #selector(switchValueChanged), for: .valueChanged)
         control.accessibilityIdentifier = prefKey
@@ -269,7 +269,6 @@ protocol SettingValuePersister {
 /// This takes an optional settingIsValid and settingDidChange callback
 /// If settingIsValid returns false, the Setting will not change and the text remains red.
 class StringSetting: Setting, UITextFieldDelegate {
-
     var Padding: CGFloat = 8
 
     fileprivate let defaultValue: String?
@@ -393,6 +392,8 @@ class CheckmarkSetting: Setting {
 /// isEnabled is called on each tableview.reloadData. If it returns
 /// false then the 'button' appears disabled.
 class ButtonSetting: Setting {
+    var Padding: CGFloat = 8
+
     let onButtonClick: (UINavigationController?) -> Void
     let destructive: Bool
     let isEnabled: (() -> Bool)?
@@ -413,6 +414,11 @@ class ButtonSetting: Setting {
         } else {
             cell.textLabel?.textColor = UIColor.theme.tableView.disabledRowText
         }
+        cell.textLabel?.snp.makeConstraints({ make in
+            make.height.equalTo(44)
+            make.trailing.equalTo(cell.contentView).offset(-Padding)
+            make.leading.equalTo(cell.contentView).offset(Padding)
+        })
         cell.textLabel?.textAlignment = .center
         cell.accessibilityTraits = UIAccessibilityTraitButton
         cell.selectionStyle = .none
@@ -507,7 +513,7 @@ class SettingsTableViewController: ThemedTableViewController {
     /// Used to calculate cell heights.
     fileprivate lazy var dummyToggleCell: UITableViewCell = {
         let cell = UITableViewCell(style: .subtitle, reuseIdentifier: "dummyCell")
-        cell.accessoryView = UISwitch()
+        cell.accessoryView = UISwitchThemed()
         return cell
     }()
 
@@ -530,6 +536,11 @@ class SettingsTableViewController: ThemedTableViewController {
         NotificationCenter.default.addObserver(self, selector: #selector(firefoxAccountDidChange), name: .FirefoxAccountChanged, object: nil)
 
         applyTheme()
+    }
+
+    override func applyTheme() {
+        settings = generateSettings()
+        super.applyTheme()
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -576,20 +587,12 @@ class SettingsTableViewController: ThemedTableViewController {
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let section = settings[indexPath.section]
         if let setting = section[indexPath.row] {
-            var cell: UITableViewCell!
-            if let _ = setting.status {
-                // Work around http://stackoverflow.com/a/9999821 and http://stackoverflow.com/a/25901083 by using a new cell.
-                // I could not make any setNeedsLayout solution work in the case where we disconnect and then connect a new account.
-                // Be aware that dequeing and then ignoring a cell appears to cause issues; only deque a cell if you're going to return it.
-                cell = UITableViewCell(style: setting.style, reuseIdentifier: nil)
-            } else {
-                cell = tableView.dequeueReusableCell(withIdentifier: Identifier, for: indexPath)
-            }
+            let cell = ThemedTableViewCell(style: setting.style, reuseIdentifier: nil)
             setting.onConfigureCell(cell)
             cell.backgroundColor = UIColor.theme.tableView.rowBackground
             return cell
         }
-        return tableView.dequeueReusableCell(withIdentifier: Identifier, for: indexPath)
+        return super.tableView(tableView, cellForRowAt: indexPath)
     }
 
     override func numberOfSections(in tableView: UITableView) -> Int {
@@ -602,7 +605,10 @@ class SettingsTableViewController: ThemedTableViewController {
     }
 
     override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-        let headerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: SectionHeaderIdentifier) as! ThemedTableSectionHeaderFooterView
+        guard let headerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: SectionHeaderIdentifier) as? ThemedTableSectionHeaderFooterView else {
+            return nil
+        }
+
         let sectionSetting = settings[section]
         if let sectionTitle = sectionSetting.title?.string {
             headerView.titleLabel.text = sectionTitle.uppercased()
@@ -620,10 +626,10 @@ class SettingsTableViewController: ThemedTableViewController {
 
     override func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
         let sectionSetting = settings[section]
-        guard let sectionFooter = sectionSetting.footerTitle?.string else {
-            return nil
+        guard let sectionFooter = sectionSetting.footerTitle?.string,
+            let footerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: SectionHeaderIdentifier) as? ThemedTableSectionHeaderFooterView else {
+                return nil
         }
-        let footerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: SectionHeaderIdentifier) as! ThemedTableSectionHeaderFooterView
         footerView.titleLabel.text = sectionFooter
         footerView.titleAlignment = .top
         footerView.showBottomBorder = false

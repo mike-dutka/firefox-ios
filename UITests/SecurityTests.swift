@@ -5,6 +5,7 @@
 import Foundation
 import WebKit
 import EarlGrey
+@testable import Client
 
 class SecurityTests: KIFTestCase {
     fileprivate var webRoot: String!
@@ -99,6 +100,29 @@ class SecurityTests: KIFTestCase {
         // Since the newly opened tab doesn't have a URL/title we can't find its accessibility
         // element to close it in teardown. Workaround: load another page first.
         enterUrl(url: webRoot!)
+    }
+
+    // For blob URLs, just show "blob:" to the user (see bug 1446227)
+    func testBlobUrlShownAsSchemeOnly() {
+        let url = "\(webRoot!)/blobURL.html"
+        enterUrl(url: url) // script that will load a blob url
+        tester().wait(forTimeInterval: 1)
+        let webView = tester().waitForView(withAccessibilityLabel: "Web content") as! WKWebView
+        XCTAssert(webView.url!.absoluteString.starts(with: "blob:http://")) // webview internally has "blob:<rest of url>"
+        let bvc = UIApplication.shared.keyWindow!.rootViewController?.childViewControllers[0] as! BrowserViewController
+        XCTAssertEqual(bvc.urlBar.locationView.urlTextField.text, "blob:") // only display "blob:"
+    }
+
+    // Web pages can't have firefox: urls, these should be used external to the app only (see bug 1447853)
+    func testFirefoxSchemeBlockedOnWebpages() {
+        let url = "\(webRoot!)/firefoxScheme.html"
+        enterUrl(url: url)
+        tester().tapWebViewElementWithAccessibilityLabel("go")
+
+        tester().wait(forTimeInterval: 1)
+        let webView = tester().waitForView(withAccessibilityLabel: "Web content") as! WKWebView
+        // Make sure the URL doesn't change.
+        XCTAssertEqual(webView.url!.absoluteString, url)
     }
 
     override func tearDown() {

@@ -80,7 +80,7 @@ class TopTabsViewController: UIViewController {
         self.tabManager = tabManager
         super.init(nibName: nil, bundle: nil)
 
-        tabDisplayManager = TabDisplayManager(collectionView: self.collectionView, tabManager: self.tabManager, tabDisplayer: self)
+        tabDisplayManager = TabDisplayManager(collectionView: self.collectionView, tabManager: self.tabManager, tabDisplayer: self, reuseID: TopTabCell.Identifier)
         collectionView.dataSource = tabDisplayManager
         collectionView.delegate = tabLayoutDelegate
         [UICollectionElementKindSectionHeader, UICollectionElementKindSectionFooter].forEach {
@@ -92,15 +92,27 @@ class TopTabsViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        tabDisplayManager.performTabUpdates()
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        self.tabDisplayManager.performTabUpdates()
+        // Will only be done once, on first appearance, due to the check
+        if isBeingPresented || isMovingToParentViewController {
+            tabDisplayManager.performTabUpdates()
+        }
+    }
+
+    deinit {
+        tabManager.removeDelegate(self.tabDisplayManager)
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        if #available(iOS 11.0, *) {
+        if #available(iOS 11.0, *), LeanPlumClient.shared.enableTabBarReorder.boolValue() {
             collectionView.dragDelegate = tabDisplayManager
             collectionView.dropDelegate = tabDisplayManager
         }

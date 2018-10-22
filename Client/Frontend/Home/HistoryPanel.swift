@@ -101,11 +101,10 @@ class HistoryPanel: SiteTableViewController, HomePanel {
         super.viewWillAppear(animated)
 
         // Add a refresh control if the user is logged in and the control was not added before. If the user is not
-        // logged in, remove any existing control but only when it is not currently refreshing. Otherwise, wait for
-        // the refresh to finish before removing the control.
+        // logged in, remove any existing control.
         if profile.hasSyncableAccount() && refreshControl == nil {
             addRefreshControl()
-        } else if refreshControl?.isRefreshing == false {
+        } else if !profile.hasSyncableAccount() && refreshControl != nil {
             removeRefreshControl()
         }
 
@@ -149,6 +148,7 @@ class HistoryPanel: SiteTableViewController, HomePanel {
         groupedSites = DateGroupedTableData<Site>()
 
         currentFetchOffset = 0
+        Profiler.shared?.begin(bookend: .history_panel_fetch)
         fetchData().uponQueue(.main) { result in
             if let sites = result.successValue {
                 for site in sites {
@@ -159,6 +159,7 @@ class HistoryPanel: SiteTableViewController, HomePanel {
 
                 self.tableView.reloadData()
                 self.updateEmptyPanelState()
+                Profiler.shared?.end(bookend: .history_panel_fetch)
             }
         }
     }
@@ -183,15 +184,15 @@ class HistoryPanel: SiteTableViewController, HomePanel {
     }
 
     func resyncHistory() {
-        profile.syncManager.syncHistory().uponQueue(.main) { result in
-            self.endRefreshing()
-
-            if result.isSuccess {
-                self.reloadData()
-            }
-
+        profile.syncManager.syncHistory().uponQueue(.main) { syncResult in
             self.updateSyncedDevicesCount().uponQueue(.main) { result in
+                self.endRefreshing()
+
                 self.updateNumberOfSyncedDevices(self.currentSyncedDevicesCount)
+
+                if syncResult.isSuccess {
+                    self.reloadData()
+                }
             }
         }
     }
@@ -202,7 +203,8 @@ class HistoryPanel: SiteTableViewController, HomePanel {
         } else {
             syncDetailText = ""
         }
-        tableView.reloadRows(at: [IndexPath(row: 1, section: Section.syncAndRecentlyClosed.rawValue)], with: .automatic)
+
+        tableView.reloadData()
     }
 
     func updateSyncedDevicesCount() -> Success {

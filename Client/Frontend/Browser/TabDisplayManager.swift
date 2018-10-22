@@ -26,12 +26,13 @@ class TabDisplayManager: NSObject {
 
     fileprivate let tabManager: TabManager
     var isPrivate = false
-    fileprivate var isDragging = false
+    var isDragging = false
     fileprivate let collectionView: UICollectionView
     typealias CompletionBlock = () -> Void
 
     private var tabObservers: TabObservers!
     fileprivate weak var tabDisplayer: TabDisplayer?
+    let tabReuseIdentifer: String
 
     var searchedTabs: [Tab] = []
     var searchActive: Bool = false
@@ -57,16 +58,12 @@ class TabDisplayManager: NSObject {
         return self.isPrivate ? tabManager.privateTabs : tabManager.normalTabs
     }
 
-    // This helps make sure animations don't happen before the view is loaded.
-    fileprivate var isRestoring: Bool {
-        return self.tabManager.isRestoring || self.collectionView.frame == CGRect.zero
-    }
-
-    init(collectionView: UICollectionView, tabManager: TabManager, tabDisplayer: TabDisplayer) {
+    init(collectionView: UICollectionView, tabManager: TabManager, tabDisplayer: TabDisplayer, reuseID: String) {
         self.collectionView = collectionView
         self.tabDisplayer = tabDisplayer
         self.tabManager = tabManager
         self.isPrivate = tabManager.selectedTab?.isPrivate ?? false
+        self.tabReuseIdentifer = reuseID
         super.init()
 
         tabManager.addDelegate(self)
@@ -78,6 +75,18 @@ class TabDisplayManager: NSObject {
     func removeObservers() {
         unregister(tabObservers)
         tabObservers = nil
+    }
+
+     // Make sure animations don't happen before the view is loaded.
+    fileprivate func shouldAnimate(isRestoringTabs: Bool) -> Bool {
+        return !isRestoringTabs && collectionView.frame != CGRect.zero
+    }
+
+    private func recordEventAndBreadcrumb(object: UnifiedTelemetry.EventObject, method: UnifiedTelemetry.EventMethod) {
+        let isTabTray = tabDisplayer as? TabTrayController != nil
+        let eventValue = isTabTray ? UnifiedTelemetry.EventValue.tabTray : UnifiedTelemetry.EventValue.topTabs
+        UnifiedTelemetry.recordEvent(category: .action, method: method, object: object, value: eventValue)
+        Sentry.shared.breadcrumb(category: "Tab Action", message: "object: \(object), action: \(method.rawValue), \(eventValue.rawValue), tab count: \(tabStore.count) ")
     }
 
     func togglePBM() {
@@ -112,14 +121,11 @@ extension TabDisplayManager: UICollectionViewDataSource {
 
     @objc func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let tab = tabStore[indexPath.row]
-        guard let identifer = tabDisplayer?.tabCellIdentifer else {
-            return UICollectionViewCell()
-        }
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: identifer, for: indexPath)
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: self.tabReuseIdentifer, for: indexPath)
         if let tabCell = tabDisplayer?.cellFactory(for: cell, using: tab) {
             return tabCell
         } else {
-            return UICollectionViewCell()
+            return cell
         }
     }
 
@@ -155,7 +161,7 @@ extension TabDisplayManager: UIDropInteractionDelegate {
     }
 
     func dropInteraction(_ interaction: UIDropInteraction, performDrop session: UIDropSession) {
-        UnifiedTelemetry.recordEvent(category: .action, method: .drop, object: .url, value: .topTabs)
+        recordEventAndBreadcrumb(object: .url, method: .drop)
 
         _ = session.loadObjects(ofClass: URL.self) { urls in
             guard let url = urls.first else {
@@ -175,6 +181,7 @@ extension TabDisplayManager: UICollectionViewDragDelegate {
 
     func collectionView(_ collectionView: UICollectionView, dragSessionDidEnd session: UIDragSession) {
         isDragging = false
+        reloadData()
     }
 
     func collectionView(_ collectionView: UICollectionView, itemsForBeginning session: UIDragSession, at indexPath: IndexPath) -> [UIDragItem] {
@@ -204,7 +211,7 @@ extension TabDisplayManager: UICollectionViewDragDelegate {
             itemProvider = NSItemProvider()
         }
 
-        UnifiedTelemetry.recordEvent(category: .action, method: .drag, object: .tab, value: .topTabs)
+        recordEventAndBreadcrumb(object: .tab, method: .drag)
 
         let dragItem = UIDragItem(itemProvider: itemProvider)
         dragItem.localObject = tab
@@ -219,7 +226,7 @@ extension TabDisplayManager: UICollectionViewDropDelegate {
             return
         }
 
-        UnifiedTelemetry.recordEvent(category: .action, method: .drop, object: .tab, value: .topTabs)
+        recordEventAndBreadcrumb(object: .tab, method: .drop)
 
         coordinator.drop(dragItem, toItemAt: destinationIndexPath)
         isDragging = false
@@ -331,13 +338,22 @@ extension TabDisplayManager {
             return IndexPath(row: newTabs.index(of: tab)!, section: 0)
             }.filter { return inserts.index(of: $0) == nil && deletes.index(of: $0) == nil }
 
+        Sentry.shared.breadcrumb(category: "Tab Diff", message: "reloads: \(reloads.count), inserts: \(inserts.count), deletes: \(deletes.count), moves: \(moves.count)")
+
         return TopTabChangeSet(reloadArr: reloads, insertArr: inserts, deleteArr: deletes, moveArr: moves)
     }
 
-    func updateTabsFrom(_ oldTabs: [Tab]?, to newTabs: [Tab], on completion: (() -> Void)? = nil) {
+    func updateTabsFrom(_ oldTabs: [Tab]?, to newTabs: [Tab]) {
         assertIsMainThread("Updates can only be performed from the main thread")
         guard let oldTabs = oldTabs, !self.isUpdating, !self.pendingReloadData, !self.isDragging else {
             return
+        }
+
+        func performPendingCompletions() {
+            for block in self.completionBlocks {
+                block()
+            }
+            self.completionBlocks.removeAll()
         }
 
         // Lets create our change set
@@ -346,7 +362,7 @@ extension TabDisplayManager {
 
         // If there are no changes. We have nothing to do
         if update.isEmpty {
-            completion?()
+            performPendingCompletions()
             return
         }
 
@@ -355,15 +371,15 @@ extension TabDisplayManager {
             self.tabStore = newTabs
 
             // Only consider moves if no other operations are pending.
-            if update.deletes.count == 0, update.inserts.count == 0, update.reloads.count == 0 {
+            if update.deletes.count == 0, update.inserts.count == 0 {
                 for move in update.moves {
                     self.collectionView.moveItem(at: move.from, to: move.to)
                 }
             } else {
                 self.collectionView.deleteItems(at: Array(update.deletes))
                 self.collectionView.insertItems(at: Array(update.inserts))
-                self.collectionView.reloadItems(at: Array(update.reloads))
             }
+            self.collectionView.reloadItems(at: Array(update.reloads))
         }
 
         //Lets lock any other updates from happening.
@@ -372,7 +388,7 @@ extension TabDisplayManager {
         self.pendingUpdatesToTabs = newTabs // This var helps other mutations that might happen while updating.
 
         let onComplete: () -> Void = {
-            completion?()
+            performPendingCompletions()
             self.isUpdating = false
             self.pendingUpdatesToTabs = []
             // run completion blocks
@@ -383,16 +399,18 @@ extension TabDisplayManager {
 
             // There can be pending animations. Run update again to clear them.
             let tabs = self.oldTabs ?? self.tabStore
-            self.updateTabsFrom(tabs, to: self.tabsToDisplay, on: {
+
+            self.completionBlocks.append {
                 if !update.inserts.isEmpty || !update.reloads.isEmpty {
                     self.tabDisplayer?.focusSelectedTab()
                 }
-            })
+            }
+            self.updateTabsFrom(tabs, to: self.tabsToDisplay)
         }
 
         // The actual update. Only animate the changes if no tabs have moved
         // as a result of drag-and-drop.
-        if update.moves.count == 0 {
+        if update.moves.count == 0, tabDisplayer is TopTabsViewController {
             UIView.animate(withDuration: TopTabsUX.AnimationSpeed, animations: {
                 self.collectionView.performBatchUpdates(updateBlock)
             }) { (_) in
@@ -416,7 +434,7 @@ extension TabDisplayManager {
             completionBlocks.append(block)
         }
 
-        if self.isUpdating || self.collectionView.frame == CGRect.zero {
+        if self.isUpdating || self.collectionView.superview == nil {
             self.pendingReloadData = true
             return
         }
@@ -453,7 +471,7 @@ extension TabDisplayManager: TabManagerDelegate {
         if let block = completionBlock {
             completionBlocks.append(block)
         }
-        guard !isUpdating, collectionView.window != nil else {
+        guard !isUpdating else {
             return
         }
 
@@ -462,17 +480,12 @@ extension TabDisplayManager: TabManagerDelegate {
         if self.pendingReloadData && !isUpdating {
             self.reloadData()
         } else {
-            self.updateTabsFrom(self.oldTabs, to: self.tabsToDisplay) {
-                for block in self.completionBlocks {
-                    block()
-                }
-                self.completionBlocks.removeAll()
-            }
+            self.updateTabsFrom(self.oldTabs, to: self.tabsToDisplay)
         }
     }
 
-    func tabManager(_ tabManager: TabManager, didSelectedTabChange selected: Tab?, previous: Tab?) {
-        if isRestoring {
+    func tabManager(_ tabManager: TabManager, didSelectedTabChange selected: Tab?, previous: Tab?, isRestoring: Bool) {
+        if !shouldAnimate(isRestoringTabs: isRestoring) {
             return
         }
         if !tabsMatchDisplayGroup(selected, b: previous) {
@@ -489,8 +502,8 @@ extension TabDisplayManager: TabManagerDelegate {
         self.oldTabs = self.oldTabs ?? tabStore
     }
 
-    func tabManager(_ tabManager: TabManager, didAddTab tab: Tab) {
-        if isRestoring || (tabManager.selectedTab != nil && !tabsMatchDisplayGroup(tab, b: tabManager.selectedTab)) {
+    func tabManager(_ tabManager: TabManager, didAddTab tab: Tab, isRestoring: Bool) {
+        if !shouldAnimate(isRestoringTabs: isRestoring) || (tabManager.selectedTab != nil && !tabsMatchDisplayGroup(tab, b: tabManager.selectedTab)) {
             return
         }
         performTabUpdates()
@@ -501,8 +514,9 @@ extension TabDisplayManager: TabManagerDelegate {
         self.oldTabs = self.oldTabs ?? tabStore
     }
 
-    func tabManager(_ tabManager: TabManager, didRemoveTab tab: Tab) {
-        if isRestoring {
+    func tabManager(_ tabManager: TabManager, didRemoveTab tab: Tab, isRestoring: Bool) {
+        recordEventAndBreadcrumb(object: .tab, method: .delete)
+        if !shouldAnimate(isRestoringTabs: isRestoring) {
             return
         }
         // If we deleted the last private tab. We'll be switching back to normal browsing. Pause updates till then
@@ -524,10 +538,11 @@ extension TabDisplayManager: TabManagerDelegate {
     }
 
     func tabManagerDidAddTabs(_ tabManager: TabManager) {
-        self.reloadData()
+        recordEventAndBreadcrumb(object: .tab, method: .add)
     }
 
     func tabManagerDidRemoveAllTabs(_ tabManager: TabManager, toast: ButtonToast?) {
+        recordEventAndBreadcrumb(object: .tab, method: .deleteAll)
         self.reloadData()
     }
 }

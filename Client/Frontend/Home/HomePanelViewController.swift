@@ -84,7 +84,7 @@ class HomePanelViewController: UIViewController, UITextFieldDelegate, HomePanelD
         buttonContainerView.spacing = 14
         buttonContainerView.clipsToBounds = true
         buttonContainerView.accessibilityNavigationStyle = .combined
-        buttonContainerView.accessibilityLabel = NSLocalizedString("Panel Chooser", comment: "Accessibility label for the Home panel's top toolbar containing list of the home panels (top sites, bookmarsk, history, remote tabs, reading list).")
+        buttonContainerView.accessibilityLabel = NSLocalizedString("Panel Chooser", comment: "Accessibility label for the Home panel's top toolbar containing list of the home panels (top sites, bookmarks, history, remote tabs, reading list).")
         view.addSubview(buttonContainerView)
         buttonContainerView.addSubview(highlightLine)
 
@@ -309,6 +309,7 @@ extension HomePanelViewController: Themeable {
         buttonTintColor = UIColor.theme.homePanel.toolbarTint
         buttonSelectedTintColor = UIColor.theme.homePanel.toolbarHighlight
         highlightLine.backgroundColor = UIColor.theme.homePanel.toolbarHighlight
+        buttonContainerBottomBorderView.backgroundColor = UIColor.theme.homePanel.buttonContainerBorder
         updateButtonTints()
     }
 }
@@ -335,6 +336,9 @@ extension HomePanelContextMenu {
         let contextMenu = PhotonActionSheet(site: site, actions: actions)
         contextMenu.modalPresentationStyle = .overFullScreen
         contextMenu.modalTransitionStyle = .crossDissolve
+
+        let generator = UIImpactFeedbackGenerator(style: .heavy)
+        generator.impactOccurred()
 
         return contextMenu
     }

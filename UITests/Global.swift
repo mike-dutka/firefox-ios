@@ -328,11 +328,11 @@ class BrowserUtils {
                 .perform(grey_swipeFastInDirection(GREYDirection.left))
         }
         EarlGrey.selectElement(with: settings_button).perform(grey_tap())
-        EarlGrey.selectElement(with: grey_accessibilityLabel("Clear Private Data"))
+        EarlGrey.selectElement(with: grey_accessibilityID("ClearPrivateData"))
             .using(searchAction: grey_scrollInDirection(.down, 200),
                    onElementWithMatcher: grey_accessibilityID("AppSettingsTableViewController.tableView"))
             .assert(grey_notNil())
-        EarlGrey.selectElement(with: grey_accessibilityLabel("Clear Private Data")).perform(grey_tap())
+        EarlGrey.selectElement(with: grey_accessibilityID("ClearPrivateData")).perform(grey_tap())
     }
 
     class func closeClearPrivateDataDialog() {
@@ -428,7 +428,7 @@ class SimplePageServer {
             return GCDWebServerDataResponse(data: img, contentType: "image/png")
         }
 
-        for page in ["findPage", "noTitle", "readablePage", "JSPrompt"] {
+        for page in ["findPage", "noTitle", "readablePage", "JSPrompt", "blobURL", "firefoxScheme"] {
             webServer.addHandler(forMethod: "GET", path: "/\(page).html", request: GCDWebServerRequest.self) { (request) -> GCDWebServerResponse? in
                 return GCDWebServerDataResponse(html: self.getPageData(page))
             }
