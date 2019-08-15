@@ -58,8 +58,9 @@ class SecurityTests: KIFTestCase {
             tabcount = tester().waitForView(withAccessibilityIdentifier: "TabToolbar.tabsButton")?.accessibilityValue
         }
 
-        // After running the exploit, make sure a new tab wasn't opened.
+        // make sure a new tab wasn't opened.
         tester().tapWebViewElementWithAccessibilityLabel("Error exploit")
+        tester().wait(forTimeInterval: 1.0)
         let newTabcount:String?
         if BrowserUtils.iPad() {
             newTabcount = tester().waitForView(withAccessibilityIdentifier: "TopTabsViewController.tabsButton")?.accessibilityValue
@@ -74,11 +75,11 @@ class SecurityTests: KIFTestCase {
     /// but we shouldn't be able to load session restore.
     func testWindowExploit() {
         tester().tapWebViewElementWithAccessibilityLabel("New tab exploit")
-        tester().wait(forTimeInterval: 30)
+        tester().wait(forTimeInterval: 5)
         let webView = tester().waitForView(withAccessibilityLabel: "Web content") as! WKWebView
 
         // Make sure the URL doesn't change.
-        XCTAssertEqual(webView.url!.path, "/errors/error.html")
+        XCTAssert(webView.url == nil)
 
         // Also make sure the XSS alert doesn't appear.
         XCTAssertFalse(tester().viewExistsWithLabel("Local page loaded"))
@@ -91,7 +92,7 @@ class SecurityTests: KIFTestCase {
         tester().tapWebViewElementWithAccessibilityLabel("URL spoof")
 
         // Wait for the window to open.
-        tester().waitForTappableView(withAccessibilityLabel: "Show Tabs", value: "2", traits: UIAccessibilityTraitButton)
+        tester().waitForTappableView(withAccessibilityLabel: "Show Tabs", value: "2", traits: UIAccessibilityTraits.button)
         tester().waitForAnimationsToFinish()
 
         // Make sure the URL bar doesn't show the URL since it hasn't loaded.
@@ -109,7 +110,7 @@ class SecurityTests: KIFTestCase {
         tester().wait(forTimeInterval: 1)
         let webView = tester().waitForView(withAccessibilityLabel: "Web content") as! WKWebView
         XCTAssert(webView.url!.absoluteString.starts(with: "blob:http://")) // webview internally has "blob:<rest of url>"
-        let bvc = UIApplication.shared.keyWindow!.rootViewController?.childViewControllers[0] as! BrowserViewController
+        let bvc = UIApplication.shared.keyWindow!.rootViewController?.children[0] as! BrowserViewController
         XCTAssertEqual(bvc.urlBar.locationView.urlTextField.text, "blob:") // only display "blob:"
     }
 

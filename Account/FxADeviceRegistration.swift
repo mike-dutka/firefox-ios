@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import Foundation
-import Deferred
 import Shared
 import SwiftyJSON
 
@@ -76,7 +75,7 @@ open class FxADeviceRegistration: NSObject, NSCoding {
 }
 
 open class FxADeviceRegistrator {
-    open static func registerOrUpdateDevice(_ account: FirefoxAccount, sessionToken: NSData, client: FxAClient10? = nil) -> Deferred<Maybe<FxADeviceRegistrationResult>> {
+    public static func registerOrUpdateDevice(_ account: FirefoxAccount, sessionToken: NSData, client: FxAClient10? = nil) -> Deferred<Maybe<FxADeviceRegistrationResult>> {
         // If we've already registered, the registration version is up-to-date,
         // we've (re-)registered within the last week, *and* we have send-tab keys,
         // do nothing. We re-register weekly as a sanity check.
@@ -95,7 +94,7 @@ open class FxADeviceRegistrator {
             pushParams = nil
         }
 
-        let client = client ?? FxAClient10(authEndpoint: account.configuration.authEndpointURL, oauthEndpoint: account.configuration.oauthEndpointURL, profileEndpoint: account.configuration.profileEndpointURL)
+        let client = client ?? FxAClient10(configuration: account.configuration)
 
         let availableCommands = account.availableCommands()
 

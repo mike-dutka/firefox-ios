@@ -17,7 +17,7 @@ private let SuggestedSite6: String = "foobar bit perfect"
 
 class SearchTests: BaseTestCase {
     private func typeOnSearchBar(text: String) {
-        waitforExistence(app.textFields["address"])
+        waitForExistence(app.textFields["address"])
         app.textFields["address"].typeText(text)
     }
 
@@ -32,30 +32,30 @@ class SearchTests: BaseTestCase {
         // Suggestion is on by default (starting on Oct 24th 2017), so the prompt should not appear
         navigator.goto(URLBarOpen)
         typeOnSearchBar(text: "foobar")
-        waitforNoExistence(app.staticTexts[LabelPrompt])
+        waitForNoExistence(app.staticTexts[LabelPrompt])
 
         // Suggestions should be shown
-        waitforExistence(app.tables["SiteTable"].buttons[SuggestedSite])
+        waitForExistence(app.tables["SiteTable"].buttons[SuggestedSite])
 
         // Disable Search suggestion
-        app.buttons["goBack"].tap()
+        app.buttons["urlBar-cancel"].tap()
         navigator.nowAt(HomePanelsScreen)
         suggestionsOnOff()
 
         // Suggestions should not be shown
-        waitforNoExistence(app.tables["SiteTable"].buttons[SuggestedSite])
+        waitForNoExistence(app.tables["SiteTable"].buttons[SuggestedSite])
         navigator.nowAt(BrowserTab)
         navigator.goto(URLBarOpen)
         typeOnSearchBar(text: "foobar")
-        waitforNoExistence(app.tables["SiteTable"].buttons[SuggestedSite])
+        waitForNoExistence(app.tables["SiteTable"].buttons[SuggestedSite])
 
         // Verify that previous choice is remembered
-        app.buttons["goBack"].tap()
+        app.buttons["urlBar-cancel"].tap()
         navigator.nowAt(HomePanelsScreen)
         navigator.goto(URLBarOpen)
         typeOnSearchBar(text: "foobar")
-        waitforNoExistence(app.tables["SiteTable"].buttons[SuggestedSite])
-        app.buttons["goBack"].tap()
+        waitForNoExistence(app.tables["SiteTable"].buttons[SuggestedSite])
+        app.buttons["urlBar-cancel"].tap()
         navigator.nowAt(HomePanelsScreen)
 
         // Reset suggestion button, set it to on
@@ -65,17 +65,17 @@ class SearchTests: BaseTestCase {
 
         // Suggestions prompt should appear
         typeOnSearchBar(text: "foobar")
-        waitforExistence(app.tables["SiteTable"].buttons[SuggestedSite])
+        waitForExistence(app.tables["SiteTable"].buttons[SuggestedSite])
     }
 
     // Promt does not appear once Search has been enabled by default, see bug: 1411184
     func testDismissPromptPresence() {
         navigator.goto(URLBarOpen)
         typeOnSearchBar(text: "foobar")
-        waitforExistence(app.staticTexts[LabelPrompt])
+        waitForExistence(app.staticTexts[LabelPrompt])
 
         app.buttons["No"].tap()
-        waitforNoExistence(app.tables["SiteTable"].buttons[SuggestedSite])
+        waitForNoExistence(app.tables["SiteTable"].buttons[SuggestedSite])
         app.buttons["Go"].tap()
         navigator.nowAt(BrowserTab)
         // Verify that it is possible to enable suggestions after selecting No
@@ -83,7 +83,7 @@ class SearchTests: BaseTestCase {
         navigator.nowAt(BrowserTab)
         navigator.goto(URLBarOpen)
         typeOnSearchBar(text: "foobar")
-        waitforExistence(app.tables["SiteTable"].buttons[SuggestedSite])
+        waitForExistence(app.tables["SiteTable"].buttons[SuggestedSite])
     }
 
     func testDoNotShowSuggestionsWhenEnteringURL() {
@@ -91,26 +91,26 @@ class SearchTests: BaseTestCase {
         // the suggestions are shown again
         navigator.goto(URLBarOpen)
         typeOnSearchBar(text: "foobar")
-        waitforNoExistence(app.staticTexts[LabelPrompt])
+        waitForNoExistence(app.staticTexts[LabelPrompt])
 
         // Suggestions should be shown
-        waitforExistence(app.tables["SiteTable"])
+        waitForExistence(app.tables["SiteTable"])
         if !(app.tables["SiteTable"].buttons[SuggestedSite].exists) {
             if !(app.tables["SiteTable"].buttons[SuggestedSite2].exists) {
-                waitforExistence(app.tables["SiteTable"].buttons[SuggestedSite3])
+                waitForExistence(app.tables["SiteTable"].buttons[SuggestedSite3])
             }
         }
 
         // Typing / should stop showing suggestions
         app.textFields["address"].typeText("/")
-        waitforNoExistence(app.tables["SiteTable"].buttons[SuggestedSite])
+        waitForNoExistence(app.tables["SiteTable"].buttons[SuggestedSite])
 
         // Typing space and char after / should show suggestions again
         app.textFields["address"].typeText(" b")
-        waitforExistence(app.tables["SiteTable"])
+        waitForExistence(app.tables["SiteTable"])
         if !(app.tables["SiteTable"].buttons[SuggestedSite4].exists) {
             if !(app.tables["SiteTable"].buttons[SuggestedSite5].exists) {
-                waitforExistence(app.tables["SiteTable"].buttons[SuggestedSite6])
+                waitForExistence(app.tables["SiteTable"].buttons[SuggestedSite6])
             }
         }
     }
@@ -122,16 +122,17 @@ class SearchTests: BaseTestCase {
         app.textFields["address"].press(forDuration: 5)
         app.menuItems["Select All"].tap()
         app.menuItems["Copy"].tap()
-        waitforExistence(app.buttons["goBack"])
-        app.buttons["goBack"].tap()
+        waitForExistence(app.buttons["urlBar-cancel"])
+        app.buttons["urlBar-cancel"].tap()
+
         navigator.nowAt(HomePanelsScreen)
         navigator.goto(URLBarOpen)
         app.textFields["address"].tap()
-        waitforExistence(app.menuItems["Paste"])
+        waitForExistence(app.menuItems["Paste"])
         app.menuItems["Paste"].tap()
 
         // Verify that the Paste shows the search controller with prompt
-        waitforNoExistence(app.staticTexts[LabelPrompt])
+        waitForNoExistence(app.staticTexts[LabelPrompt])
         app.typeText("\r")
 
         // Check that the website is loaded
@@ -183,19 +184,28 @@ class SearchTests: BaseTestCase {
     func testSearchWithFirefoxOption() {
         navigator.openURL(path(forTestPage: "test-mozilla-book.html"))
         waitUntilPageLoad()
-        waitforExistence(app.webViews.staticTexts["cloud"], timeout: 5)
+        waitForExistence(app.webViews.staticTexts["cloud"], timeout: 10)
         // Select some text and long press to find the option
         app.webViews.staticTexts["cloud"].press(forDuration: 1)
         if !iPad() {
-            waitforExistence(app.menus.children(matching: .menuItem).element(boundBy: 3))
+            waitForExistence(app.menus.children(matching: .menuItem).element(boundBy: 3))
             app.menus.children(matching: .menuItem).element(boundBy: 3).tap()
         }
-        waitforExistence(app.menuItems["Search with Firefox"])
+        waitForExistence(app.menuItems["Search with Firefox"])
         app.menuItems["Search with Firefox"].tap()
         waitUntilPageLoad()
         waitForValueContains(app.textFields["url"], value: "google")
         // Now there should be two tabs open
         let numTab = app.buttons["Show Tabs"].value as? String
         XCTAssertEqual("2", numTab)
+    }
+    // Bug https://bugzilla.mozilla.org/show_bug.cgi?id=1541832 scenario 4
+    func testSearchStartAfterTypingTwoWords() {
+        navigator.goto(URLBarOpen)
+        waitForExistence(app.textFields["url"], timeout: 10)
+        app.typeText("foo bar")
+        app.typeText(XCUIKeyboardKey.return.rawValue)
+        waitForExistence(app.textFields["url"], timeout: 10)
+        waitForValueContains(app.textFields["url"], value: "google")
     }
 }

@@ -33,12 +33,10 @@ class ClearPrivateDataTableViewController: ThemedTableViewController {
             (HistoryClearable(profile: self.profile), true),
             (CacheClearable(tabManager: self.tabManager), true),
             (CookiesClearable(tabManager: self.tabManager), true),
-            (SiteDataClearable(tabManager: self.tabManager), true)
+            (SiteDataClearable(tabManager: self.tabManager), true),
+            (TrackingProtectionClearable(), true),
+            (DownloadedFilesClearable(), false) // Don't clear downloaded files by default
         ]
-        if #available(iOS 11, *) {
-            items.append((TrackingProtectionClearable(), true))
-        }
-        items.append((DownloadedFilesClearable(), false)) // Don't clear downloaded files by default
         return items
     }()
 
@@ -77,6 +75,7 @@ class ClearPrivateDataTableViewController: ThemedTableViewController {
         if indexPath.section == SectionArrow {
             cell.accessoryType = .disclosureIndicator
             cell.textLabel?.text = Strings.SettingsWebsiteDataTitle
+            cell.accessibilityIdentifier = "WebsiteData"
             clearButton = cell
         } else if indexPath.section == SectionToggles {
             cell.textLabel?.text = clearables[indexPath.item].clearable.label
@@ -92,7 +91,7 @@ class ClearPrivateDataTableViewController: ThemedTableViewController {
             cell.textLabel?.text = Strings.SettingsClearPrivateDataClearButton
             cell.textLabel?.textAlignment = .center
             cell.textLabel?.textColor = UIColor.theme.general.destructiveRed
-            cell.accessibilityTraits = UIAccessibilityTraitButton
+            cell.accessibilityTraits = UIAccessibilityTraits.button
             cell.accessibilityIdentifier = "ClearPrivateData"
             clearButton = cell
         }

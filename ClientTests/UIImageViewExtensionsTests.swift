@@ -14,7 +14,7 @@ import Shared
 class UIImageViewExtensionsTests: XCTestCase {
 
     override func setUp() {
-        SDWebImageDownloader.shared().urlCredential = WebServer.sharedInstance.credentials
+        SDWebImageDownloader.shared.config.urlCredential = WebServer.sharedInstance.credentials
     }
 
     func testsetIcon() {
@@ -37,12 +37,12 @@ class UIImageViewExtensionsTests: XCTestCase {
     func testAsyncSetIcon() {
         let originalImage = UIImage(named: "fxLogo")!
 
-        WebServer.sharedInstance.registerHandlerForMethod("GET", module: "favicon", resource: "icon") { (request) -> GCDWebServerResponse! in
-            return GCDWebServerDataResponse(data: UIImagePNGRepresentation(originalImage), contentType: "image/png")
+        WebServer.sharedInstance.registerHandlerForMethod("GET", module: "favicon", resource: "icon") { (request) -> GCDWebServerResponse in
+            return GCDWebServerDataResponse(data: originalImage.pngData()!, contentType: "image/png")
         }
 
         let favImageView = UIImageView()
-        favImageView.setIcon(Favicon(url: "http://localhost:6571/favicon/icon"), forURL: URL(string: "http://localhost:6571"))
+        favImageView.setIcon(Favicon(url: "http://localhost:\(AppInfo.webserverPort)/favicon/icon"), forURL: URL(string: "http://localhost:\(AppInfo.webserverPort)"))
 
         let expect = expectation(description: "UIImageView async load")
         let time = Int64(2 * Double(NSEC_PER_SEC))

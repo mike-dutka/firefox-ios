@@ -5,13 +5,12 @@
 import Foundation
 import Shared
 @testable import Storage
-import Deferred
 import SwiftyJSON
 
 import XCTest
 
 open class MockRemoteClientsAndTabs: RemoteClientsAndTabs {
-    open let clientsAndTabs: [ClientAndTabs]
+    public let clientsAndTabs: [ClientAndTabs]
 
     public init() {
         let now = Date.now()

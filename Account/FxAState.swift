@@ -250,8 +250,8 @@ open class EngagedAfterVerifiedState: ReadyForKeys {
 
 // Not an externally facing state!
 open class TokenAndKeys: TokenState {
-    open let kSync: Data
-    open let kXCS: String
+    public let kSync: Data
+    public let kXCS: String
 
     init(sessionToken: Data, kSync: Data, kXCS: String) {
         self.kSync = kSync
@@ -285,7 +285,7 @@ open class TokenKeysAndKeyPair: TokenAndKeys {
 
     open override func asJSON() -> JSON {
         var d = super.asJSON().dictionary!
-        d["keyPair"] = JSON(keyPair.jsonRepresentation())
+        d["keyPair"] = JSON(keyPair.jsonRepresentation() as Any)
         d["keyPairExpiresAt"] = JSON(NSNumber(value: keyPairExpiresAt))
         return JSON(d)
     }

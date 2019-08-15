@@ -7,6 +7,9 @@ import XCTest
 private let testingURL = "example.com"
 private let userName = "iosmztest"
 private let userPassword = "test15mz"
+private let historyItemSavedOnDesktop = "http://www.example.com/"
+private let loginEntry = "https://accounts.google.com"
+private let tabOpenInDesktop = "http://example.com/"
 
 class IntegrationTests: BaseTestCase {
 
@@ -31,25 +34,26 @@ class IntegrationTests: BaseTestCase {
             alert.buttons["Allow"].tap()
             return true
         }
-        sleep(5)
         app.swipeDown()
     }
 
     private func signInFxAccounts() {
         navigator.goto(FxASigninScreen)
-        waitforExistence(app.webViews.staticTexts["Sign in"], timeout: 10)
+        waitForExistence(app.navigationBars["Client.FxAContentView"], timeout: 10)
         userState.fxaUsername = ProcessInfo.processInfo.environment["FXA_EMAIL"]!
         userState.fxaPassword = ProcessInfo.processInfo.environment["FXA_PASSWORD"]!
         navigator.performAction(Action.FxATypeEmail)
+        navigator.performAction(Action.FxATapOnContinueButton)
         navigator.performAction(Action.FxATypePassword)
         navigator.performAction(Action.FxATapOnSignInButton)
+        sleep(3)
         allowNotifications()
     }
 
     private func waitForInitialSyncComplete() {
         navigator.nowAt(BrowserTab)
         navigator.goto(SettingsScreen)
-        waitforExistence(app.tables.staticTexts["Sync Now"], timeout: 10)
+        waitForExistence(app.tables.staticTexts["Sync Now"], timeout: 15)
     }
 
     func testFxASyncHistory () {
@@ -71,7 +75,16 @@ class IntegrationTests: BaseTestCase {
         waitForInitialSyncComplete()
     }
 
-    /* Disabling test until it is consistently working remotely
+    func testFxASyncBookmarkDesktop () {
+        // Sign into Firefox Accounts
+        signInFxAccounts()
+
+        // Wait for initial sync to complete
+        waitForInitialSyncComplete()
+        navigator.goto(LibraryPanel_Bookmarks)
+        waitForExistence(app.tables["Bookmarks List"].cells.staticTexts["Example Domain"], timeout: 5)
+    }
+
     func testFxASyncTabs () {
         navigator.openURL(testingURL)
         waitUntilPageLoad()
@@ -83,37 +96,80 @@ class IntegrationTests: BaseTestCase {
         // This is only to check that the device's name changed
         navigator.goto(SettingsScreen)
         app.tables.cells.element(boundBy: 0).tap()
-        waitforExistence(app.cells["DeviceNameSetting"].textFields["DeviceNameSettingTextField"])
-        XCTAssertEqual(app.cells["DeviceNameSetting"].textFields["DeviceNameSettingTextField"].value! as! String, "Fennec on iOS")
+        waitForExistence(app.cells["DeviceNameSetting"].textFields["DeviceNameSettingTextField"], timeout: 10)
+        XCTAssertEqual(app.cells["DeviceNameSetting"].textFields["DeviceNameSettingTextField"].value! as! String, "Fennec (synctesting) on iOS")
 
         // Sync again just to make sure to sync after new name is shown
         app.buttons["Settings"].tap()
         app.tables.cells.element(boundBy: 1).tap()
-        waitforExistence(app.tables.staticTexts["Sync Now"], timeout: 15)
-    }*/
+        waitForExistence(app.tables.staticTexts["Sync Now"], timeout: 15)
+    }
 
     func testFxASyncLogins () {
         navigator.openURL("gmail.com")
         waitUntilPageLoad()
 
         // Log in in order to save it
-        waitforExistence(app.webViews.textFields["Email or phone"])
+        waitForExistence(app.webViews.textFields["Email or phone"])
         app.webViews.textFields["Email or phone"].tap()
         app.webViews.textFields["Email or phone"].typeText(userName)
         app.webViews.buttons["Next"].tap()
-        waitforExistence(app.webViews.secureTextFields["Password"])
+        waitForExistence(app.webViews.secureTextFields["Password"])
         app.webViews.secureTextFields["Password"].tap()
         app.webViews.secureTextFields["Password"].typeText(userPassword)
 
         app.webViews.buttons["Sign in"].tap()
 
         // Save the login
-        waitforExistence(app.buttons["SaveLoginPrompt.saveLoginButton"])
+        waitForExistence(app.buttons["SaveLoginPrompt.saveLoginButton"])
         app.buttons["SaveLoginPrompt.saveLoginButton"].tap()
 
         // Sign in with FxAccount
         signInFxAccounts()
         // Wait for initial sync to complete
         waitForInitialSyncComplete()
+    }
+
+    func testFxASyncHistoryDesktop () {
+        // Sign into Firefox Accounts
+        signInFxAccounts()
+
+        // Wait for initial sync to complete
+        waitForInitialSyncComplete()
+
+        // Check synced History
+        navigator.goto(LibraryPanel_History)
+        waitForExistence(app.tables.cells.staticTexts[historyItemSavedOnDesktop], timeout: 5)
+    }
+
+    func testFxASyncPasswordDesktop () {
+        // Sign into Firefox Accounts
+        signInFxAccounts()
+
+        // Wait for initial sync to complete
+        waitForInitialSyncComplete()
+
+        // Check synced Logins
+        navigator.nowAt(SettingsScreen)
+        navigator.goto(LoginsSettings)
+        waitForExistence(app.tables["Login List"], timeout: 5)
+        XCTAssertTrue(app.tables.cells.staticTexts[loginEntry].exists, "The login saved on desktop is not synced")
+    }
+
+    func testFxASyncTabsDesktop () {
+        // Sign into Firefox Accounts
+        signInFxAccounts()
+
+        // Wait for initial sync to complete
+        waitForInitialSyncComplete()
+
+        // Check synced Tabs
+        navigator.goto(LibraryPanel_History)
+        waitForExistence(app.cells["HistoryPanel.syncedDevicesCell"], timeout: 5)
+        app.cells["HistoryPanel.syncedDevicesCell"].tap()
+        // Need to swipe to get the data on the screen on focus
+        app.swipeDown()
+        waitForExistence(app.tables.otherElements["profile1"], timeout: 10)
+        XCTAssertTrue(app.tables.staticTexts[tabOpenInDesktop].exists, "The tab is not synced")
     }
 }

@@ -18,7 +18,7 @@ const NIGHT_MODE_STYLESHEET =
 `html {
   -webkit-filter: hue-rotate(180deg) invert(100%) !important;
 }
-img,video {
+iframe,img,video {
   -webkit-filter: ${NIGHT_MODE_INVERT_FILTER_CSS} !important;
 }`;
 
@@ -127,4 +127,8 @@ Object.defineProperty(window.__firefox__.NightMode, "setEnabled", {
       document.documentElement.style.backgroundColor = "#fff";
     }
   }
+});
+
+window.addEventListener("DOMContentLoaded", function() {
+  window.__firefox__.NightMode.setEnabled(window.__firefox__.NightMode.enabled);
 });

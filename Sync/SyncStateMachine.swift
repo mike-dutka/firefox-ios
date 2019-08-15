@@ -6,7 +6,6 @@ import Foundation
 import Shared
 import Account
 import XCGLogger
-import Deferred
 
 private let log = Logger.syncLogger
 
@@ -26,16 +25,18 @@ private let LocalEngines: [String] = TogglableEngines + ["clients"]
 // Names of collections which will appear in a default meta/global produced locally.
 // Map collection name to engine version.  See http://docs.services.mozilla.com/sync/objectformats.html.
 private let DefaultEngines: [String: Int] = [
-    "bookmarks": BookmarksStorageVersion,
+    "bookmarks": 2,
     "clients": ClientsStorageVersion,
     "history": HistoryStorageVersion,
-    "passwords": PasswordsStorageVersion,
     "tabs": TabsStorageVersion,
     // We opt-in to syncing collections we don't know about, since no client offers to sync non-enabled,
     // non-declined engines yet.  See Bug 969669.
+    "passwords": 1,
     "forms": 1,
     "addons": 1,
     "prefs": 2,
+    "addresses": 1,
+    "creditcards": 1,
 ]
 
 // Names of collections which will appear as declined in a default
@@ -294,7 +295,7 @@ public protocol SyncState {
 open class BaseSyncState: SyncState {
     open var label: SyncStateLabel { return SyncStateLabel.Stub }
 
-    open let client: Sync15StorageClient!
+    public let client: Sync15StorageClient!
     let token: TokenServerToken    // Maybe expired.
     var scratchpad: Scratchpad
 
@@ -334,7 +335,7 @@ open class BaseSyncState: SyncState {
 }
 
 open class BaseSyncStateWithInfo: BaseSyncState {
-    open let info: InfoCollections
+    public let info: InfoCollections
 
     init(client: Sync15StorageClient, scratchpad: Scratchpad, token: TokenServerToken, info: InfoCollections) {
         self.info = info

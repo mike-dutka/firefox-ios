@@ -83,7 +83,7 @@ class TopTabsViewController: UIViewController {
         tabDisplayManager = TabDisplayManager(collectionView: self.collectionView, tabManager: self.tabManager, tabDisplayer: self, reuseID: TopTabCell.Identifier)
         collectionView.dataSource = tabDisplayManager
         collectionView.delegate = tabLayoutDelegate
-        [UICollectionElementKindSectionHeader, UICollectionElementKindSectionFooter].forEach {
+        [UICollectionView.elementKindSectionHeader, UICollectionView.elementKindSectionFooter].forEach {
             collectionView.register(TopTabsHeaderFooter.self, forSupplementaryViewOfKind: $0, withReuseIdentifier: "HeaderFooter")
         }
     }
@@ -94,15 +94,9 @@ class TopTabsViewController: UIViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        tabDisplayManager.performTabUpdates()
-    }
-
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-        // Will only be done once, on first appearance, due to the check
-        if isBeingPresented || isMovingToParentViewController {
-            tabDisplayManager.performTabUpdates()
-        }
+        view.setNeedsLayout()
+        view.layoutIfNeeded()
+        tabDisplayManager.refreshStore(evenIfHidden: true)
     }
 
     deinit {
@@ -112,10 +106,8 @@ class TopTabsViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        if #available(iOS 11.0, *), LeanPlumClient.shared.enableTabBarReorder.boolValue() {
-            collectionView.dragDelegate = tabDisplayManager
-            collectionView.dropDelegate = tabDisplayManager
-        }
+        collectionView.dragDelegate = tabDisplayManager
+        collectionView.dropDelegate = tabDisplayManager
 
         let topTabFader = TopTabFader()
         topTabFader.semanticContentAttribute = .forceLeftToRight
@@ -128,14 +120,12 @@ class TopTabsViewController: UIViewController {
 
         // Setup UIDropInteraction to handle dragging and dropping
         // links onto the "New Tab" button.
-        if #available(iOS 11, *) {
             let dropInteraction = UIDropInteraction(delegate: tabDisplayManager)
             newTab.addInteraction(dropInteraction)
-        }
 
         newTab.snp.makeConstraints { make in
             make.centerY.equalTo(view)
-            make.trailing.equalTo(tabsButton.snp.leading).offset(-10)
+            make.trailing.equalTo(tabsButton.snp.leading)
             make.size.equalTo(view.snp.height)
         }
         tabsButton.snp.makeConstraints { make in
@@ -160,7 +150,7 @@ class TopTabsViewController: UIViewController {
         tabsButton.applyTheme()
         applyUIMode(isPrivate: tabManager.selectedTab?.isPrivate ?? false)
 
-        updateTabCount(tabDisplayManager.tabCount, animated: false)
+        updateTabCount(tabDisplayManager.dataStore.count, animated: false)
     }
 
     func switchForegroundStatus(isInForeground reveal: Bool) {
@@ -183,27 +173,20 @@ class TopTabsViewController: UIViewController {
     }
 
     @objc func newTabTapped() {
-        if tabDisplayManager.pendingReloadData {
-            return
-        }
         self.delegate?.topTabsDidPressNewTab(self.tabDisplayManager.isPrivate)
         LeanPlumClient.shared.track(event: .openedNewTab, withParameters: ["Source": "Add tab button in the URL Bar on iPad"])
     }
 
     @objc func togglePrivateModeTapped() {
-        let currentMode = tabDisplayManager.isPrivate
-
-        tabDisplayManager.togglePBM()
-        if currentMode != tabDisplayManager.isPrivate {
-            delegate?.topTabsDidTogglePrivateMode()
-        }
+        tabDisplayManager.togglePrivateMode(isOn: !tabDisplayManager.isPrivate, createTabOnEmptyPrivateMode: true)
+        delegate?.topTabsDidTogglePrivateMode()
         self.privateModeButton.setSelected(tabDisplayManager.isPrivate, animated: true)
     }
 
     func scrollToCurrentTab(_ animated: Bool = true, centerCell: Bool = false) {
         assertIsMainThread("Only animate on the main thread")
 
-        guard let currentTab = tabManager.selectedTab, let index = tabDisplayManager.tabStore.index(of: currentTab), !collectionView.frame.isEmpty else {
+        guard let currentTab = tabManager.selectedTab, let index = tabDisplayManager.dataStore.index(of: currentTab), !collectionView.frame.isEmpty else {
             return
         }
         if let frame = collectionView.layoutAttributesForItem(at: IndexPath(row: index, section: 0))?.frame {
@@ -242,20 +225,13 @@ extension TopTabsViewController: TabDisplayer {
 
 extension TopTabsViewController: TopTabCellDelegate {
     func tabCellDidClose(_ cell: UICollectionViewCell) {
-        // Trying to remove tabs while animating can lead to crashes as indexes change. If updates are happening don't allow tabs to be removed.
-        guard let index = collectionView.indexPath(for: cell)?.item else {
-            return
-        }
-        if let tab = self.tabDisplayManager.tabStore[safe: index] {
-            tabManager.removeTabAndUpdateSelectedIndex(tab)
-        }
-
+        tabDisplayManager.closeActionPerformed(forCell: cell)
     }
 }
 
 extension TopTabsViewController: Themeable, PrivateModeUI {
     func applyUIMode(isPrivate: Bool) {
-        tabDisplayManager.isPrivate = isPrivate
+        tabDisplayManager.togglePrivateMode(isOn: isPrivate, createTabOnEmptyPrivateMode: true)
 
         privateModeButton.onTint = UIColor.theme.topTabs.privateModeButtonOnTint
         privateModeButton.offTint = UIColor.theme.topTabs.privateModeButtonOffTint
@@ -267,6 +243,15 @@ extension TopTabsViewController: Themeable, PrivateModeUI {
         newTab.tintColor = UIColor.theme.topTabs.buttonTint
         view.backgroundColor = UIColor.theme.topTabs.background
         collectionView.backgroundColor = view.backgroundColor
-        tabDisplayManager.reloadData()
+        tabDisplayManager.refreshStore()
     }
 }
+
+// Functions for testing
+extension TopTabsViewController {
+    func test_getDisplayManager() -> TabDisplayManager {
+        assert(AppConstants.IsRunningTest)
+        return tabDisplayManager
+    }
+}
+

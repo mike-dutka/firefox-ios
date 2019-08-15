@@ -8,7 +8,7 @@ open class DeviceInfo {
     // List of device names that don't support advanced visual settings
     static let lowGraphicsQualityModels = ["iPad", "iPad1,1", "iPhone1,1", "iPhone1,2", "iPhone2,1", "iPhone3,1", "iPhone3,2", "iPhone3,3", "iPod1,1", "iPod2,1", "iPod2,2", "iPod3,1", "iPod4,1", "iPad2,1", "iPad2,2", "iPad2,3", "iPad2,4", "iPad3,1", "iPad3,2", "iPad3,3"]
 
-    open static var specificModelName: String {
+    public static var specificModelName: String {
         var systemInfo = utsname()
         uname(&systemInfo)
 
@@ -30,7 +30,7 @@ open class DeviceInfo {
     open class func defaultClientName() -> String {
         let format = NSLocalizedString("%@ on %@", tableName: "Shared", comment: "A brief descriptive name for this app on this device, used for Send Tab and Synced Tabs. The first argument is the app name. The second argument is the device name.")
 
-        if (ProcessInfo.processInfo.arguments.contains(LaunchArguments.DeviceName)) {
+        if ProcessInfo.processInfo.arguments.contains(LaunchArguments.DeviceName) {
             return String(format: format, AppInfo.displayName, "iOS")
         }
 

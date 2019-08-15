@@ -42,8 +42,8 @@ class HistoryTests: KIFTestCase {
         _ = addHistoryItems(2)
 
         // Check that both appear in the history home panel
-        EarlGrey.selectElement(with: grey_accessibilityID("url")).perform(grey_tap())
-        EarlGrey.selectElement(with: grey_accessibilityLabel("History")).perform(grey_tap())
+        BrowserUtils.openLibraryMenu(tester())
+        tester().tapView(withAccessibilityIdentifier: "LibraryPanels.History")
 
         // Wait until the dialog shows up
         let listAppeared = GREYCondition(name: "Wait the history list to appear", block: {
@@ -70,7 +70,8 @@ class HistoryTests: KIFTestCase {
             .inRoot(grey_accessibilityID("History List"))
             .assert(grey_sufficientlyVisible())
 
-        EarlGrey.selectElement(with: grey_accessibilityID("goBack")).perform(grey_tap())
+        // Close History (and so Library) panel
+        BrowserUtils.closeLibraryMenu(tester())
     }
 
     func testDeleteHistoryItemFromListWith2Items() {
@@ -78,8 +79,9 @@ class HistoryTests: KIFTestCase {
         let urls = addHistoryItems(2)
 
         // Check that both appear in the history home panel
-        EarlGrey.selectElement(with: grey_accessibilityID("url")).perform(grey_tap())
-        EarlGrey.selectElement(with: grey_accessibilityLabel("History")).perform(grey_tap())
+        BrowserUtils.openLibraryMenu(tester())
+        tester().waitForAnimationsToFinish()
+
         EarlGrey.selectElement(with: grey_accessibilityLabel(urls[0]))
             .perform(grey_longPress())
         EarlGrey.selectElement(with: grey_accessibilityLabel("Delete from History"))
@@ -102,25 +104,30 @@ class HistoryTests: KIFTestCase {
         }).wait(withTimeout: 5)
         GREYAssertTrue(historyRemoved, reason: "Failed to remove history")
 
-       EarlGrey.selectElement(with:grey_accessibilityID("goBack")).perform(grey_tap())
+        // Close History (and so Library) panel
+        BrowserUtils.closeLibraryMenu(tester())
     }
 
     func testDeleteHistoryItemFromListWithMoreThan100Items() {
-        EarlGrey.selectElement(with: grey_accessibilityID("url")).perform(grey_tap())
-        EarlGrey.selectElement(with: grey_accessibilityLabel("Top sites")).perform(grey_tap())
 
         for pageNo in 1...102 {
             BrowserUtils.addHistoryEntry("Page \(pageNo)", url: URL(string: "\(webRoot!)/numberedPage.html?page=\(pageNo)")!)
         }
+        tester().wait(forTimeInterval: 2)
         let urlToDelete = "\(webRoot!)/numberedPage.html?page=\(102)"
         let oldestUrl = "\(webRoot!)/numberedPage.html?page=\(101)"
+        tester().waitForAnimationsToFinish()
+        BrowserUtils.openLibraryMenu(tester())
+        tester().waitForAnimationsToFinish()
+        tester().waitForView(withAccessibilityIdentifier: "LibraryPanels.History")
+        tester().waitForView(withAccessibilityLabel: "Page 102")
 
-        EarlGrey.selectElement(with:grey_accessibilityLabel("History"))
-            .perform(grey_tap())
-        EarlGrey.selectElement(with: grey_accessibilityLabel("Page 102")).inRoot(grey_kindOfClass(NSClassFromString("UITableView")!)).perform(grey_swipeSlowInDirectionWithStartPoint(.left, 0.4, 0.4))
-        EarlGrey.selectElement(with:grey_accessibilityLabel("Delete"))
-            .inRoot(grey_kindOfClass(NSClassFromString("UISwipeActionStandardButton")!))
-            .perform(grey_tap())
+        EarlGrey.selectElement(with: grey_accessibilityLabel("Page 102")).inRoot(grey_kindOfClass(NSClassFromString("UITableView")!)).perform(grey_swipeSlowInDirectionWithStartPoint(.left, 0.6, 0.6))
+        if !BrowserUtils.iPad() {
+            EarlGrey.selectElement(with:grey_accessibilityLabel("Delete"))
+                .inRoot(grey_kindOfClass(NSClassFromString("UISwipeActionStandardButton")!))
+                .perform(grey_tap())
+        }
 
         // The history list still exists
         EarlGrey.selectElement(with: grey_accessibilityID("History List"))
@@ -139,7 +146,8 @@ class HistoryTests: KIFTestCase {
         }).wait(withTimeout: 5)
         GREYAssertTrue(historyRemoved, reason: "Failed to remove history")
 
-        EarlGrey.selectElement(with:grey_accessibilityID("goBack")).perform(grey_tap())
+        // Close History (and so Library) panel
+        BrowserUtils.closeLibraryMenu(tester())
     }
 
     override func tearDown() {

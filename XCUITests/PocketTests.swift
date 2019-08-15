@@ -8,24 +8,25 @@ class PocketTest: BaseTestCase {
 
     func testPocketEnabledByDefault() {
         navigator.goto(NewTabScreen)
-        waitforExistence(app.staticTexts["Recommended by Pocket"])
+        waitForExistence(app.staticTexts["pocketTitle"])
+        XCTAssertEqual(app.staticTexts["pocketTitle"].label, "Trending on Pocket")
 
         // There should be two stories on iPhone and three on iPad
         let numPocketStories = app.collectionViews.containing(.cell, identifier:"TopSitesCell").children(matching: .cell).count-1
         if iPad() {
-            XCTAssertEqual(numPocketStories, 3)
+            XCTAssertEqual(numPocketStories, 9)
         } else {
-            XCTAssertEqual(numPocketStories, 2)
+            XCTAssertEqual(numPocketStories, 3)
         }
 
-        // Disable Pocked
+        // Disable Pocket
         navigator.performAction(Action.TogglePocketInNewTab)
         navigator.goto(NewTabScreen)
-        waitforNoExistence(app.staticTexts["Recommended by Pocket"])
+        waitForNoExistence(app.staticTexts["pocketTitle"])
         // Enable it again
         navigator.performAction(Action.TogglePocketInNewTab)
         navigator.goto(NewTabScreen)
-        waitforExistence(app.staticTexts["Recommended by Pocket"])
+        waitForExistence(app.staticTexts["pocketTitle"])
 
         // Tap on the first Pocket element
         app.collectionViews.containing(.cell, identifier:"TopSitesCell").children(matching: .cell).element(boundBy: 1).tap()
@@ -37,11 +38,11 @@ class PocketTest: BaseTestCase {
     func testTapOnMore() {
         // Tap on More should show Pocket website
         navigator.goto(NewTabScreen)
-        waitforExistence(app.buttons["More"], timeout: 5)
+        waitForExistence(app.buttons["More"], timeout: 5)
         app.buttons["More"].tap()
         waitUntilPageLoad()
         navigator.nowAt(BrowserTab)
-        waitforExistence(app.textFields["url"], timeout: 15)
+        waitForExistence(app.textFields["url"], timeout: 15)
         let value = app.textFields["url"].value as! String
         XCTAssertEqual(value, "getpocket.com/explore/trending?src=ff_ios&cdn=0")
     }

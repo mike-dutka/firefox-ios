@@ -10,11 +10,13 @@ class TabTraySearchTabsTests: BaseTestCase {
         // Open two tabs and go to tab tray
         navigator.openURL(path(forTestPage: "test-mozilla-org.html"))
         waitUntilPageLoad()
+        waitForTabsButton()
         navigator.openNewURL(urlString: secondURL )
+        waitForTabsButton()
         navigator.goto(TabTray)
 
         // Search no matches
-        waitforExistence(app.textFields["Search Tabs"])
+        waitForExistence(app.textFields["Search Tabs"])
         XCTAssertTrue(app.textFields["Search Tabs"].exists)
         searchTabs(tabTitleOrUrl: "foo")
 
@@ -31,17 +33,19 @@ class TabTraySearchTabsTests: BaseTestCase {
     }
 
     private func searchTabs(tabTitleOrUrl: String) {
-        waitforExistence(app.textFields["Search Tabs"])
+        waitForExistence(app.textFields["Search Tabs"])
         app.textFields["Search Tabs"].tap()
         app.textFields["Search Tabs"].typeText(tabTitleOrUrl)
     }
 
     func testSearchTabsPrivateMode() {
         navigator.performAction(Action.TogglePrivateMode)
+        navigator.goto(NewTabScreen)
         // Open two tabs to check that the search works
         navigator.openNewURL(urlString: path(forTestPage: "test-mozilla-org.html"))
         waitUntilPageLoad()
         navigator.openNewURL(urlString: path(forTestPage: "test-example.html"))
+        waitForTabsButton()
         navigator.goto(TabTray)
         searchTabs(tabTitleOrUrl: "internet")
         XCTAssertEqual(app.collectionViews.cells.count, 1)
@@ -50,7 +54,7 @@ class TabTraySearchTabsTests: BaseTestCase {
     /*func testDragAndDropTabToSearchTabField() {
         navigator.openURL(firstURL)
         navigator.goto(TabTray)
-        waitforExistence(app.textFields["Search Tabs"])
+        waitForExistence(app.textFields["Search Tabs"])
         app.collectionViews.cells["Internet for people, not profit — Mozilla"].press(forDuration: 2, thenDragTo: app.textFields["Search Tabs"])
         waitForValueContains(app.textFields["Search Tabs"], value: "mozilla.org")
         let searchValue = app.textFields["Search Tabs"].value
@@ -59,10 +63,12 @@ class TabTraySearchTabsTests: BaseTestCase {
 
     func testSearchFieldClearedAfterVisingWebsite() {
         navigator.openURL(path(forTestPage: "test-mozilla-org.html"))
+        waitForTabsButton()
         navigator.goto(TabTray)
         searchTabs(tabTitleOrUrl: "mozilla")
         app.collectionViews.cells["Internet for people, not profit — Mozilla"].tap()
         navigator.nowAt(BrowserTab)
+        waitForTabsButton()
         navigator.goto(TabTray)
         let searchValue = app.textFields["Search Tabs"].value
         XCTAssertEqual(searchValue as! String, "Search Tabs")

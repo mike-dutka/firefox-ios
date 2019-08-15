@@ -6,7 +6,6 @@ import Foundation
 import Shared
 import Storage
 import XCGLogger
-import Deferred
 import SwiftyJSON
 
 private let log = Logger.syncLogger
@@ -181,7 +180,7 @@ open class TabsSynchronizer: TimestampedSingleCollectionSynchronizer, Synchroniz
      * This is a dedicated resetting interface that does both tabs and clients at the
      * same time.
      */
-    open static func resetClientsAndTabsWithStorage(_ storage: ResettableSyncStorage, basePrefs: Prefs) -> Success {
+    public static func resetClientsAndTabsWithStorage(_ storage: ResettableSyncStorage, basePrefs: Prefs) -> Success {
         let clientPrefs = BaseCollectionSynchronizer.prefsForCollection("clients", withBasePrefs: basePrefs)
         let tabsPrefs = BaseCollectionSynchronizer.prefsForCollection("tabs", withBasePrefs: basePrefs)
         clientPrefs.removeObjectForKey("lastFetched")

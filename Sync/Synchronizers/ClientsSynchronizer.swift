@@ -6,7 +6,6 @@ import Foundation
 import Shared
 import Storage
 import XCGLogger
-import Deferred
 import SwiftyJSON
 
 private let log = Logger.syncLogger
@@ -37,7 +36,7 @@ open class WipeCommand: Command {
         return succeed()
     }
 
-    open static func commandFromSyncCommand(_ syncCommand: SyncCommand) -> Command? {
+    public static func commandFromSyncCommand(_ syncCommand: SyncCommand) -> Command? {
         let json = JSON(parseJSON: syncCommand.value)
         if let name = json["command"].string,
             let args = json["args"].array {
@@ -86,37 +85,11 @@ open class DisplayURICommand: Command {
         }
     }
 
-    open static func commandFromSyncCommand(_ syncCommand: SyncCommand) -> Command? {
+    public static func commandFromSyncCommand(_ syncCommand: SyncCommand) -> Command? {
         let json = JSON(parseJSON: syncCommand.value)
         if let name = json["command"].string,
             let args = json["args"].array {
                 return DisplayURICommand.fromName(name, args: args)
-        }
-        return nil
-    }
-}
-
-open class RepairResponseCommand: Command {
-    let repairResponse: RepairResponse
-
-    public init(command: String, args: [JSON]) {
-        self.repairResponse = RepairResponse.fromJSON(args: args[0])
-    }
-
-    open class func fromName(_ command: String, args: [JSON]) -> Command? {
-        return RepairResponseCommand(command: command, args: args)
-    }
-
-    open func run(_ synchronizer: ClientsSynchronizer) -> Success {
-        let repairer = BookmarksRepairRequestor(scratchpad: synchronizer.scratchpad, basePrefs: synchronizer.basePrefs, remoteClients: synchronizer.localClients!)
-        return repairer.continueRepairs(response: self.repairResponse) >>> succeed
-    }
-
-    open static func commandFromSyncCommand(_ syncCommand: SyncCommand) -> Command? {
-        let json = JSON(parseJSON: syncCommand.value)
-        if let name = json["command"].string,
-            let args = json["args"].array {
-            return RepairResponseCommand.fromName(name, args: args)
         }
         return nil
     }
@@ -129,7 +102,7 @@ let Commands: [String: (String, [JSON]) -> Command?] = [
     // resetAll
     // logout
     "displayURI": DisplayURICommand.fromName,
-    "repairResponse": RepairResponseCommand.fromName
+    // repairResponse
 ]
 
 open class ClientsSynchronizer: TimestampedSingleCollectionSynchronizer, Synchronizer {
@@ -338,7 +311,7 @@ open class ClientsSynchronizer: TimestampedSingleCollectionSynchronizer, Synchro
 
         let ourGUID = self.scratchpad.clientGUID
         var toInsert = [RemoteClient]()
-        var ours: Record<ClientPayload>? = nil
+        var ours: Record<ClientPayload>?
 
         for (rec) in records {
             guard rec.payload.isValid() else {

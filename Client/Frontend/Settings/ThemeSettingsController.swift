@@ -50,7 +50,7 @@ class ThemeSettingsController: ThemedTableViewController {
         tableView.tableHeaderView = headerView
         headerView.titleLabel.text = Strings.DisplayThemeSectionHeader
 
-        NotificationCenter.default.addObserver(self, selector: #selector(brightnessChanged), name: .UIScreenBrightnessDidChange, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(brightnessChanged), name: UIScreen.brightnessDidChangeNotification, object: nil)
     }
 
     @objc func brightnessChanged() {
@@ -122,7 +122,6 @@ class ThemeSettingsController: ThemedTableViewController {
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = ThemedTableViewCell(style: .subtitle, reuseIdentifier: nil)
         cell.selectionStyle = .none
-
         let section = Section(rawValue: indexPath.section) ?? .automaticOnOff
         switch section {
         case .automaticOnOff:
@@ -134,6 +133,8 @@ class ThemeSettingsController: ThemedTableViewController {
                 cell.detailTextLabel?.adjustsFontSizeToFitWidth = true
 
                 let control = UISwitchThemed()
+
+                control.accessibilityIdentifier = "DisplaySwitchValue"
                 control.onTintColor = UIColor.theme.tableView.controlTint
                 control.addTarget(self, action: #selector(switchValueChanged), for: .valueChanged)
                 control.isOn = ThemeManager.instance.automaticBrightnessIsOn

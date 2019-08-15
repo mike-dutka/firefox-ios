@@ -9,8 +9,8 @@ public protocol AccessibilityActionsSource: AnyObject {
 }
 
 open class AccessibleAction: NSObject {
-    open let name: String
-    open let handler: () -> Bool
+    public let name: String
+    public let handler: () -> Bool
 
     public init(name: String, handler: @escaping () -> Bool) {
         self.name = name
@@ -35,7 +35,7 @@ extension AccessibleAction { // UIAlertAction
         }
     }
 
-    public func alertAction(style: UIAlertActionStyle) -> UIAlertAction {
+    public func alertAction(style: UIAlertAction.Style) -> UIAlertAction {
         return UIAlertAction(title: name, style: style, handler: alertActionHandler)
     }
 }

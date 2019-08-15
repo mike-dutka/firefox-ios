@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import Foundation
-import Deferred
 
 public let DefaultDispatchQueue = DispatchQueue.global(qos: DispatchQoS.default.qosClass)
 
@@ -34,7 +33,7 @@ open class AsyncReducer<T, U> {
     private let combine: Combine
 
     private let initialValueDeferred: Deferred<Maybe<T>>
-    open let terminal: Deferred<Maybe<T>> = Deferred()
+    public let terminal: Deferred<Maybe<T>> = Deferred()
 
     private var queuedItems: [U] = []
 

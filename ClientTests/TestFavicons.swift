@@ -35,7 +35,7 @@ class TestFavicons: ProfileTest {
                 return expectation.fulfill()
             }
             XCTAssertEqual(favicons.count, 1, "Instagram should have a Favicon.")
-            SDWebImageManager.shared().loadImage(with: url, options: .retryFailed, progress: nil, completed: { (img, _, _, _, _, _) in
+            SDWebImageManager.shared.loadImage(with: url, options: .retryFailed, progress: nil, completed: { (img, _, _, _, _, _) in
                 guard let image = img else {
                     XCTFail("Not a valid URL provided for a favicon.")
                     return expectation.fulfill()
@@ -51,8 +51,10 @@ class TestFavicons: ProfileTest {
     func testDefaultFavicons() {
         let icon = FaviconFetcher.getDefaultIconForURL(url: URL(string: "http://www.google.de")!)
         XCTAssertNotNil(icon)
-        let craigsListIcon = FaviconFetcher.getDefaultIconForURL(url: URL(string: "http://vancouver.craigslist.ca")!)
-        XCTAssertNotNil(craigsListIcon)
+        let gmailIcon = FaviconFetcher.getDefaultIconForURL(url: URL(string: "http://mail.google.com")!)
+        XCTAssertNotNil(gmailIcon)
+        let siteIcon = FaviconFetcher.getDefaultIconForURL(url: URL(string: "http://airbnb.com")!)
+        XCTAssertNotNil(siteIcon)
 
     }
 }

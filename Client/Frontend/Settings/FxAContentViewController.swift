@@ -29,6 +29,7 @@ class FxAContentViewController: SettingsContentViewController, WKScriptMessageHa
         case changePassword = "change_password"
         case sessionStatus = "session_status"
         case signOut = "sign_out"
+        case deleteAccount = "delete_account"
     }
 
     weak var delegate: FxAContentViewControllerDelegate?
@@ -87,7 +88,6 @@ class FxAContentViewController: SettingsContentViewController, WKScriptMessageHa
             configuration: config
         )
         webView.allowsLinkPreview = false
-        webView.navigationDelegate = self
         webView.accessibilityLabel = NSLocalizedString("Web content", comment: "Accessibility label for the main web content view")
 
         // Don't allow overscrolling.
@@ -103,7 +103,7 @@ class FxAContentViewController: SettingsContentViewController, WKScriptMessageHa
         ] as [String: Any]
         let json = JSON(data).stringify() ?? ""
         let script = "window.postMessage(\(json), '\(self.url.absoluteString)');"
-        webView.evaluateJavaScript(script, completionHandler: nil)
+        settingsWebView.evaluateJavaScript(script, completionHandler: nil)
     }
 
     fileprivate func onCanLinkAccount(_ data: JSON) {
@@ -121,6 +121,13 @@ class FxAContentViewController: SettingsContentViewController, WKScriptMessageHa
     // We're not signed in to a Firefox Account at this time. We should never get a sign out message!
     fileprivate func onSignOut(_ data: JSON) {
         injectData("message", content: ["status": "error"])
+    }
+
+    // The user has deleted their Firefox Account. Disconnect them!
+    fileprivate func onDeleteAccount(_ data: JSON) {
+        FxALoginHelper.sharedInstance.applicationDidDisconnect(UIApplication.shared)
+        LeanPlumClient.shared.set(attributes: [LPAttributeKey.signedInSync: profile.hasAccount()])
+        dismiss(animated: true)
     }
 
     // The user has signed in to a Firefox Account.  We're done!
@@ -181,6 +188,8 @@ class FxAContentViewController: SettingsContentViewController, WKScriptMessageHa
                 onSessionStatus(data)
             case .signOut:
                 onSignOut(data)
+            case .deleteAccount:
+                onDeleteAccount(data)
             }
         }
     }
@@ -212,24 +221,20 @@ class FxAContentViewController: SettingsContentViewController, WKScriptMessageHa
             return profileUrl
         }
 
-        // Only append `signin`, `entrypoint` and `utm_*` parameters. Note that you can't
-        // override the service and context params.
+        // Only append certain parameters. Note that you can't override the service and context params.
         var params = launchParams.query
         params.removeValue(forKey: "service")
         params.removeValue(forKey: "context")
-        let queryURL = params.filter { $0.key == "signin" || $0.key == "entrypoint" || $0.key.range(of: "utm_") != nil }.map({
+
+        params["action"] = "email"
+        params["style"] = "trailhead" // adds Trailhead banners to the page
+
+        let queryURL = params.filter { ["action", "style", "signin", "entrypoint"].contains($0.key) || $0.key.range(of: "utm_") != nil }.map({
             return "\($0.key)=\($0.value)"
         }).joined(separator: "&")
 
+
         return  URL(string: "\(profileUrl)&\(queryURL)") ?? profileUrl
-    }
-
-    override func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        // Ignore for now.
-    }
-
-    override func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        // Ignore for now.
     }
 }
 

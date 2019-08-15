@@ -34,15 +34,6 @@ extension UIImage {
         return image
     }
 
-    /// Generates a UIImage from GIF data by calling out to SDWebImage. The latter in turn uses UIImage(data: NSData)
-    /// in certain cases so we have to synchronize calls (see bug 1223132).
-    public static func imageFromGIFDataThreadSafe(_ data: Data) -> UIImage? {
-        imageLock.lock()
-        let image = UIImage.sd_animatedGIF(with: data)
-        imageLock.unlock()
-        return image
-    }
-
     public static func createWithColor(_ size: CGSize, color: UIColor) -> UIImage {
         UIGraphicsBeginImageContextWithOptions(size, false, 0.0)
         let context = UIGraphicsGetCurrentContext()
@@ -87,13 +78,12 @@ extension UIImage {
     //    let image = UIImage(named: "fxLogo")!
     //    let data = UIImagePNGRepresentation(image)!
     //    assert(data != UIImagePNGRepresentation(UIImage(data: data)!))
-    @available(*, deprecated, message: "use only in testing code")
     public func isStrictlyEqual(to other: UIImage) -> Bool {
         // Must use same constructor for PNG metadata block to be the same.
-        let imageA = UIImage(data: UIImagePNGRepresentation(self)!)!
-        let imageB = UIImage(data: UIImagePNGRepresentation(other)!)!
-        let dataA = UIImagePNGRepresentation(imageA)!
-        let dataB = UIImagePNGRepresentation(imageB)!
+        let imageA = UIImage(data: self.pngData()!)!
+        let imageB = UIImage(data: other.pngData()!)!
+        let dataA = imageA.pngData()!
+        let dataB = imageB.pngData()!
         return dataA == dataB
     }
 }

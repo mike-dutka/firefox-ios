@@ -4,6 +4,7 @@
 
 import UIKit
 import Storage
+import Shared
 
 class BackForwardTableViewCell: UITableViewCell {
 
@@ -53,7 +54,7 @@ class BackForwardTableViewCell: UITableViewCell {
         didSet {
             if let s = site {
                 faviconView.setFavicon(forSite: s, onCompletion: { [weak self] (color, url) in
-                    if s.tileURL.isLocal {
+                    if InternalURL.isValid(url: s.tileURL) {
                         self?.faviconView.image = UIImage(named: "faviconFox")
                         self?.faviconView.image = self?.faviconView.image?.createScaled(CGSize(width: BackForwardViewCellUX.IconSize, height: BackForwardViewCellUX.IconSize))
                         self?.faviconView.backgroundColor = UIColor.Photon.White100
@@ -73,7 +74,7 @@ class BackForwardTableViewCell: UITableViewCell {
         }
     }
 
-    override init(style: UITableViewCellStyle, reuseIdentifier: String?) {
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         backgroundColor = UIColor.clear
         selectionStyle = .none

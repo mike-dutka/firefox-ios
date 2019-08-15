@@ -4,11 +4,11 @@
 
 import UIKit
 
-class SettingsNavigationController: UINavigationController {
-    var popoverDelegate: PresentingModalViewControllerDelegate?
+class ThemedNavigationController: UINavigationController {
+    var presentingModalViewControllerDelegate: PresentingModalViewControllerDelegate?
 
     @objc func done() {
-        if let delegate = popoverDelegate {
+        if let delegate = presentingModalViewControllerDelegate {
             delegate.dismissPresentedModalViewController(self, animated: true)
         } else {
             self.dismiss(animated: true, completion: nil)
@@ -21,15 +21,16 @@ class SettingsNavigationController: UINavigationController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        modalPresentationStyle = .formSheet
         applyTheme()
     }
 }
 
-extension SettingsNavigationController: Themeable {
+extension ThemedNavigationController: Themeable {
     func applyTheme() {
         navigationBar.barTintColor = UIColor.theme.tableView.headerBackground
         navigationBar.tintColor = UIColor.theme.general.controlTint
-        navigationBar.titleTextAttributes = [NSAttributedStringKey.foregroundColor: UIColor.theme.tableView.headerTextDark]
+        navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.theme.tableView.headerTextDark]
         setNeedsStatusBarAppearanceUpdate()
         viewControllers.forEach {
             ($0 as? Themeable)?.applyTheme()
@@ -37,7 +38,7 @@ extension SettingsNavigationController: Themeable {
     }
 }
 
-protocol PresentingModalViewControllerDelegate {
+protocol PresentingModalViewControllerDelegate: AnyObject {
     func dismissPresentedModalViewController(_ modalViewController: UIViewController, animated: Bool)
 }
 

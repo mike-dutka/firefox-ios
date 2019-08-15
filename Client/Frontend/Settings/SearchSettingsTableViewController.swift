@@ -48,14 +48,9 @@ class SearchSettingsTableViewController: ThemedTableViewController {
         tableView.register(ThemedTableSectionHeaderFooterView.self, forHeaderFooterViewReuseIdentifier: SectionHeaderIdentifier)
 
         // Insert Done button if being presented outside of the Settings Nav stack
-        if !(self.navigationController is SettingsNavigationController) {
+        if !(self.navigationController is ThemedNavigationController) {
             self.navigationItem.leftBarButtonItem = UIBarButtonItem(title: Strings.SettingsSearchDoneButton, style: .done, target: self, action: #selector(self.dismissAnimated))
         }
-
-        let footer = ThemedTableSectionHeaderFooterView(frame: CGRect(width: tableView.bounds.width, height: 44))
-        footer.showTopBorder = false
-        footer.showBottomBorder = false
-        tableView.tableFooterView = footer
 
         navigationItem.rightBarButtonItem = UIBarButtonItem(title: Strings.SettingsSearchEditButton, style: .plain, target: self,
                                                                  action: #selector(beginEditing))
@@ -173,9 +168,9 @@ class SearchSettingsTableViewController: ThemedTableViewController {
     }
 
     // Don't show delete button on the left.
-    override func tableView(_ tableView: UITableView, editingStyleForRowAt indexPath: IndexPath) -> UITableViewCellEditingStyle {
+    override func tableView(_ tableView: UITableView, editingStyleForRowAt indexPath: IndexPath) -> UITableViewCell.EditingStyle {
         if indexPath.section == SectionDefault || indexPath.item + 1 == model.orderedEngines.count {
-            return UITableViewCellEditingStyle.none
+            return UITableViewCell.EditingStyle.none
         }
 
         let index = indexPath.item + 1
@@ -201,6 +196,10 @@ class SearchSettingsTableViewController: ThemedTableViewController {
         return 44
     }
 
+    override func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        return 0
+    }
+
     override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
         let headerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: SectionHeaderIdentifier) as! ThemedTableSectionHeaderFooterView
         var sectionTitle: String
@@ -212,6 +211,16 @@ class SearchSettingsTableViewController: ThemedTableViewController {
         headerView.titleLabel.text = sectionTitle
 
         return headerView
+    }
+
+    override func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
+        guard let footerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: SectionHeaderIdentifier) as? ThemedTableSectionHeaderFooterView else {
+            return nil
+        }
+
+        footerView.showBottomBorder = false
+        footerView.applyTheme()
+        return footerView
     }
 
     override func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
@@ -253,7 +262,7 @@ class SearchSettingsTableViewController: ThemedTableViewController {
         return proposedDestinationIndexPath
     }
 
-    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCellEditingStyle, forRowAt indexPath: IndexPath) {
+    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         if editingStyle == .delete {
             let index = indexPath.item + 1
             let engine = model.orderedEngines[index]
@@ -268,6 +277,8 @@ class SearchSettingsTableViewController: ThemedTableViewController {
     }
 
     override func setEditing(_ editing: Bool, animated: Bool) {
+        super.setEditing(editing, animated: animated)
+        tableView.isEditing = true
         showDeletion = editing
         UIView.performWithoutAnimation {
             self.navigationItem.rightBarButtonItem?.title = editing ? Strings.SettingsSearchDoneButton : Strings.SettingsSearchEditButton

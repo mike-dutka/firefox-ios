@@ -73,10 +73,8 @@ class ReadingListTests: KIFTestCase, UITextFieldDelegate {
         tester().waitForWebViewElementWithAccessibilityLabel("Page 1")
 
         // Check that it appears in the reading list home panel
-        EarlGrey.selectElement(with: grey_accessibilityID("url"))
-            .perform(grey_tap())
-        EarlGrey.selectElement(with: grey_accessibilityLabel("Reading list"))
-            .perform(grey_tap())
+        BrowserUtils.openLibraryMenu(tester())
+        tester().tapView(withAccessibilityIdentifier: "LibraryPanels.ReadingList")
 
         // Tap to open it
         EarlGrey.selectElement(with: grey_accessibilityLabel("localhost"))
@@ -88,13 +86,14 @@ class ReadingListTests: KIFTestCase, UITextFieldDelegate {
             .perform(grey_tap())
 
         // Check that it no longer appears in the reading list home panel
-        EarlGrey.selectElement(with: grey_accessibilityID("url"))
-            .perform(grey_tap())
-        EarlGrey.selectElement(with: grey_accessibilityLabel("Reading list"))
-            .perform(grey_tap())
-
+        BrowserUtils.openLibraryMenu(tester())
+        tester().tapView(withAccessibilityIdentifier: "LibraryPanels.Bookmarks")
+        tester().tapView(withAccessibilityIdentifier: "LibraryPanels.ReadingList")
         waitForEmptyReadingList()
-        EarlGrey.selectElement(with: grey_accessibilityID("goBack")).perform(grey_tap())
+
+        // Close the menu
+        tester().tapView(withAccessibilityIdentifier: "LibraryPanels.History")
+        BrowserUtils.closeLibraryMenu(tester())
     }
 
     func testReadingListAutoMarkAsRead() {
@@ -112,10 +111,9 @@ class ReadingListTests: KIFTestCase, UITextFieldDelegate {
             .perform(grey_tap())
 
         // Check that it appears in the reading list home panel and make sure it marked as unread
-        EarlGrey.selectElement(with: grey_accessibilityID("url"))
-            .perform(grey_tap())
-        EarlGrey.selectElement(with: grey_accessibilityLabel("Reading list"))
-            .perform(grey_tap())
+        BrowserUtils.openLibraryMenu(tester())
+        tester().tapView(withAccessibilityIdentifier: "LibraryPanels.ReadingList")
+
         tester().waitForView(withAccessibilityLabel: "Readable page, unread, localhost")
         // Select to Read
         EarlGrey.selectElement(with: grey_accessibilityLabel("localhost"))
@@ -123,10 +121,7 @@ class ReadingListTests: KIFTestCase, UITextFieldDelegate {
         tester().waitForWebViewElementWithAccessibilityLabel("Readable page")
 
         // Go back to the reading list panel
-        EarlGrey.selectElement(with: grey_accessibilityID("url"))
-            .perform(grey_tap())
-        EarlGrey.selectElement(with: grey_accessibilityLabel("Reading list"))
-            .perform(grey_tap())
+        BrowserUtils.openLibraryMenu(tester())
 
         // Make sure the article is marked as read
         EarlGrey.selectElement(with: grey_accessibilityLabel("Readable page"))
@@ -137,16 +132,29 @@ class ReadingListTests: KIFTestCase, UITextFieldDelegate {
             .assert(grey_notNil())
 
         // Remove the list entry
-        EarlGrey.selectElement(with: grey_accessibilityLabel("Readable page"))
-            .inRoot(grey_kindOfClass(NSClassFromString("UITableViewCellContentView")!))
-            .perform(grey_swipeSlowInDirection(GREYDirection.left))
-        EarlGrey.selectElement(with: grey_accessibilityLabel("Remove"))
-            .inRoot(grey_kindOfClass(NSClassFromString("UISwipeActionStandardButton")!))
-            .perform(grey_tap())
+        // Workaround for iPad, the swipe gesture is not controlled and the Remove button
+        // is kept behing the Mark as read and so the test fails
+        if BrowserUtils.iPad() {
+            EarlGrey.selectElement(with: grey_accessibilityLabel("Readable page"))
+                .inRoot(grey_kindOfClass(NSClassFromString("UITableViewCellContentView")!))
+                .perform(grey_longPress())
+            tester().longPressView(withAccessibilityIdentifier: "action_remove", duration: 1)
+        } else {
+            EarlGrey.selectElement(with: grey_accessibilityLabel("Readable page"))
+                .inRoot(grey_kindOfClass(NSClassFromString("UITableViewCellContentView")!))
+                .perform(grey_swipeSlowInDirectionWithStartPoint(GREYDirection.left, 0.1, 0.1))
+
+            EarlGrey.selectElement(with: grey_accessibilityLabel("Remove"))
+                .inRoot(grey_kindOfClass(NSClassFromString("UISwipeActionStandardButton")!))
+                .perform(grey_tap())
+        }
 
         // check the entry no longer exist
         waitForEmptyReadingList()
-        EarlGrey.selectElement(with: grey_accessibilityID("goBack")).perform(grey_tap())
+
+        // Close Reading (and so Library) panel
+        tester().tapView(withAccessibilityIdentifier: "LibraryPanels.History")
+        BrowserUtils.closeLibraryMenu(tester())
     }
 
     override func tearDown() {

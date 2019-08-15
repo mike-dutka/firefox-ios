@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import Shared
-import Deferred
 
 open class IgnoredSiteError: MaybeErrorType {
     open var description: String {
@@ -22,6 +21,7 @@ public protocol BrowserHistory {
     @discardableResult func addLocalVisit(_ visit: SiteVisit) -> Success
     func clearHistory() -> Success
     @discardableResult func removeHistoryForURL(_ url: String) -> Success
+    func removeHistoryFromDate(_ date: Date) -> Success
     func removeSiteFromTopSites(_ site: Site) -> Success
     func removeHostFromTopSites(_ host: String) -> Success
     func getFrecentHistory() -> FrecentHistory
@@ -42,7 +42,7 @@ public protocol BrowserHistory {
  * An interface for fast repeated frecency queries.
  */
 public protocol FrecentHistory {
-    func getSites(whereURLContains filter: String?, historyLimit limit: Int, bookmarksLimit: Int) -> Deferred<Maybe<Cursor<Site>>>
+    func getSites(matchingSearchQuery filter: String?, limit: Int) -> Deferred<Maybe<Cursor<Site>>>
     func updateTopSitesCacheQuery() -> (String, Args?)
 }
 
@@ -50,11 +50,8 @@ public protocol FrecentHistory {
  * An interface for accessing recommendation content from Storage
  */
 public protocol HistoryRecommendations {
-    func getHighlights() -> Deferred<Maybe<Cursor<Site>>>
-    func getRecentBookmarks(_ limit: Int) -> Deferred<Maybe<Cursor<Site>>>
-
-    func removeHighlightForURL(_ url: String) -> Success
-    func repopulate(invalidateTopSites shouldInvalidateTopSites: Bool, invalidateHighlights shouldInvalidateHighlights: Bool) -> Success
+    func cleanupHistoryIfNeeded()
+    func repopulate(invalidateTopSites shouldInvalidateTopSites: Bool) -> Success
 }
 
 /**
@@ -97,9 +94,9 @@ public protocol SyncableHistory: AccountRemovalDelegate {
 // TODO: integrate Site with this.
 
 open class Place {
-    open let guid: GUID
-    open let url: String
-    open let title: String
+    public let guid: GUID
+    public let url: String
+    public let title: String
 
     public init(guid: GUID, url: String, title: String) {
         self.guid = guid

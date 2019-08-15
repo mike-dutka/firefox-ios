@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "0940"
+   LastUpgradeVersion = "1030"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
@@ -167,7 +167,7 @@
       </BuildActionEntries>
    </BuildAction>
    <TestAction
-      buildConfiguration = "Fennec_Enterprise"
+      buildConfiguration = "Fennec"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       language = "en"
@@ -215,13 +215,22 @@
                   Identifier = "CopiedLinksTests">
                </Test>
                <Test
+                  Identifier = "DataManagementTests">
+               </Test>
+               <Test
                   Identifier = "DatabaseFixtureTest">
+               </Test>
+               <Test
+                  Identifier = "DisplaySettingTests">
                </Test>
                <Test
                   Identifier = "DomainAutocompleteTest">
                </Test>
                <Test
                   Identifier = "DownloadFilesTests">
+               </Test>
+               <Test
+                  Identifier = "DragAndDropTestIpad">
                </Test>
                <Test
                   Identifier = "DragAndDropTests">
@@ -296,6 +305,9 @@
                   Identifier = "PrivateBrowsingTest/testiPadDirectAccessPrivateModeBrowserTab()">
                </Test>
                <Test
+                  Identifier = "PrivateBrowsingTestIpad">
+               </Test>
+               <Test
                   Identifier = "ReaderViewTest">
                </Test>
                <Test
@@ -323,6 +335,9 @@
                   Identifier = "SyncUITests">
                </Test>
                <Test
+                  Identifier = "TabTraySearchTabsTests">
+               </Test>
+               <Test
                   Identifier = "ThirdPartySearchTest">
                </Test>
                <Test
@@ -342,6 +357,12 @@
                </Test>
                <Test
                   Identifier = "TopTabsTest/testCloseTabFromPageOptionsMenu()">
+               </Test>
+               <Test
+                  Identifier = "TopTabsTestIpad">
+               </Test>
+               <Test
+                  Identifier = "TopTabsTestIphone">
                </Test>
                <Test
                   Identifier = "TrackingProtectionTests">
@@ -384,7 +405,7 @@
       </AdditionalOptions>
    </TestAction>
    <LaunchAction
-      buildConfiguration = "Fennec_Enterprise"
+      buildConfiguration = "Fennec"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       launchStyle = "1"
@@ -414,7 +435,7 @@
       </AdditionalOptions>
    </LaunchAction>
    <ProfileAction
-      buildConfiguration = "Fennec_Enterprise"
+      buildConfiguration = "Fennec"
       shouldUseLaunchSchemeArgsEnv = "YES"
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
@@ -431,10 +452,10 @@
       </BuildableProductRunnable>
    </ProfileAction>
    <AnalyzeAction
-      buildConfiguration = "Fennec_Enterprise">
+      buildConfiguration = "Fennec">
    </AnalyzeAction>
    <ArchiveAction
-      buildConfiguration = "Fennec_Enterprise"
+      buildConfiguration = "Fennec"
       revealArchiveInOrganizer = "YES">
       <PreActions>
          <ExecutionAction

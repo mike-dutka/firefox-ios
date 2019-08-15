@@ -62,20 +62,22 @@ class WebsiteDataManagementViewController: UIViewController, UITableViewDataSour
         // Search Controller setup
         let searchResultsViewController = WebsiteDataSearchResultsViewController()
 
-        if #available(iOS 11.0, *) {
-            let searchController = UISearchController(searchResultsController: searchResultsViewController)
-            searchController.searchResultsUpdater = searchResultsViewController
-            searchController.obscuresBackgroundDuringPresentation = false
-            searchController.searchBar.placeholder = Strings.SettingsFilterSitesSearchLabel
-            searchController.searchBar.delegate = self
+        let searchController = UISearchController(searchResultsController: searchResultsViewController)
 
-            if theme == .dark {
-                searchController.searchBar.barStyle = .black
-            }
-            navigationItem.searchController = searchController
-            navigationItem.hidesSearchBarWhenScrolling = false
-            self.searchController = searchController
+        // No need to hide the navigation bar on iPad, on iPhone the additional height is useful.
+        searchController.hidesNavigationBarDuringPresentation = UIDevice.current.userInterfaceIdiom != .pad
+
+        searchController.searchResultsUpdater = searchResultsViewController
+        searchController.obscuresBackgroundDuringPresentation = false
+        searchController.searchBar.placeholder = Strings.SettingsFilterSitesSearchLabel
+        searchController.searchBar.delegate = self
+
+        if theme == .dark {
+            searchController.searchBar.barStyle = .black
         }
+        navigationItem.searchController = searchController
+        navigationItem.hidesSearchBarWhenScrolling = false
+        self.searchController = searchController
 
         definesPresentationContext = true
     }
@@ -84,9 +86,7 @@ class WebsiteDataManagementViewController: UIViewController, UITableViewDataSour
         super.viewDidAppear(animated)
 
         // Allows the search bar to be scrolled away even though we initially show it.
-        if #available(iOS 11.0, *) {
-            navigationItem.hidesSearchBarWhenScrolling = true
-        }
+        navigationItem.hidesSearchBarWhenScrolling = true
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -100,14 +100,14 @@ class WebsiteDataManagementViewController: UIViewController, UITableViewDataSour
         case .showMore:
             cell.textLabel?.text = Strings.SettingsWebsiteDataShowMoreButton
             cell.textLabel?.textColor = showMoreButtonEnabled ? UIColor.theme.general.highlightBlue : UIColor.gray
-            cell.accessibilityTraits = UIAccessibilityTraitButton
+            cell.accessibilityTraits = UIAccessibilityTraits.button
             cell.accessibilityIdentifier = "ShowMoreWebsiteData"
             showMoreButton = cell 
         case .clearAllButton:
             cell.textLabel?.text = Strings.SettingsClearAllWebsiteDataButton
             cell.textLabel?.textAlignment = .center
             cell.textLabel?.textColor = UIColor.theme.general.destructiveRed
-            cell.accessibilityTraits = UIAccessibilityTraitButton
+            cell.accessibilityTraits = UIAccessibilityTraits.button
             cell.accessibilityIdentifier = "ClearAllWebsiteData"
             clearButton = cell
         }
@@ -162,16 +162,16 @@ class WebsiteDataManagementViewController: UIViewController, UITableViewDataSour
         }
     }
 
-    func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCellEditingStyle, forRowAt indexPath: IndexPath) {
-        guard editingStyle == UITableViewCellEditingStyle.delete, let record = siteRecords?[safe: indexPath.row] else {
+    func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
+        guard editingStyle == UITableViewCell.EditingStyle.delete, let record = siteRecords?[safe: indexPath.row] else {
             return
         }
 
         let types = WKWebsiteDataStore.allWebsiteDataTypes()
-        WKWebsiteDataStore.default().removeData(ofTypes: types, for: [record]) {
-            self.siteRecords?.remove(at: indexPath.row)
-            self.tableView.reloadData()
-        }
+        WKWebsiteDataStore.default().removeData(ofTypes: types, for: [record]) {}
+
+        siteRecords?.remove(at: indexPath.row)
+        tableView.reloadData()
     }
 
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
@@ -184,7 +184,9 @@ class WebsiteDataManagementViewController: UIViewController, UITableViewDataSour
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
         let section = Section(rawValue: section)!
         switch section {
-        case .sites, .clearAllButton:
+        case .clearAllButton:
+            return 10 // Controls the space between the site list and the button
+        case .sites:
             return SettingsUX.TableViewHeaderFooterHeight
         case .showMore:
             return 0
@@ -224,10 +226,10 @@ class WebsiteDataManagementViewController: UIViewController, UITableViewDataSour
 
     func clearWebsiteData(_ action: UIAlertAction) {
         let types = WKWebsiteDataStore.allWebsiteDataTypes()
-        WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: .distantPast) {
-            self.siteRecords = []
-            self.showMoreButtonEnabled = false
-            self.tableView.reloadData()
-        }
+        WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: .distantPast) {}
+
+        siteRecords = []
+        showMoreButtonEnabled = false
+        tableView.reloadData()
     }
 }
