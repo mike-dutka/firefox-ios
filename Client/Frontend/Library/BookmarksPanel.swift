@@ -68,7 +68,7 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel {
 
         self.tableView.register(OneLineTableViewCell.self, forCellReuseIdentifier: BookmarkNodeCellIdentifier)
         self.tableView.register(SeparatorTableViewCell.self, forCellReuseIdentifier: BookmarkSeparatorCellIdentifier)
-        self.tableView.register(ThemedTableSectionHeaderFooterView.self, forHeaderFooterViewReuseIdentifier: BookmarkSectionHeaderIdentifier)
+        self.tableView.register(SiteTableViewHeader.self, forHeaderFooterViewReuseIdentifier: BookmarkSectionHeaderIdentifier)
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -84,16 +84,11 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel {
         tableView.allowsSelectionDuringEditing = true
 
         self.editBarButtonItem = UIBarButtonItem(barButtonSystemItem: .edit) { _ in
-            self.tableView.setEditing(true, animated: true)
-            self.navigationItem.leftBarButtonItem = self.newBarButtonItem
-            self.navigationItem.rightBarButtonItem = self.doneBarButtonItem
+            self.enableEditMode()
         }
 
         self.doneBarButtonItem = UIBarButtonItem(barButtonSystemItem: .done) { _ in
-            self.tableView.setEditing(false, animated: true)
-            self.navigationItem.leftBarButtonItem = nil
-            self.navigationItem.rightBarButtonItem = self.editBarButtonItem
-            self.setupBackButtonGestureRecognizer()
+            self.disableEditMode()
         }
 
         self.newBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add) { _ in
@@ -151,6 +146,13 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel {
 
         setupBackButtonGestureRecognizer()
     }
+    
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        if tableView.isEditing {
+            disableEditMode()
+        }
+        super.viewWillTransition(to: size, with: coordinator)
+    }
 
     override func applyTheme() {
         super.applyTheme()
@@ -161,6 +163,8 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel {
     }
 
     override func reloadData() {
+        // Can be called while app backgrounded and the db closed, don't try to reload the data source in this case
+        if profile.isShutdown { return }
         profile.places.getBookmarksTree(rootGUID: bookmarkFolderGUID, recursive: false).uponQueue(.main) { result in
 
             guard let folder = result.successValue as? BookmarkFolder else {
@@ -193,6 +197,19 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel {
                 }
             }
         }
+    }
+    
+    fileprivate func enableEditMode() {
+        self.tableView.setEditing(true, animated: true)
+        self.navigationItem.leftBarButtonItem = self.newBarButtonItem
+        self.navigationItem.rightBarButtonItem = self.doneBarButtonItem
+    }
+    
+    fileprivate func disableEditMode() {
+        self.tableView.setEditing(false, animated: true)
+        self.navigationItem.leftBarButtonItem = nil
+        self.navigationItem.rightBarButtonItem = self.editBarButtonItem
+        self.setupBackButtonGestureRecognizer()
     }
 
     fileprivate func setupBackButtonGestureRecognizer() {
@@ -338,7 +355,7 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel {
         case let bookmarkItem as BookmarkItem:
             libraryPanelDelegate?.libraryPanel(didSelectURLString: bookmarkItem.url, visitType: .bookmark)
             LeanPlumClient.shared.track(event: .openedBookmark)
-            UnifiedTelemetry.recordEvent(category: .action, method: .open, object: .bookmark, value: .bookmarksPanel)
+            TelemetryWrapper.recordEvent(category: .action, method: .open, object: .bookmark, value: .bookmarksPanel)
         default:
             return // Likely a separator was selected so do nothing.
         }
@@ -354,6 +371,10 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel {
         }
 
         return 1
+    }
+
+    override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        return UITableView.automaticDimension
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
@@ -383,6 +404,8 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel {
                 cell.textLabel?.text = bookmarkItem.title
             }
 
+            cell.imageView?.image = nil
+
             let site = Site(url: bookmarkItem.url, title: bookmarkItem.title, bookmarked: true, guid: bookmarkItem.guid)
             profile.favicons.getFaviconImage(forSite: site).uponQueue(.main) { result in
                 // Check that we successfully retrieved an image (should always happen)
@@ -409,11 +432,13 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel {
 
     override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
         guard section == BookmarksSection.recent.rawValue, !recentBookmarks.isEmpty,
-            let headerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: BookmarkSectionHeaderIdentifier) as? ThemedTableSectionHeaderFooterView else {
+            let headerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: BookmarkSectionHeaderIdentifier) as? SiteTableViewHeader else {
             return nil
         }
 
-        headerView.titleLabel.text = Strings.RecentlyBookmarkedTitle.uppercased()
+        headerView.titleLabel.text = Strings.RecentlyBookmarkedTitle
+        headerView.showBorder(for: .top, true)
+        headerView.showBorder(for: .bottom, true)
 
         return headerView
     }
@@ -471,7 +496,7 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel {
     func tableView(_ tableView: UITableView, editActionsForRowAt indexPath: IndexPath) -> [UITableViewRowAction]? {
         let delete = UITableViewRowAction(style: .default, title: Strings.BookmarksPanelDeleteTableAction, handler: { (action, indexPath) in
             self.deleteBookmarkNodeAtIndexPath(indexPath)
-            UnifiedTelemetry.recordEvent(category: .action, method: .delete, object: .bookmark, value: .bookmarksPanel, extras: ["gesture": "swipe"])
+            TelemetryWrapper.recordEvent(category: .action, method: .delete, object: .bookmark, value: .bookmarksPanel, extras: ["gesture": "swipe"])
         })
 
         return [delete]
@@ -504,13 +529,17 @@ extension BookmarksPanel: LibraryPanelContextMenu {
         }
 
         let pinTopSite = PhotonActionSheetItem(title: Strings.PinTopsiteActionTitle, iconString: "action_pin", handler: { _, _ in
-            _ = self.profile.history.addPinnedTopSite(site)
+            _ = self.profile.history.addPinnedTopSite(site).uponQueue(.main) { result in
+                if result.isSuccess {
+                    SimpleToast().showAlertWithText(Strings.AppMenuAddPinToTopSitesConfirmMessage, bottomContainer: self.view)
+                }
+            }
         })
         actions.append(pinTopSite)
 
         let removeAction = PhotonActionSheetItem(title: Strings.RemoveBookmarkContextMenuTitle, iconString: "action_bookmark_remove", handler: { _, _ in
             self.deleteBookmarkNodeAtIndexPath(indexPath)
-            UnifiedTelemetry.recordEvent(category: .action, method: .delete, object: .bookmark, value: .bookmarksPanel, extras: ["gesture": "long-press"])
+            TelemetryWrapper.recordEvent(category: .action, method: .delete, object: .bookmark, value: .bookmarksPanel, extras: ["gesture": "long-press"])
         })
         actions.append(removeAction)
 

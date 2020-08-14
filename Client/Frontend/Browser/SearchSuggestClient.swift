@@ -6,7 +6,7 @@ import Foundation
 import Shared
 import SwiftyJSON
 
-let SearchSuggestClientErrorDomain = "mdut.firefox.SearchSuggestClient"
+let SearchSuggestClientErrorDomain = "mdutka.firefox.SearchSuggestClient"
 let SearchSuggestClientErrorInvalidEngine = 0
 let SearchSuggestClientErrorInvalidResponse = 1
 

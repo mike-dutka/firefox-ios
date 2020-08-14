@@ -18,17 +18,14 @@ class SettingsTest: BaseTestCase {
 
         waitUntilPageLoad()
         waitForValueContains(app.textFields["url"], value: "support.mozilla.org")
-        if iPad() {
-            waitForExistence(app.webViews.staticTexts["Firefox for iOS Support"])
-        } else {
-            waitForExistence(app.webViews.staticTexts["Firefox for iOS"])
-        }
+        waitForExistence(app.webViews.staticTexts["Firefox for iOS Support"])
+        
         let numTabs = app.buttons["Show Tabs"].value
         XCTAssertEqual("2", numTabs as? String, "Sume should be open in a different tab")
     }
 
     func testOpenSiriOption() {
         navigator.performAction(Action.OpenSiriFromSettings)
-        waitForExistence(app.buttons["Start recording"], timeout: 5)
+        waitForExistence(app.buttons["Add to Siri"], timeout: 5)
     }
 }

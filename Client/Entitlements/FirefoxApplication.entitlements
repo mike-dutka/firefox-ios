@@ -15,11 +15,11 @@
 	<string>production</string>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.mdut.ios.Firefox</string>
+		<string>group.mdutka.ios.Firefox</string>
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)mdut.ios.Firefox</string>
+		<string>$(AppIdentifierPrefix)mdutka.ios.Firefox</string>
 	</array>
 </dict>
 </plist>

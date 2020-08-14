@@ -20,9 +20,6 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
     private var heightConstraint: Constraint?
     var tableView = UITableView(frame: .zero, style: .grouped)
 
-    // Using a popover (ipad), reverse the order of the actions
-    var autoreverseActions = true
-
     lazy var tapRecognizer: UITapGestureRecognizer = {
         let tapRecognizer = UITapGestureRecognizer()
         tapRecognizer.addTarget(self, action: #selector(dismiss))
@@ -108,11 +105,9 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
         }
 
         if style == .popover {
-            if autoreverseActions {
-                self.actions = actions.map({ $0.reversed() }).reversed()
-            }
             tableView.snp.makeConstraints { make in
-                make.edges.equalTo(self.view)
+                make.top.bottom.equalTo(self.view)
+                make.width.equalTo(400)
             }
         } else {
             tableView.snp.makeConstraints { make in
@@ -193,6 +188,12 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
         tableView.sectionFooterHeight = 1
 
         applyTheme()
+
+        DispatchQueue.main.async {
+            // Pick up the correct/final tableview.contentsize in order to set the height.
+            // Without async dispatch, the contentsize is wrong.
+            self.view.setNeedsLayout()
+        }
     }
 
     // Nested tableview rows get additional height
@@ -304,7 +305,12 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
 
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
         if section == 0 {
-            return (site != nil || title != nil) ? PhotonActionSheetUX.TitleHeaderSectionHeight : 6
+            if site != nil {
+                return PhotonActionSheetUX.TitleHeaderSectionHeightWithSite
+            } else if title != nil {
+                return PhotonActionSheetUX.TitleHeaderSectionHeight
+            }
+            return 6
         }
 
         return PhotonActionSheetUX.SeparatorRowHeight

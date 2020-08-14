@@ -35,7 +35,7 @@ class TPStatsBlocklistChecker {
     // Initialized async, is non-nil when ready to be used.
     private var blockLists: TPStatsBlocklists?
 
-    func isBlocked(url: URL) -> Deferred<BlocklistCategory?> {
+    func isBlocked(url: URL, mainDocumentURL: URL) -> Deferred<BlocklistCategory?> {
         let deferred = Deferred<BlocklistCategory?>()
 
         guard let blockLists = blockLists, let host = url.host, !host.isEmpty else {
@@ -44,12 +44,17 @@ class TPStatsBlocklistChecker {
             return deferred
         }
 
+        guard let domain = url.baseDomain, let docDomain = mainDocumentURL.baseDomain, domain != docDomain else {
+            deferred.fill(nil)
+            return deferred
+        }
+
         // Make a copy on the main thread
-        let whitelistRegex = ContentBlocker.shared.whitelistedDomains.domainRegex
+        let safelistRegex = ContentBlocker.shared.safelistedDomains.domainRegex
 
         DispatchQueue.global().async {
             // Return true in the Deferred if the domain could potentially be blocked
-            deferred.fill(blockLists.urlIsInList(url, whitelistedDomains: whitelistRegex))
+            deferred.fill(blockLists.urlIsInList(url, mainDocumentURL: mainDocumentURL, safelistedDomains: safelistRegex))
         }
         return deferred
     }
@@ -184,10 +189,10 @@ class TPStatsBlocklists {
         }
     }
 
-    func urlIsInList(_ url: URL, whitelistedDomains: [String]) -> BlocklistCategory? {
+    func urlIsInList(_ url: URL, mainDocumentURL: URL, safelistedDomains: [String]) -> BlocklistCategory? {
         let resourceString = url.absoluteString
 
-        guard let baseDomain = url.baseDomain, let rules = blockRules[baseDomain] else {
+        guard let firstPartyDomain = mainDocumentURL.baseDomain, let baseDomain = url.baseDomain, let rules = blockRules[baseDomain] else {
             return nil
         }
 
@@ -196,14 +201,14 @@ class TPStatsBlocklists {
             if resourceString.range(of: rule.regex, options: .regularExpression) != nil {
                 // Check the domain exceptions. If a domain exception matches, this filter does not apply.
                 for domainRegex in (rule.domainExceptions ?? []) {
-                    if resourceString.range(of: domainRegex, options: .regularExpression) != nil {
+                    if firstPartyDomain.range(of: domainRegex, options: .regularExpression) != nil {
                         continue domainSearch
                     }
                 }
 
-                // Check the whitelist.
-                if let baseDomain = url.baseDomain, !whitelistedDomains.isEmpty {
-                    for ignoreDomain in whitelistedDomains {
+                // Check the safelist.
+                if let baseDomain = url.baseDomain, !safelistedDomains.isEmpty {
+                    for ignoreDomain in safelistedDomains {
                         if baseDomain.range(of: ignoreDomain, options: .regularExpression) != nil {
                             return nil
                         }

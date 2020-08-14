@@ -4,6 +4,8 @@
 
 import Foundation
 
+public let debugPrefIsChinaEdition = "debugPrefIsChinaEdition"
+
 open class AppInfo {
     /// Return the main application bundle. If this is called from an extension, the containing app bundle is returned.
     public static var applicationBundle: Bundle {
@@ -39,10 +41,10 @@ open class AppInfo {
     /// http requests. It is the base bundle identifier with a "group." prefix.
     public static var sharedContainerIdentifier: String {
         var bundleIdentifier = baseBundleIdentifier
-        if bundleIdentifier == "mdut.ios.FennecEnterprise" {
+        if bundleIdentifier == "mdutka.ios.FennecEnterprise" {
             // Bug 1373726 - Base bundle identifier incorrectly generated for Nightly builds
             // This can be removed when we are able to fix the app group in the developer portal
-            bundleIdentifier = "mdut.ios.Fennec.enterprise"
+            bundleIdentifier = "mdutka.ios.Fennec.enterprise"
         }
         return "group." + bundleIdentifier
     }
@@ -50,10 +52,10 @@ open class AppInfo {
     /// Return the keychain access group.
     public static func keychainAccessGroupWithPrefix(_ prefix: String) -> String {
         var bundleIdentifier = baseBundleIdentifier
-        if bundleIdentifier == "mdut.ios.FennecEnterprise" {
+        if bundleIdentifier == "mdutka.ios.FennecEnterprise" {
             // Bug 1373726 - Base bundle identifier incorrectly generated for Nightly builds
             // This can be removed when we are able to fix the app group in the developer portal
-            bundleIdentifier = "mdut.ios.Fennec.enterprise"
+            bundleIdentifier = "mdutka.ios.Fennec.enterprise"
         }
         return prefix + "." + bundleIdentifier
     }
@@ -86,4 +88,11 @@ open class AppInfo {
 
     // The port for the internal webserver, tests can change this
     public static var webserverPort = 6571
+
+    public static var isChinaEdition: Bool = {
+        if UserDefaults.standard.bool(forKey: debugPrefIsChinaEdition) {
+            return true
+        }
+        return Locale.current.identifier == "zh_CN"
+    }()
 }

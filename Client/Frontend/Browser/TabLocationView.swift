@@ -46,16 +46,16 @@ class TabLocationView: UIView {
         didSet { updateTextWithURL() }
     }
 
+    func showLockIcon(forSecureContent isSecure: Bool) {
+        lockImageView.isHidden = !isSecure
+    }
+
     var url: URL? {
         didSet {
-            let wasHidden = lockImageView.isHidden
-            lockImageView.isHidden = url?.scheme != "https"
-            if wasHidden != lockImageView.isHidden {
-                UIAccessibility.post(notification: UIAccessibility.Notification.layoutChanged, argument: nil)
-            }
             updateTextWithURL()
             pageOptionsButton.isHidden = (url == nil)
-            trackingProtectionButton.isHidden = lockImageView.isHidden
+
+            trackingProtectionButton.isHidden = !["https", "http"].contains(url?.scheme ?? "")
             setNeedsUpdateConstraints()
         }
     }
@@ -100,6 +100,7 @@ class TabLocationView: UIView {
         urlTextField.accessibilityActionsSource = self
         urlTextField.font = UIConstants.DefaultChromeFont
         urlTextField.backgroundColor = .clear
+        urlTextField.accessibilityLabel = "Address Bar"
 
         // Remove the default drop interaction from the URL text field so that our
         // custom drop interaction on the BVC can accept dropped URLs.
@@ -203,6 +204,8 @@ class TabLocationView: UIView {
 
         // Link these so they hide/show in-sync.
         trackingProtectionButton.separatorLine = separatorLineForTP
+
+        pageOptionsButton.separatorLine = separatorLineForPageOptions
 
         let subviews = [trackingProtectionButton, separatorLineForTP, space10px, lockImageView, urlTextField, readerModeButton, separatorLineForPageOptions, pageOptionsButton]
         contentView = UIStackView(arrangedSubviews: subviews)
@@ -340,7 +343,7 @@ extension TabLocationView: UIDragInteractionDelegate {
             return []
         }
 
-        UnifiedTelemetry.recordEvent(category: .action, method: .drag, object: .locationBar)
+        TelemetryWrapper.recordEvent(category: .action, method: .drag, object: .locationBar)
 
         let dragItem = UIDragItem(itemProvider: itemProvider)
         return [dragItem]
@@ -388,25 +391,28 @@ extension TabLocationView: TabEventHandler {
     private func updateBlockerStatus(forTab tab: Tab) {
         assertIsMainThread("UI changes must be on the main thread")
         guard let blocker = tab.contentBlocker else { return }
+        trackingProtectionButton.alpha = 1.0
         switch blocker.status {
-        case .Blocking:
-            trackingProtectionButton.setImage(UIImage(imageLiteralResourceName: "tracking-protection-active-block"), for: .normal)
-        case .NoBlockedURLs:
+        case .blocking:
+            let blockImageName = ThemeManager.instance.currentName == .dark ? "tracking-protection-active-block-dark" : "tracking-protection-active-block"
+            trackingProtectionButton.setImage(UIImage(imageLiteralResourceName: blockImageName), for: .normal)
+        case .noBlockedURLs:
             trackingProtectionButton.setImage(UIImage.templateImageNamed("tracking-protection"), for: .normal)
-        case .Whitelisted:
+            trackingProtectionButton.alpha = 0.5
+        case .safelisted:
             trackingProtectionButton.setImage(UIImage.templateImageNamed("tracking-protection-off"), for: .normal)
-        case .Disabled:
+        case .disabled:
             trackingProtectionButton.isHidden = true
         }
     }
 
     func tabDidGainFocus(_ tab: Tab) {
         updateBlockerStatus(forTab: tab)
-        menuBadge.show(tab.desktopSite)
+        menuBadge.show(tab.changedUserAgent)
     }
 
     func tabDidToggleDesktopMode(_ tab: Tab) {
-        menuBadge.show(tab.desktopSite)
+        menuBadge.show(tab.changedUserAgent)
     }
 }
 

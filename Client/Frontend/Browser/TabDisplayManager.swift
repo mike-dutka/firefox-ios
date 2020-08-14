@@ -123,6 +123,8 @@ class TabDisplayManager: NSObject {
         isPrivate = isOn
         UserDefaults.standard.set(isPrivate, forKey: "wasLastSessionPrivate")
 
+        TelemetryWrapper.recordEvent(category: .action, method: .tap, object: .privateBrowsingButton, extras: ["is-private": isOn.description] )
+
         searchedTabs = nil
         refreshStore()
 
@@ -205,10 +207,10 @@ class TabDisplayManager: NSObject {
         tabManager.removeTabAndUpdateSelectedIndex(tab)
     }
 
-    private func recordEventAndBreadcrumb(object: UnifiedTelemetry.EventObject, method: UnifiedTelemetry.EventMethod) {
-        let isTabTray = tabDisplayer as? TabTrayController != nil
-        let eventValue = isTabTray ? UnifiedTelemetry.EventValue.tabTray : UnifiedTelemetry.EventValue.topTabs
-        UnifiedTelemetry.recordEvent(category: .action, method: method, object: object, value: eventValue)
+    private func recordEventAndBreadcrumb(object: TelemetryWrapper.EventObject, method: TelemetryWrapper.EventMethod) {
+        let isTabTray = tabDisplayer as? TabTrayControllerV1 != nil
+        let eventValue = isTabTray ? TelemetryWrapper.EventValue.tabTray : TelemetryWrapper.EventValue.topTabs
+        TelemetryWrapper.recordEvent(category: .action, method: method, object: object, value: eventValue)
     }
 
     // When using 'Close All', hide all the tabs so they don't animate their deletion individually
@@ -259,6 +261,7 @@ extension TabDisplayManager: TabSelectionDelegate {
         if tabsToDisplay.firstIndex(of: tab) != nil {
             tabManager.selectTab(tab)
         }
+        TelemetryWrapper.recordEvent(category: .action, method: .press, object: .tab)
     }
 }
 
@@ -308,15 +311,8 @@ extension TabDisplayManager: UICollectionViewDragDelegate {
             }
         }
 
-        // Ensure we actually have a URL for the tab being dragged and that the URL is not local.
-        // If not, just create an empty `NSItemProvider` so we can create a drag item with the
-        // `Tab` so that it can at still be re-ordered.
-        var itemProvider: NSItemProvider
-        if let url = url, !InternalURL.isValid(url: url) {
-            itemProvider = NSItemProvider(contentsOf: url) ?? NSItemProvider()
-        } else {
-            itemProvider = NSItemProvider()
-        }
+        // Don't store the URL in the item as dragging a tab near the screen edge will prompt to open Safari with the URL
+        let itemProvider = NSItemProvider()
 
         recordEventAndBreadcrumb(object: .tab, method: .drag)
 

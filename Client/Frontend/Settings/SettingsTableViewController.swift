@@ -53,6 +53,8 @@ class Setting: NSObject {
 
     var accessoryType: UITableViewCell.AccessoryType { return .none }
 
+    var accessoryView: UIImageView? { return nil }
+
     var textAlignment: NSTextAlignment { return .natural }
 
     var image: UIImage? { return _image }
@@ -69,10 +71,10 @@ class Setting: NSObject {
         cell.detailTextLabel?.numberOfLines = 0
         cell.textLabel?.assign(attributed: title)
         cell.textLabel?.textAlignment = textAlignment
-        cell.textLabel?.numberOfLines = 1
+        cell.textLabel?.numberOfLines = 0
         cell.textLabel?.lineBreakMode = .byTruncatingTail
         cell.accessoryType = accessoryType
-        cell.accessoryView = nil
+        cell.accessoryView = accessoryView
         cell.selectionStyle = enabled ? .default : .none
         cell.accessibilityIdentifier = accessibilityIdentifier
         cell.imageView?.image = _image
@@ -88,6 +90,12 @@ class Setting: NSObject {
         cell.accessibilityTraits = UIAccessibilityTraits.button
         cell.indentationWidth = 0
         cell.layoutMargins = .zero
+        
+        let backgroundView = UIView()
+        backgroundView.backgroundColor = UIColor.theme.tableView.selectedBackground
+        backgroundView.bounds = cell.bounds
+        cell.selectedBackgroundView = backgroundView
+        
         // So that the separator line goes all the way to the left edge.
         cell.separatorInset = .zero
         if let cell = cell as? ThemedTableViewCell {
@@ -221,7 +229,7 @@ class BoolSetting: Setting {
     @objc func switchValueChanged(_ control: UISwitch) {
         writeBool(control)
         settingDidChange?(control.isOn)
-        UnifiedTelemetry.recordEvent(category: .action, method: .change, object: .setting, value: self.prefKey, extras: ["to": control.isOn])
+        TelemetryWrapper.recordEvent(category: .action, method: .change, object: .setting, value: self.prefKey, extras: ["to": control.isOn])
     }
 
     // These methods allow a subclass to control how the pref is saved
@@ -269,7 +277,10 @@ class StringPrefSetting: StringSetting {
 }
 
 class WebPageSetting: StringPrefSetting {
-    init(prefs: Prefs, prefKey: String, defaultValue: String? = nil, placeholder: String, accessibilityIdentifier: String, settingDidChange: ((String?) -> Void)? = nil) {
+    let isChecked: () -> Bool
+
+    init(prefs: Prefs, prefKey: String, defaultValue: String? = nil, placeholder: String, accessibilityIdentifier: String, isChecked: @escaping () -> Bool = { return false }, settingDidChange: ((String?) -> Void)? = nil) {
+        self.isChecked = isChecked
         super.init(prefs: prefs,
                    prefKey: prefKey,
                    defaultValue: defaultValue,
@@ -291,7 +302,7 @@ class WebPageSetting: StringPrefSetting {
 
     override func onConfigureCell(_ cell: UITableViewCell) {
         super.onConfigureCell(cell)
-        cell.accessoryType = .checkmark
+        cell.accessoryType = isChecked() ? .checkmark : .none
         textField.textAlignment = .left
     }
 
@@ -338,12 +349,9 @@ class StringSetting: Setting, UITextFieldDelegate {
         if let id = accessibilityIdentifier {
             textField.accessibilityIdentifier = id + "TextField"
         }
-        if let placeholderColor = UIColor.theme.general.settingsTextPlaceholder {
-            textField.attributedPlaceholder = NSAttributedString(string: placeholder, attributes: [NSAttributedString.Key.foregroundColor: placeholderColor])
-        } else {
-            textField.placeholder = placeholder
-        }
-
+        let placeholderColor = UIColor.theme.general.settingsTextPlaceholder
+        textField.attributedPlaceholder = NSAttributedString(string: placeholder, attributes: [NSAttributedString.Key.foregroundColor: placeholderColor])
+        
         cell.tintColor = self.persister.readPersistedValue() != nil ? UIColor.theme.tableView.rowActionAccessory : UIColor.clear
         textField.textAlignment = .center
         textField.delegate = self
@@ -353,13 +361,17 @@ class StringSetting: Setting, UITextFieldDelegate {
         cell.accessibilityTraits = UIAccessibilityTraits.none
         cell.contentView.addSubview(textField)
 
+        textField.font = DynamicFontHelper.defaultHelper.DefaultStandardFont
+
         textField.snp.makeConstraints { make in
             make.height.equalTo(44)
             make.trailing.equalTo(cell.contentView).offset(-Padding)
             make.leading.equalTo(cell.contentView).offset(Padding)
         }
-        textField.text = self.persister.readPersistedValue() ?? defaultValue
-        textFieldDidChange(textField)
+        if let value = self.persister.readPersistedValue() {
+            textField.text = value
+            textFieldDidChange(textField)
+        }
     }
 
     override func onClick(_ navigationController: UINavigationController?) {
@@ -432,7 +444,9 @@ class CheckmarkSetting: Setting {
             cell.accessoryType = .checkmark
             cell.tintColor = isChecked() ? UIColor.theme.tableView.rowActionAccessory : UIColor.clear
         } else {
-            cell.indentationWidth = 42
+            let window = UIApplication.shared.keyWindow
+            let safeAreaInsets = window?.safeAreaInsets.left ?? 0
+            cell.indentationWidth = 42 + safeAreaInsets
             cell.indentationLevel = 1
 
             cell.accessoryType = .detailButton
@@ -514,7 +528,7 @@ class ButtonSetting: Setting {
 
 // A helper class for prefs that deal with sync. Handles reloading the tableView data if changes to
 // the fxAccount happen.
-class AccountSetting: Setting, FxAContentViewControllerDelegate {
+class AccountSetting: Setting {
     unowned var settings: SettingsTableViewController
 
     var profile: Profile {
@@ -530,34 +544,12 @@ class AccountSetting: Setting, FxAContentViewControllerDelegate {
 
     override func onConfigureCell(_ cell: UITableViewCell) {
         super.onConfigureCell(cell)
-        if settings.profile.getAccount() != nil {
+        if settings.profile.rustFxA.userProfile != nil {
             cell.selectionStyle = .none
         }
     }
 
     override var accessoryType: UITableViewCell.AccessoryType { return .none }
-
-    func contentViewControllerDidSignIn(_ viewController: FxAContentViewController, withFlags flags: FxALoginFlags) {
-        // This method will get called twice: once when the user signs in, and once
-        // when the account is verified by email – on this device or another.
-        // If the user hasn't dismissed the fxa content view controller,
-        // then we should only do that (thus finishing the sign in/verification process)
-        // once the account is verified.
-        // By the time we get to here, we should be syncing or just about to sync in the
-        // background, most likely from FxALoginHelper.
-        if flags.verified {
-            _ = settings.navigationController?.popToRootViewController(animated: true)
-            // Reload the data to reflect the new Account immediately.
-            settings.tableView.reloadData()
-            // And start advancing the Account state in the background as well.
-            settings.refresh()
-        }
-    }
-
-    func contentViewControllerDidCancel(_ viewController: FxAContentViewController) {
-        NSLog("didCancel")
-        _ = settings.navigationController?.popToRootViewController(animated: true)
-    }
 }
 
 class WithAccountSetting: AccountSetting {
@@ -586,8 +578,6 @@ class SettingsTableViewController: ThemedTableViewController {
 
     var profile: Profile!
     var tabManager: TabManager!
-
-    var hasSectionSeparatorLine = true
 
     /// Used to calculate cell heights.
     fileprivate lazy var dummyToggleCell: UITableViewCell = {
@@ -651,15 +641,8 @@ class SettingsTableViewController: ThemedTableViewController {
 
     @objc fileprivate func refresh() {
         // Through-out, be aware that modifying the control while a refresh is in progress is /not/ supported and will likely crash the app.
-        if let account = self.profile.getAccount() {
-            account.advance().upon { state in
-                DispatchQueue.main.async { () -> Void in
-                    self.tableView.reloadData()
-                }
-            }
-        } else {
-            self.tableView.reloadData()
-        }
+        ////self.profile.rustAccount.refreshProfile()
+        // TODO [rustfxa] listen to notification and refresh profile
     }
 
     @objc func firefoxAccountDidChange() {
@@ -707,12 +690,6 @@ class SettingsTableViewController: ThemedTableViewController {
         if let sectionTitle = sectionSetting.title?.string {
             headerView.titleLabel.text = sectionTitle.uppercased()
         }
-        // Hide the top border for the top section to avoid having a double line at the top
-        if section == 0 || !hasSectionSeparatorLine {
-            headerView.showTopBorder = false
-        } else {
-            headerView.showTopBorder = true
-        }
 
         headerView.applyTheme()
         return headerView
@@ -726,7 +703,6 @@ class SettingsTableViewController: ThemedTableViewController {
         let footerView = ThemedTableSectionHeaderFooterView()
         footerView.titleLabel.text = sectionFooter
         footerView.titleAlignment = .top
-        footerView.showBottomBorder = false
         footerView.applyTheme()
         return footerView
     }
@@ -745,11 +721,6 @@ class SettingsTableViewController: ThemedTableViewController {
 
     override func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         let section = settings[indexPath.section]
-        // Workaround for calculating the height of default UITableViewCell cells with a subtitle under
-        // the title text label.
-        if let setting = section[indexPath.row], setting is BoolSetting && setting.status != nil {
-            return calculateStatusCellHeightForSetting(setting)
-        }
         if let setting = section[indexPath.row], let height = setting.cellHeight {
             return height
         }
@@ -764,18 +735,6 @@ class SettingsTableViewController: ThemedTableViewController {
         if let setting = section[indexPath.row], setting.enabled {
             setting.onClick(navigationController)
         }
-    }
-
-    fileprivate func calculateStatusCellHeightForSetting(_ setting: Setting) -> CGFloat {
-        dummyToggleCell.layoutSubviews()
-
-        let topBottomMargin: CGFloat = 10
-        let width = dummyToggleCell.contentView.frame.width - 2 * dummyToggleCell.separatorInset.left
-
-        return
-            heightForLabel(dummyToggleCell.textLabel!, width: width, text: setting.title?.string) +
-            heightForLabel(dummyToggleCell.detailTextLabel!, width: width, text: setting.status?.string) +
-            2 * topBottomMargin
     }
 
     fileprivate func heightForLabel(_ label: UILabel, width: CGFloat, text: String?) -> CGFloat {

@@ -58,7 +58,7 @@ public struct ExtensionUtils {
                         }
 
                         guard let url = obj as? URL else {
-                            completionHandler(nil, NSError(domain: "mdut.fennec", code: 999, userInfo: ["Problem": "Non-URL result."]))
+                            completionHandler(nil, NSError(domain: "mdutka.fennec", code: 999, userInfo: ["Problem": "Non-URL result."]))
                             return
                         }
 

@@ -18,9 +18,9 @@ extension BlockingStrength {
     var settingSubtitle: String {
         switch self {
         case .basic:
-            return Strings.TPAccessoryInfoTitleBasic
+            return Strings.TrackingProtectionStandardLevelDescription
         case .strict:
-            return Strings.TPAccessoryInfoTitleStrict
+            return Strings.TrackingProtectionStrictLevelDescription
         }
     }
 
@@ -78,7 +78,7 @@ class TPAccessoryInfo: ThemedTableViewController {
 
         sep.backgroundColor = UIColor.theme.tableView.separator
         sep.snp.makeConstraints { make in
-            make.height.equalTo(1)
+            make.height.equalTo(0.5)
             make.width.equalToSuperview()
         }
         return topStack
@@ -155,7 +155,6 @@ class ContentBlockerSettingViewController: SettingsTableViewController {
         super.init(style: .grouped)
 
         self.title = Strings.SettingsTrackingProtectionSectionName
-        hasSectionSeparatorLine = false
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -173,7 +172,13 @@ class ContentBlockerSettingViewController: SettingsTableViewController {
                 TabContentBlocker.prefsChanged()
                 self.tableView.reloadData()
                 LeanPlumClient.shared.track(event: .trackingProtectionSettings, withParameters: ["Strength option": option.rawValue])
-                UnifiedTelemetry.recordEvent(category: .action, method: .change, object: .setting, value: ContentBlockingConfig.Prefs.StrengthKey, extras: ["to": option.rawValue])
+                TelemetryWrapper.recordEvent(category: .action, method: .change, object: .setting, value: ContentBlockingConfig.Prefs.StrengthKey, extras: ["to": option.rawValue])
+                
+                if option == .strict {
+                    let alert = UIAlertController(title: Strings.TrackerProtectionAlertTitle, message: Strings.TrackerProtectionAlertDescription, preferredStyle: .alert)
+                    alert.addAction(UIAlertAction(title: Strings.TrackerProtectionAlertButton, style: .default, handler: nil))
+                    self.present(alert, animated: true)
+                }
             })
 
             setting.onAccessoryButtonTapped = {
@@ -193,9 +198,9 @@ class ContentBlockerSettingViewController: SettingsTableViewController {
             self?.tableView.reloadData()
         }
 
-        let firstSection = SettingSection(title: nil, footerTitle: NSAttributedString(string: Strings.TrackingProtectionOptionOnOffFooter), children: [enabledSetting])
+        let firstSection = SettingSection(title: nil, footerTitle: NSAttributedString(string: Strings.TrackingProtectionCellFooter), children: [enabledSetting])
 
-        let optionalFooterTitle = NSAttributedString(string: Strings.TrackingProtectionProtectionStrictInfoFooter)
+        let optionalFooterTitle = NSAttributedString(string: Strings.TrackingProtectionLevelFooter)
 
         // The bottom of the block lists section has a More Info button, implemented as a custom footer view,
         // SettingSection needs footerTitle set to create a footer, which we then override the view for.
@@ -216,7 +221,7 @@ class ContentBlockerSettingViewController: SettingsTableViewController {
         }
 
         // TODO: Get a dedicated string for this.
-        let title = Strings.TPMoreInfo
+        let title = Strings.TrackerProtectionLearnMore
 
         var attributes = [NSAttributedString.Key: AnyObject]()
         attributes[NSAttributedString.Key.font] = UIFont.systemFont(ofSize: 12, weight: UIFont.Weight.regular)

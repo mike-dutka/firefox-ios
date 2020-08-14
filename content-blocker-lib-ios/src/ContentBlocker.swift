@@ -52,10 +52,10 @@ enum BlocklistFileName: String, CaseIterable {
 }
 
 enum BlockerStatus: String {
-    case Disabled
-    case NoBlockedURLs // When TP is enabled but nothing is being blocked
-    case Whitelisted
-    case Blocking
+    case disabled
+    case noBlockedURLs // When TP is enabled but nothing is being blocked
+    case safelisted
+    case blocking
 }
 
 struct NoImageModeDefaults {
@@ -64,7 +64,7 @@ struct NoImageModeDefaults {
 }
 
 class ContentBlocker {
-    var whitelistedDomains = WhitelistedDomains()
+    var safelistedDomains = SafelistedDomains()
     let ruleStore: WKContentRuleListStore = WKContentRuleListStore.default()
     var blockImagesRule: WKContentRuleList?
     var setupCompleted = false
@@ -78,9 +78,9 @@ class ContentBlocker {
             self.blockImagesRule = rule
         }
 
-        // Read the whitelist at startup
-        if let list = readWhitelistFile() {
-            whitelistedDomains.domainSet = Set(list)
+        // Read the safelist at startup
+        if let list = readSafelistFile() {
+            safelistedDomains.domainSet = Set(list)
         }
 
         TPStatsBlocklistChecker.shared.startup()
@@ -220,7 +220,13 @@ extension ContentBlocker {
     // remove all the content blockers and reload them.
     func removeOldListsByDateFromStore(completion: @escaping () -> Void) {
 
-        guard let fileDate = dateOfMostRecentBlockerFile(), let prefsNewestDate = UserDefaults.standard.object(forKey: "blocker-file-date") as? Date else {
+            guard let fileDate = dateOfMostRecentBlockerFile() else {
+            completion()
+            return
+        }
+
+        guard let prefsNewestDate = UserDefaults.standard.object(forKey: "blocker-file-date") as? Date else {
+            UserDefaults.standard.set(fileDate, forKey: "blocker-file-date")
             completion()
             return
         }
@@ -231,6 +237,7 @@ extension ContentBlocker {
         }
 
         UserDefaults.standard.set(fileDate, forKey: "blocker-file-date")
+
         removeAllRulesInStore() {
             completion()
         }
@@ -246,24 +253,18 @@ extension ContentBlocker {
             }
 
             let blocklists = BlocklistFileName.allCases.map { $0.filename }
-            for contentRuleIdentifier in available {
-                if !blocklists.contains(where: { $0 == contentRuleIdentifier }) {
+            for listOnDisk in blocklists {
+                // If any file from the list on disk is not installed, remove all the rules and re-install them
+                if !available.contains(where: { $0 == listOnDisk}) {
                     noMatchingIdentifierFoundForRule = true
                     break
                 }
             }
-
-            guard let fileDate = self.dateOfMostRecentBlockerFile(), let prefsNewestDate = UserDefaults.standard.object(forKey: "blocker-file-date") as? Date else {
+            if !noMatchingIdentifierFoundForRule {
                 completion()
                 return
             }
 
-            if fileDate <= prefsNewestDate && !noMatchingIdentifierFoundForRule {
-                completion()
-                return
-            }
-
-            UserDefaults.standard.set(fileDate, forKey: "blocker-file-date")
             self.removeAllRulesInStore {
                 completion()
             }
@@ -282,7 +283,7 @@ extension ContentBlocker {
                 self.loadJsonFromBundle(forResource: filename) { jsonString in
                     var str = jsonString
                     guard let range = str.range(of: "]", options: String.CompareOptions.backwards) else { return }
-                    str = str.replacingCharacters(in: range, with: self.whitelistAsJSON() + "]")
+                    str = str.replacingCharacters(in: range, with: self.safelistAsJSON() + "]")
                     self.ruleStore.compileContentRuleList(forIdentifier: filename, encodedContentRuleList: str) { rule, error in
                         if let error = error {
                             print("Content blocker error: \(error)")

@@ -7,7 +7,7 @@ import WebKit
 class UserScriptManager {
 
     // Scripts can use this to verify the *app* (not JS on the web) is calling into them.
-    public static let securityToken = UUID()
+    public static let securityToken = UUID().uuidString
 
     // Singleton instance.
     public static let shared = UserScriptManager()
@@ -55,13 +55,11 @@ class UserScriptManager {
                 tab.webView?.configuration.userContentController.addUserScript(userScript)
             }
         }
-
         // If Night Mode is enabled, inject a small user script to ensure
         // that it gets enabled immediately when the DOM loads.
         if nightMode {
             tab.webView?.configuration.userContentController.addUserScript(nightModeUserScript)
         }
-
         // If No Image Mode is enabled, inject a small user script to ensure
         // that it gets enabled immediately when the DOM loads.
         if noImageMode {

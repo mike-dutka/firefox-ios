@@ -54,8 +54,29 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
             showLibrary()
         }
     }
+    
+    func tabToolbarDidPressAddNewTab(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
+        let isPrivate = tabManager.selectedTab?.isPrivate ?? false
+        tabManager.selectTab(tabManager.addTab(nil, isPrivate: isPrivate))
+        focusLocationTextField(forTab: tabManager.selectedTab)
+    }
 
     func tabToolbarDidPressMenu(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
+        var whatsNewAction: PhotonActionSheetItem? = nil
+        let showBadgeForWhatsNew = shouldShowWhatsNew()
+        if showBadgeForWhatsNew {
+            // Set the version number of the app, so the What's new will stop showing
+            profile.prefs.setString(AppInfo.appVersion, forKey: LatestAppVersionProfileKey)
+            // Redraw the toolbar so the badge hides from the appMenu button.
+            updateToolbarStateForTraitCollection(view.traitCollection)
+        }
+        whatsNewAction = PhotonActionSheetItem(title: Strings.WhatsNewString, iconString: "whatsnew", isEnabled: showBadgeForWhatsNew, badgeIconNamed: "menuBadge") { _, _ in
+            if let whatsNewTopic = AppInfo.whatsNewTopic, let whatsNewURL = SupportUtils.URLForTopic(whatsNewTopic) {
+                TelemetryWrapper.recordEvent(category: .action, method: .open, object: .whatsNew)
+                self.openURLInNewTab(whatsNewURL)
+            }
+        }
+
         // ensure that any keyboards or spinners are dismissed before presenting the menu
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         libraryDrawerViewController?.close(immediately: true)
@@ -81,6 +102,13 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
 
         actions.append(getLibraryActions(vcDelegate: self))
         actions.append(getOtherPanelActions(vcDelegate: self))
+
+        if let whatsNewAction = whatsNewAction, var lastGroup = actions.last, lastGroup.count > 1 {
+            lastGroup.insert(whatsNewAction, at: lastGroup.count - 1)
+            actions.removeLast()
+            actions.append(lastGroup)
+        }
+
         // force a modal if the menu is being displayed in compact split screen
         let shouldSuppress = !topTabsVisible && UIDevice.current.userInterfaceIdiom == .pad
         presentSheetWith(actions: actions, on: self, from: button, suppressPopover: shouldSuppress)
@@ -88,6 +116,7 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
 
     func tabToolbarDidPressTabs(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
         showTabTray()
+        TelemetryWrapper.recordEvent(category: .action, method: .press, object: .tabToolbar, value: .tabView)
     }
 
     func getTabToolbarLongPressActionsForModeSwitching() -> [PhotonActionSheetItem] {
@@ -160,6 +189,10 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
             backForwardViewController.backForwardTransitionDelegate = BackForwardListAnimator()
             self.present(backForwardViewController, animated: true, completion: nil)
         }
+    }
+
+    func tabToolbarDidPressSearch(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
+        focusLocationTextField(forTab: tabManager.selectedTab)
     }
 }
 

@@ -7,7 +7,7 @@
 
 import Foundation
 
-public let NSFileManagerExtensionsDomain = "mdut.NSFileManagerExtensions"
+public let NSFileManagerExtensionsDomain = "mdutka.NSFileManagerExtensions"
 
 public enum NSFileManagerExtensionsErrorCodes: Int {
     case enumeratorFailure = 0

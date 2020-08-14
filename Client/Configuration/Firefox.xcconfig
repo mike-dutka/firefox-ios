@@ -5,7 +5,7 @@
 MOZ_BUNDLE_DISPLAY_NAME = Firefox
 
 // Bundle Identifier
-MOZ_BUNDLE_ID = mdut.ios.Firefox
+MOZ_BUNDLE_ID = mdutka.ios.Firefox
 
 // Flag to indicate if we want to include the debug settings bundle or not
 INCLUDE_SETTINGS_BUNDLE = NO
@@ -21,3 +21,6 @@ LEANPLUM_KEY =
 
 ENABLE_BITCODE = NO
 CLANG_MODULES_AUTOLINK = NO
+
+// Today Widget - Search
+MOZ_TODAY_WIDGET_SEARCH_DISPLAY_NAME = Firefox - Search

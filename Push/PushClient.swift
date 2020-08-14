@@ -21,7 +21,7 @@ import SwiftyJSON
 //    static let UnknownError: Int32               = 999
 //}
 
-public let PushClientErrorDomain = "mdut.push.error"
+public let PushClientErrorDomain = "mdutka.push.error"
 private let PushClientUnknownError = NSError(domain: PushClientErrorDomain, code: 999,
                                              userInfo: [NSLocalizedDescriptionKey: "Invalid server response"])
 private let log = Logger.browserLogger
@@ -128,7 +128,7 @@ public extension PushClient {
         mutableURLRequest.httpBody = JSON(parameters).stringify()?.utf8EncodedData
 
         return send(request: mutableURLRequest) >>== { json in
-            KeychainStore.shared.setString(apnsToken, forKey: "apnsToken")
+            KeychainStore.shared.setString(apnsToken, forKey: KeychainKey.apnsToken, withAccessibility: .afterFirstUnlock)
             return deferMaybe(creds)
         }
     }

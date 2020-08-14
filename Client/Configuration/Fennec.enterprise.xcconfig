@@ -5,7 +5,7 @@
 MOZ_BUNDLE_DISPLAY_NAME = Fennec
 
 // Bundle Identifier
-MOZ_BUNDLE_ID = mdut.ios.FennecEnterprise
+MOZ_BUNDLE_ID = mdutka.ios.FennecEnterprise
 
 // Flag to indicate if we want to include the debug settings bundle or not
 INCLUDE_SETTINGS_BUNDLE = YES
@@ -21,3 +21,6 @@ LEANPLUM_KEY =
 
 ENABLE_BITCODE = NO
 CLANG_MODULES_AUTOLINK = NO
+
+// Today Widget - Search
+MOZ_TODAY_WIDGET_SEARCH_DISPLAY_NAME = Firefox - Search

@@ -20,6 +20,11 @@ public enum KVOConstants: String {
     case contentSize = "contentSize"
 }
 
+public struct KeychainKey {
+    public static let fxaPushRegistration = "account.push-registration"
+    public static let apnsToken = "apnsToken"
+}
+
 public struct AppConstants {
     public static let IsRunningTest = NSClassFromString("XCTestCase") != nil || ProcessInfo.processInfo.arguments.contains(LaunchArguments.Test)
 
@@ -41,7 +46,7 @@ public struct AppConstants {
             return "unknown"
         }
 
-        let scheme = identifier.replacingOccurrences(of: "mdut.ios.", with: "")
+        let scheme = identifier.replacingOccurrences(of: "mdutka.ios.", with: "")
         if scheme == "FirefoxNightly.enterprise" {
             return "FirefoxNightly"
         }
