@@ -4,7 +4,7 @@
 
 import UIKit
 
-class ThemedNavigationController: UINavigationController {
+class ThemedNavigationController: DismissableNavigationViewController {
     var presentingModalViewControllerDelegate: PresentingModalViewControllerDelegate?
 
     @objc func done() {
@@ -16,12 +16,12 @@ class ThemedNavigationController: UINavigationController {
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle {
-        return ThemeManager.instance.statusBarStyle
+        return topViewController?.preferredStatusBarStyle ?? ThemeManager.instance.statusBarStyle
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        modalPresentationStyle = .formSheet
+        modalPresentationStyle = .overFullScreen
         modalPresentationCapturesStatusBarAppearance = true
         applyTheme()
     }

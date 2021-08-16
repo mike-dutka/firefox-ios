@@ -6,7 +6,8 @@ import XCTest
 
 class PocketTest: BaseTestCase {
 
-    func testPocketEnabledByDefault() {
+    func testPocketEnabledByDefault() throws {
+        throw XCTSkip("Disabled due to #7855")
         navigator.goto(NewTabScreen)
         waitForExistence(app.staticTexts["pocketTitle"])
         XCTAssertEqual(app.staticTexts["pocketTitle"].label, "Trending on Pocket")
@@ -36,8 +37,6 @@ class PocketTest: BaseTestCase {
     }
 
     func testTapOnMore() {
-        // Tap on More should show Pocket website
-        navigator.goto(NewTabScreen)
         waitForExistence(app.buttons["More"], timeout: 5)
         app.buttons["More"].tap()
         waitUntilPageLoad()

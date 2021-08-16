@@ -1,12 +1,11 @@
 const glob = require("glob");
 const path = require("path");
 
-const UglifyJsPlugin = require("terser-webpack-plugin");
-
 const AllFramesAtDocumentStart = glob.sync("./Client/Frontend/UserContent/UserScripts/AllFrames/AtDocumentStart/*.js");
 const AllFramesAtDocumentEnd = glob.sync("./Client/Frontend/UserContent/UserScripts/AllFrames/AtDocumentEnd/*.js");
 const MainFrameAtDocumentStart = glob.sync("./Client/Frontend/UserContent/UserScripts/MainFrame/AtDocumentStart/*.js");
 const MainFrameAtDocumentEnd = glob.sync("./Client/Frontend/UserContent/UserScripts/MainFrame/AtDocumentEnd/*.js");
+const WebcompatAllFramesAtDocumentStart = glob.sync("./Client/Frontend/UserContent/UserScripts/AllFrames/WebcompatAtDocumentStart/*.js");
 
 // Ensure the first script loaded at document start is __firefox__.js
 // since it defines the `window.__firefox__` global.
@@ -33,32 +32,15 @@ module.exports = {
     AllFramesAtDocumentEnd,
     MainFrameAtDocumentStart,
     MainFrameAtDocumentEnd,
+    WebcompatAllFramesAtDocumentStart,
   },
+  // optimization: { minimize: false }, // use for debugging
   output: {
     filename: "[name].js",
     path: path.resolve(__dirname, "Client/Assets")
   },
   module: {
-    rules: [
-      {
-        test: /\.js$/,
-        exclude: /node_modules\/(?!(readability|page-metadata-parser)\/).*/,
-        use: {
-          loader: "babel-loader",
-          options: {
-            presets: [
-              ["@babel/preset-env", {
-                targets: {
-                  iOS: "10.3"
-                }
-              }]
-            ]
-          }
-        }
-      }
-    ]
+    rules: []
   },
-  plugins: [
-    new UglifyJsPlugin()
-  ]
+  plugins: []
 };

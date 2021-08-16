@@ -76,7 +76,7 @@ class FxAWebViewModel {
                 // Handle authentication with either the QR code login flow, email login flow, or settings page flow
                 switch self.pageType {
                 case .emailLoginFlow:
-                    accountManager.beginAuthentication { [weak self] result in
+                    accountManager.beginAuthentication(entrypoint: "emailLoginFlow") { [weak self] result in
                         guard let self = self else { return }
 
                         if case .success(let url) = result {
@@ -85,7 +85,7 @@ class FxAWebViewModel {
                         }
                     }
                 case let .qrCode(url):
-                    accountManager.beginPairingAuthentication(pairingUrl: url) { [weak self] result in
+                    accountManager.beginPairingAuthentication(pairingUrl: url, entrypoint: "qrCode") { [weak self] result in
                         guard let self = self else { return }
 
                         if case .success(let url) = result {
@@ -182,7 +182,7 @@ extension FxAWebViewModel {
             window.dispatchEvent(new CustomEvent('WebChannelMessageToContent', { detail: JSON.stringify(msg) }));
         """
 
-        webView.evaluateJavaScript(msg)
+        webView.evaluateJavascriptInDefaultContentWorld(msg)
     }
 
     /// Respond to the webpage session status notification by either passing signed in user info (for settings), or by passing CWTS setup info (in case the user is signing up for an account). This latter case is also used for the sign-in state.
@@ -228,14 +228,6 @@ extension FxAWebViewModel {
             // Stash the declined engines so on first sync we can disable them!
             UserDefaults.standard.set(declinedSyncEngines, forKey: "fxa.cwts.declinedSyncEngines")
         }
-        
-        // Use presence of key `offeredSyncEngines` to determine if this was a new sign-up.
-        if let engines = data["offeredSyncEngines"] as? [String], engines.count > 0 {
-            LeanPlumClient.shared.track(event: .signsUpFxa)
-        } else {
-            LeanPlumClient.shared.track(event: .signsInFxa)
-        }
-        LeanPlumClient.shared.set(attributes: [LPAttributeKey.signedInSync: true])
         
         let auth = FxaAuthData(code: code, state: state, actionQueryParam: "signin")
         profile.rustFxA.accountManager.peek()?.finishAuthentication(authData: auth) { _ in

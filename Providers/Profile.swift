@@ -13,11 +13,12 @@ import Storage
 import Sync
 import XCGLogger
 import SwiftKeychainWrapper
+import SyncTelemetry
+import AuthenticationServices
 
 // Import these dependencies ONLY for the main `Client` application target.
 #if MOZ_TARGET_CLIENT
     import SwiftyJSON
-    import SyncTelemetry
 #endif
 
 private let log = Logger.syncLogger
@@ -141,11 +142,80 @@ protocol Profile: AnyObject {
 
     func cleanupHistoryIfNeeded()
 
+    func sendQueuedSyncEvents()
+
     @discardableResult func storeTabs(_ tabs: [RemoteTab]) -> Deferred<Maybe<Int>>
 
     func sendItem(_ item: ShareItem, toDevices devices: [RemoteDevice]) -> Success
 
     var syncManager: SyncManager! { get }
+    
+    func syncCredentialIdentities() -> Deferred<Result<Void, Error>>
+    func updateCredentialIdentities() -> Deferred<Result<Void, Error>>
+    func clearCredentialStore() -> Deferred<Result<Void, Error>>
+}
+
+extension Profile {
+    
+    func syncCredentialIdentities() -> Deferred<Result<Void, Error>> {
+        let deferred = Deferred<Result<Void, Error>>()
+        self.clearCredentialStore().upon { clearResult in
+            self.updateCredentialIdentities().upon { updateResult in
+                switch (clearResult, updateResult) {
+                case (.success, .success):
+                    deferred.fill(.success(()))
+                case (.failure(let error), _):
+                    deferred.fill(.failure(error))
+                case (_, .failure(let error)):
+                    deferred.fill(.failure(error))
+                }
+            }
+        }
+        return deferred
+    }
+
+    func updateCredentialIdentities() -> Deferred<Result<Void, Error>> {
+        let deferred = Deferred<Result<Void, Error>>()
+        self.logins.list().upon { loginResult in
+            switch loginResult {
+            case let .failure(error):
+                deferred.fill(.failure(error))
+            case let .success(logins):
+                
+                self.populateCredentialStore(
+                        identities: logins.map(\.passwordCredentialIdentity)
+                ).upon(deferred.fill)
+            }
+        }
+        return deferred
+    }
+
+    func populateCredentialStore(identities: [ASPasswordCredentialIdentity]) -> Deferred<Result<Void, Error>>  {
+        let deferred = Deferred<Result<Void, Error>>()
+        ASCredentialIdentityStore.shared.saveCredentialIdentities(identities) { (success, error) in
+            if success {
+                deferred.fill(.success(()))
+            } else if let err = error {
+                deferred.fill(.failure(err))
+            }
+        }
+        return deferred
+        
+    }
+
+    func clearCredentialStore() -> Deferred<Result<Void, Error>> {
+        let deferred = Deferred<Result<Void, Error>>()
+        
+        ASCredentialIdentityStore.shared.removeAllCredentialIdentities { (success, error) in
+            if success {
+                deferred.fill(.success(()))
+            } else if let err = error {
+                deferred.fill(.failure(err))
+            }
+        }
+        
+        return deferred
+    }
 }
 
 fileprivate let PrefKeyClientID = "PrefKeyClientID"
@@ -297,16 +367,6 @@ open class BrowserProfile: Profile {
             // Remove the default homepage. This does not change the user's preference,
             // just the behaviour when there is no homepage.
             prefs.removeObjectForKey(PrefsKeys.KeyDefaultHomePageURL)
-        }
-
-        // Hide the "__leanplum.sqlite" file in the documents directory.
-        if var leanplumFile = try? FileManager.default.url(for: .documentDirectory, in: .userDomainMask, appropriateFor: nil, create: false).appendingPathComponent("__leanplum.sqlite"), FileManager.default.fileExists(atPath: leanplumFile.path) {
-            let isHidden = (try? leanplumFile.resourceValues(forKeys: [.isHiddenKey]))?.isHidden ?? false
-            if !isHidden {
-                var resourceValues = URLResourceValues()
-                resourceValues.isHidden = true
-                try? leanplumFile.setResourceValues(resourceValues)
-            }
         }
 
         // Create the "Downloads" folder in the documents directory.
@@ -477,6 +537,24 @@ open class BrowserProfile: Profile {
         recommendations.cleanupHistoryIfNeeded()
     }
 
+    public func sendQueuedSyncEvents() {
+        if !hasAccount() {
+            // We shouldn't be called at all if the user isn't signed in.
+            return
+        }
+        if syncManager.isSyncing {
+            // If Sync is already running, `BrowserSyncManager#endSyncing` will
+            // send a ping with the queued events when it's done, so don't send
+            // an events-only ping now.
+            return
+        }
+        let sendUsageData = prefs.boolForKey(AppConstants.PrefSendUsageData) ?? true
+        if sendUsageData {
+            SyncPing.fromQueuedEvents(prefs: self.prefs,
+                                      why: .schedule) >>== { SyncTelemetry.send(ping: $0, docType: .sync) }
+        }
+    }
+
     func storeTabs(_ tabs: [RemoteTab]) -> Deferred<Maybe<Int>> {
         return self.remoteClientsAndTabs.insertOrUpdateTabs(tabs)
     }
@@ -493,6 +571,11 @@ open class BrowserProfile: Profile {
                     constellation.sendEventToDevice(targetDeviceId: id, e: .sendTab(title: item.title ?? "", url: item.url))
                 }
             }
+            if let json = try? accountManager.gatherTelemetry() {
+                let events = FxATelemetry.parseTelemetry(fromJSONString: json)
+                events.forEach { $0.record(intoPrefs: self.prefs) }
+            }
+            self.sendQueuedSyncEvents()
             deferred.fill(Maybe(success: ()))
         }
         return deferred
@@ -899,7 +982,8 @@ open class BrowserProfile: Profile {
                     guard let self = self else { return }
                     let devices = state.remoteDevices.map { d -> RemoteDevice in
                         let t = "\(d.deviceType)"
-                        return RemoteDevice(id: d.id, name: d.displayName, type: t, isCurrentDevice: d.isCurrentDevice, lastAccessTime: d.lastAccessTime, availableCommands: nil)
+                        let lastAccessTime = d.lastAccessTime == nil ? nil : UInt64(clamping: d.lastAccessTime!)
+                        return RemoteDevice(id: d.id, name: d.displayName, type: t, isCurrentDevice: d.isCurrentDevice, lastAccessTime: lastAccessTime, availableCommands: nil)
                     }
                     let _ = self.profile.remoteClientsAndTabs.replaceRemoteDevices(devices)
                 }
@@ -966,12 +1050,15 @@ open class BrowserProfile: Profile {
                     return deferMaybe(SyncStatus.notStarted(.unknown))
                 }
 
-                return self.profile.logins.sync(unlockInfo: syncUnlockInfo).bind({ result in
+                return self.profile.logins.sync(unlockInfo: syncUnlockInfo).bind({ [weak self] result in
                     guard result.isSuccess else {
                         return deferMaybe(SyncStatus.notStarted(.unknown))
                     }
 
                     let syncEngineStatsSession = SyncEngineStatsSession(collection: "logins")
+                    self?.profile.syncCredentialIdentities().upon { result in
+                        log.debug(result)
+                    }
                     return deferMaybe(SyncStatus.completed(syncEngineStatsSession))
                 })
             })

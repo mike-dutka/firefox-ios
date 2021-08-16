@@ -19,6 +19,7 @@ extension BrowserViewController: ReaderModeDelegate {
     }
 
     func readerMode(_ readerMode: ReaderMode, didParseReadabilityResult readabilityResult: ReadabilityResult, forTab tab: Tab) {
+        TabEvent.post(.didLoadReadability(readabilityResult), for: tab)
     }
 }
 
@@ -106,18 +107,14 @@ extension BrowserViewController {
             webView.go(to: forwardList.first!)
         } else {
             // Store the readability result in the cache and load it. This will later move to the ReadabilityHelper.
-            webView.evaluateJavaScript("\(ReaderModeNamespace).readerize()", completionHandler: { (object, error) -> Void in
+            webView.evaluateJavascriptInDefaultContentWorld("\(ReaderModeNamespace).readerize()") { object, error in
                 if let readabilityResult = ReadabilityResult(object: object as AnyObject?) {
-                    do {
-                        try self.readerModeCache.put(currentURL, readabilityResult)
-                    } catch _ {
-                    }
-                    
+                    try? self.readerModeCache.put(currentURL, readabilityResult)
                     if let nav = webView.load(PrivilegedRequest(url: readerModeURL) as URLRequest) {
                         self.ignoreNavigationInTab(tab, navigation: nav)
                     }
                 }
-            })
+            }
         }
     }
 

@@ -66,7 +66,7 @@ class EmbeddedNavController {
             let shrinkage = UX.navBarLandscapeShrinkage + (UX.numberOfActionRows + 1 /*one info row*/) * UX.perRowShrinkageForLandscape
             updatedHeight = isLandscapeSmallScreen(forTraitCollection) ? UX.topViewHeight - shrinkage : UX.topViewHeight
         } else {
-            updatedHeight = forTraitCollection.verticalSizeClass == .compact ? UX.topViewHeight - UX.navBarLandscapeShrinkage :  UX.topViewHeight
+            updatedHeight = forTraitCollection.verticalSizeClass == .compact ? UX.topViewHeight - UX.navBarLandscapeShrinkage : UX.topViewHeight
         }
         heightConstraint.update(offset: updatedHeight)
     }
@@ -85,23 +85,20 @@ class InitialViewController: UIViewController {
     override func viewDidLoad() {
         UIDevice.current.beginGeneratingDeviceOrientationNotifications()
         super.viewDidLoad()
-        if #available(iOS 13, *) {
-            view.backgroundColor = .clear
+    
+        view.backgroundColor = .clear
 
-            // iPad drop shadow removal hack!
-            var view = parent?.view
-            while view != nil, view!.classForCoder.description() != "UITransitionView" {
-                view = view?.superview
-            }
-            if let view = view {
-                // For reasons unknown, if the alpha is < 1.0, the drop shadow is not shown
-                view.alpha = 0.99
-            }
-
-        } else {
-            view.backgroundColor = UIColor(white: 0.0, alpha: UX.alphaForFullscreenOverlay)
+        // iPad drop shadow removal hack!
+        var view = parent?.view
+        while view != nil, view!.classForCoder.description() != "UITransitionView" {
+            view = view?.superview
         }
-        view.alpha = 0
+        if let view = view {
+            // For reasons unknown, if the alpha is < 1.0, the drop shadow is not shown
+            view.alpha = 0.99
+        }
+
+        self.view.alpha = 0
 
         getShareItem().uponQueue(.main) { shareItem in
             guard let shareItem = shareItem else {

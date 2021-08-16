@@ -2,9 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import Glean
+import MozillaAppServices
 import Shared
 import Telemetry
+import Account
+import Sync
 
 class TelemetryWrapper {
     let legacyTelemetry = Telemetry.default
@@ -56,21 +58,15 @@ class TelemetryWrapper {
         telemetryConfig.isCollectionEnabled = sendUsageData
         telemetryConfig.isUploadEnabled = sendUsageData
 
-        telemetryConfig.measureUserDefaultsSetting(forKey: "profile.blockPopups", withDefaultValue: true)
         telemetryConfig.measureUserDefaultsSetting(forKey: "profile.saveLogins", withDefaultValue: true)
         telemetryConfig.measureUserDefaultsSetting(forKey: "profile.showClipboardBar", withDefaultValue: false)
         telemetryConfig.measureUserDefaultsSetting(forKey: "profile.settings.closePrivateTabs", withDefaultValue: false)
         telemetryConfig.measureUserDefaultsSetting(forKey: "profile.ASPocketStoriesVisible", withDefaultValue: true)
         telemetryConfig.measureUserDefaultsSetting(forKey: "profile.ASBookmarkHighlightsVisible", withDefaultValue: true)
-        telemetryConfig.measureUserDefaultsSetting(forKey: "profile.ASRecentHighlightsVisible", withDefaultValue: true)
         telemetryConfig.measureUserDefaultsSetting(forKey: "profile.prefkey.trackingprotection.normalbrowsing", withDefaultValue: true)
         telemetryConfig.measureUserDefaultsSetting(forKey: "profile.prefkey.trackingprotection.privatebrowsing", withDefaultValue: true)
         telemetryConfig.measureUserDefaultsSetting(forKey: "profile.prefkey.trackingprotection.strength", withDefaultValue: "basic")
         telemetryConfig.measureUserDefaultsSetting(forKey: ThemeManagerPrefs.systemThemeIsOn.rawValue, withDefaultValue: true)
-        telemetryConfig.measureUserDefaultsSetting(forKey: ThemeManagerPrefs.automaticSwitchIsOn.rawValue, withDefaultValue: false)
-        telemetryConfig.measureUserDefaultsSetting(forKey: ThemeManagerPrefs.automaticSliderValue.rawValue, withDefaultValue: 0)
-        telemetryConfig.measureUserDefaultsSetting(forKey: ThemeManagerPrefs.themeName.rawValue, withDefaultValue: "normal")
-        telemetryConfig.measureUserDefaultsSetting(forKey: "profile.show-translation", withDefaultValue: true)
 
         let prefs = profile.prefs
         legacyTelemetry.beforeSerializePing(pingType: CorePingBuilder.PingType) { (inputDict) -> [String: Any?] in
@@ -80,9 +76,6 @@ class TelemetryWrapper {
 
             if let newTabChoice = prefs.stringForKey(NewTabAccessors.HomePrefKey) {
                 outputDict["defaultNewTabExperience"] = newTabChoice as AnyObject?
-            }
-            if let chosenEmailClient = prefs.stringForKey(PrefsKeys.KeyMailToOption) {
-                outputDict["defaultMailClient"] = chosenEmailClient as AnyObject?
             }
 
             // Report this flag as a `1` or `0` integer to allow it
@@ -97,11 +90,7 @@ class TelemetryWrapper {
 
             outputDict["openTabCount"] = delegate?.tabManager.count ?? 0
 
-            var userInterfaceStyle = "unknown" // unknown implies that device is on pre-iOS 13
-            if #available(iOS 13.0, *) {
-                userInterfaceStyle = UITraitCollection.current.userInterfaceStyle == .dark ? "dark" : "light"
-            }
-            outputDict["systemTheme"] = userInterfaceStyle
+            outputDict["systemTheme"] = UITraitCollection.current.userInterfaceStyle == .dark ? "dark" : "light"
 
             return outputDict
         }
@@ -156,6 +145,8 @@ class TelemetryWrapper {
         // Save the profile so we can record settings from it when the notification below fires.
         self.profile = profile
 
+        setSyncDeviceId()
+        
         // Register an observer to record settings and other metrics that are more appropriate to
         // record on going to background rather than during initialization.
         NotificationCenter.default.addObserver(
@@ -164,6 +155,19 @@ class TelemetryWrapper {
             name: UIApplication.didEnterBackgroundNotification,
             object: nil
         )
+    }
+    
+    // Sets hashed fxa sync device id for glean deletion ping
+    func setSyncDeviceId() {
+        guard let prefs = profile?.prefs else { return }
+        // Grab our token so we can use the hashed_fxa_uid and clientGUID from our scratchpad for deletion-request ping
+        RustFirefoxAccounts.shared.syncAuthState.token(Date.now(), canBeExpired: true) >>== { (token, kSync) in
+            let scratchpadPrefs = prefs.branch("sync.scratchpad")
+            guard let scratchpad = Scratchpad.restoreFromPrefs(scratchpadPrefs, syncKeyBundle: KeyBundle.fromKSync(kSync)) else { return }
+
+            let deviceId = (scratchpad.clientGUID + token.hashedFxAUID).sha256.hexEncodedString
+            GleanMetrics.Deletion.syncDeviceId.set(deviceId)
+        }
     }
 
     // Function for recording metrics that are better recorded when going to background due
@@ -191,15 +195,17 @@ class TelemetryWrapper {
         } else {
             GleanMetrics.Preferences.newTabExperience.set(NewTabAccessors.Default.rawValue)
         }
-        // Record chosen email client setting
-        if let chosenEmailClient = prefs.stringForKey(PrefsKeys.KeyMailToOption) {
-            GleanMetrics.Preferences.mailClient.set(chosenEmailClient)
-        }
-        // Block popups
-        if let blockPopups = prefs.boolForKey(PrefsKeys.KeyBlockPopups) {
-            GleanMetrics.Preferences.blockPopups.set(blockPopups)
-        } else {
-            GleanMetrics.Preferences.blockPopups.set(true)
+        // Record `Home` setting, where Firefox Home is "Home", a custom URL is "other" and blank is "Blank".
+        let homePageSetting = NewTabAccessors.getHomePage(prefs)
+        switch homePageSetting {
+        case .topSites:
+            let firefoxHome = "Home"
+            GleanMetrics.Preferences.homePageSetting.set(firefoxHome)
+        case .homePage:
+            let customUrl = "other"
+            GleanMetrics.Preferences.homePageSetting.set(customUrl)
+        default:
+            GleanMetrics.Preferences.homePageSetting.set(homePageSetting.rawValue)
         }
         // Save logins
         if let saveLogins = prefs.boolForKey(PrefsKeys.LoginsSaveEnabled) {
@@ -225,18 +231,6 @@ class TelemetryWrapper {
         } else {
             GleanMetrics.ApplicationServices.pocketStoriesVisible.set(true)
         }
-        // Bookmark highlights visible
-        if let bookmarkHighlightsVisible = prefs.boolForKey(PrefsKeys.ASBookmarkHighlightsVisible) {
-            GleanMetrics.ApplicationServices.bookmarkHighlightsVisible.set(bookmarkHighlightsVisible)
-        } else {
-            GleanMetrics.ApplicationServices.bookmarkHighlightsVisible.set(true)
-        }
-        // Recent highlights visible
-        if let recentHighlightsVisible = prefs.boolForKey(PrefsKeys.ASRecentHighlightsVisible) {
-            GleanMetrics.ApplicationServices.recentHighlightsVisible.set(recentHighlightsVisible)
-        } else {
-            GleanMetrics.ApplicationServices.recentHighlightsVisible.set(true)
-        }
         // Tracking protection - enabled
         if let tpEnabled = prefs.boolForKey(ContentBlockingConfig.Prefs.EnabledKey) {
             GleanMetrics.TrackingProtection.enabled.set(tpEnabled)
@@ -251,14 +245,6 @@ class TelemetryWrapper {
         }
         // System theme enabled
         GleanMetrics.Theme.useSystemTheme.set(ThemeManager.instance.systemThemeIsOn)
-        // Automatic brightness enabled
-        GleanMetrics.Theme.automaticMode.set(ThemeManager.instance.automaticBrightnessIsOn)
-        // Automatic brightness slider value
-        // Note: we are recording this as a string since there is not currently a pure Numeric
-        // Glean metric type.
-        GleanMetrics.Theme.automaticSliderValue.set("\(ThemeManager.instance.automaticBrightnessValue)")
-        // Theme name
-        GleanMetrics.Theme.name.set(ThemeManager.instance.currentName.rawValue)
     }
 
     @objc func uploadError(notification: NSNotification) {
@@ -283,6 +269,7 @@ extension TelemetryWrapper {
         case cancel = "cancel"
         case change = "change"
         case close = "close"
+        case closeAll = "close-all"
         case delete = "delete"
         case deleteAll = "deleteAll"
         case drag = "drag"
@@ -318,6 +305,7 @@ extension TelemetryWrapper {
         case readingListItem = "reading-list-item"
         case setting = "setting"
         case tab = "tab"
+        case tabTray = "tab-tray"
         case trackingProtectionStatistics = "tracking-protection-statistics"
         case trackingProtectionSafelist = "tracking-protection-safelist"
         case trackingProtectionMenu = "tracking-protection-menu"
@@ -334,29 +322,69 @@ extension TelemetryWrapper {
         case dismissedOnboardingSignUp = "dismissed-onboarding-sign-up"
         case privateBrowsingButton = "private-browsing-button"
         case startSearchButton = "start-search-button"
+        case addNewTabButton = "add-new-tab-button"
         case removeUnVerifiedAccountButton = "remove-unverified-account-button"
         case tabSearch = "tab-search"
         case tabToolbar = "tab-toolbar"
-        case experimentEnrollment = "experiment-enrollment"
         case chinaServerSwitch = "china-server-switch"
         case accountConnected = "connected"
         case accountDisconnected = "disconnected"
         case appMenu = "app_menu"
         case settings = "settings"
+        case settingsMenuSetAsDefaultBrowser = "set-as-default-browser-menu-go-to-settings"
         case onboarding = "onboarding"
+        case dismissDefaultBrowserCard = "default-browser-card"
+        case goToSettingsDefaultBrowserCard = "default-browser-card-go-to-settings"
+        case dismissDefaultBrowserOnboarding = "default-browser-onboarding"
+        case goToSettingsDefaultBrowserOnboarding = "default-browser-onboarding-go-to-settings"
+        case asDefaultBrowser = "as-default-browser"
+        case mediumTabsOpenUrl = "medium-tabs-widget-url"
+        case largeTabsOpenUrl = "large-tabs-widget-url"
+        case smallQuickActionSearch = "small-quick-action-search"
+        case mediumQuickActionSearch = "medium-quick-action-search"
+        case mediumQuickActionPrivateSearch = "medium-quick-action-private-search"
+        case mediumQuickActionCopiedLink = "medium-quick-action-copied-link"
+        case mediumQuickActionClosePrivate = "medium-quick-action-close-private"
+        case mediumTopSitesWidget = "medium-top-sites-widget"
+        case topSiteTile = "top-site-tile"
+        case pocketStory = "pocket-story"
+        case pocketSectionImpression = "pocket-section-impression"
+        case library = "library"
+        case home = "home-page"
+        case blockImagesEnabled = "block-images-enabled"
+        case blockImagesDisabled = "block-images-disabled"
+        case nightModeEnabled = "night-mode-enabled"
+        case nightModeDisabled = "night-mode-disabled"
+        case logins = "logins-and-passwords"
+        case signIntoSync = "sign-into-sync"
+        case syncTab = "sync-tab"
+        case syncSignIn = "sync-sign-in"
+        case syncCreateAccount = "sync-create-account"
+        case libraryPanel = "library-panel"
+        case sharePageWith = "share-page-with"
+        case sendToDevice = "send-to-device"
+        case copyAddress = "copy-address"
+        case reportSiteIssue = "report-site-issue"
+        case findInPage = "find-in-page"
+        case requestDesktopSite = "request-desktop-site"
+        case requestMobileSite = "request-mobile-site"
+        case pinToTopSites = "pin-to-top-sites"
+        case removePinnedSite = "remove-pinned-site"
+        case firefoxHomepage = "firefox-homepage"
+        case jumpBackInImpressions = "jump-back-in-impressions"
+        case recentlySavedBookmarkImpressions = "recently-saved-bookmark-impressions"
+        case recentlySavedReadingItemImpressions = "recently-saved-reading-items-impressions"
+        case inactiveTabTray = "inactiveTabTray"
     }
 
     public enum EventValue: String {
         case activityStream = "activity-stream"
         case appMenu = "app-menu"
         case awesomebarResults = "awesomebar-results"
-        case bookmarksPanel = "bookmarks-panel"
         case browser = "browser"
         case contextMenu = "context-menu"
         case downloadCompleteToast = "download-complete-toast"
-        case downloadsPanel = "downloads-panel"
         case homePanel = "home-panel"
-        case homePanelTabButton = "home-panel-tab-button"
         case markAsRead = "mark-as-read"
         case markAsUnread = "mark-as-unread"
         case pageActionMenu = "page-action-menu"
@@ -374,72 +402,257 @@ extension TelemetryWrapper {
         case privateTab = "private-tab"
         case normalTab = "normal-tab"
         case tabView = "tab-view"
+        case bookmarksPanel = "bookmarks-panel"
+        case historyPanel = "history-panel"
+        case readingPanel = "reading-panel"
+        case downloadsPanel = "downloads-panel"
+        case syncPanel = "sync-panel"
+        case yourLibrarySection = "your-library-section"
+        case jumpBackInSectionShowAll = "jump-back-in-section-show-all"
+        case jumpBackInSectionTabOpened = "jump-back-in-section-tab-opened"
+        case recentlySavedSectionShowAll = "recently-saved-section-show-all"
+        case recentlySavedBookmarkItemAction = "recently-saved-bookmark-item-action"
+        case recentlySavedBookmarkItemView = "recently-saved-bookmark-item-view"
+        case recentlySavedReadingListView = "recently-saved-reading-list-view"
+        case recentlySavedReadingListAction = "recently-saved-reading-list-action"
+        case addBookmarkToast = "add-bookmark-toast"
+        case openHomeFromAwesomebar = "open-home-from-awesomebar"
+        case openHomeFromPhotonMenuButton = "open-home-from-photon-menu-button"
+        case openInactiveTab = "openInactiveTab"
+        case inactiveTabExpand = "inactivetab-expand"
+        case inactiveTabCollapse = "inactivetab-collapse"
+        case openRecentlyClosedList = "openRecentlyClosedList"
+        case openRecentlyClosedTab = "openRecentlyClosedTab"
+    }
+    
+    public enum EventExtraKey: String {
+        case topSitePosition = "tilePosition"
+        case topSiteTileType = "tileType"
+        case pocketTilePosition = "pocketTilePosition"
     }
 
-    public static func recordEvent(category: EventCategory, method: EventMethod, object: EventObject, value: EventValue, extras: [String: Any]? = nil) {
-        Telemetry.default.recordEvent(category: category.rawValue, method: method.rawValue, object: object.rawValue, value: value.rawValue, extras: extras)
+    public static func recordEvent(category: EventCategory, method: EventMethod, object: EventObject, value: EventValue? = nil, extras: [String: Any]? = nil) {
+        Telemetry.default.recordEvent(category: category.rawValue, method: method.rawValue, object: object.rawValue, value: value?.rawValue ?? "", extras: extras)
 
-        gleanRecordEvent(category: category, method: method, object: object, value: value.rawValue, extras: extras);
+        gleanRecordEvent(category: category, method: method, object: object, value: value, extras: extras);
     }
 
-    public static func recordEvent(category: EventCategory, method: EventMethod, object: EventObject, value: String? = nil, extras: [String: Any]? = nil) {
-        Telemetry.default.recordEvent(category: category.rawValue, method: method.rawValue, object: object.rawValue, value: value, extras: extras)
-
-        gleanRecordEvent(category: category, method: method, object: object, value: value ?? "", extras: extras);
-    }
-
-    static func gleanRecordEvent(category: EventCategory, method: EventMethod, object: EventObject, value: String, extras: [String: Any]? = nil) {
+    static func gleanRecordEvent(category: EventCategory, method: EventMethod, object: EventObject, value: EventValue? = nil, extras: [String: Any]? = nil) {
+        let value = value?.rawValue ?? ""
         switch (category, method, object, value, extras) {
         // Bookmarks
-        case (.action, .view, .bookmarksPanel, let value, _):
-            GleanMetrics.Bookmarks.viewList[value].add()
-        case (.action, .add, .bookmark, let value, _):
-            GleanMetrics.Bookmarks.add[value].add()
-        case (.action, .delete, .bookmark, let value, _):
-            GleanMetrics.Bookmarks.delete[value].add()
-        case (.action, .open, .bookmark, let value, _):
-            GleanMetrics.Bookmarks.open[value].add()
+        case (.action, .view, .bookmarksPanel, let from, _):
+            GleanMetrics.Bookmarks.viewList[from].add()
+        case (.action, .add, .bookmark, let from, _):
+            GleanMetrics.Bookmarks.add[from].add()
+        case (.action, .delete, .bookmark, let from, _):
+            GleanMetrics.Bookmarks.delete[from].add()
+        case (.action, .open, .bookmark, let from, _):
+            GleanMetrics.Bookmarks.open[from].add()
+        case (.action, .change, .bookmark, let from, _):
+            GleanMetrics.Bookmarks.edit[from].add()
         // Reader Mode
         case (.action, .tap, .readerModeOpenButton, _, _):
             GleanMetrics.ReaderMode.open.add()
         case (.action, .tap, .readerModeCloseButton, _, _):
             GleanMetrics.ReaderMode.close.add()
         // Reading List
-        case (.action, .add, .readingListItem, let value, _):
-            GleanMetrics.ReadingList.add[value].add()
-        case (.action, .delete, .readingListItem, let value, _):
-            GleanMetrics.ReadingList.delete[value].add()
+        case (.action, .add, .readingListItem, let from, _):
+            GleanMetrics.ReadingList.add[from].add()
+        case (.action, .delete, .readingListItem, let from, _):
+            GleanMetrics.ReadingList.delete[from].add()
         case (.action, .open, .readingListItem, _, _):
             GleanMetrics.ReadingList.open.add()
-        case (.action, .tap, .readingListItem, EventValue.markAsRead.rawValue, _):
-            GleanMetrics.ReadingList.markRead.add()
-        case (.action, .tap, .readingListItem, EventValue.markAsUnread.rawValue, _):
-            GleanMetrics.ReadingList.markUnread.add()
+        // Top Site
+        case (.action, .tap, .topSiteTile, _, let extras):
+            if let position = extras?[EventExtraKey.topSitePosition.rawValue] as? String, let tileType = extras?[EventExtraKey.topSiteTileType.rawValue] as? String {
+                GleanMetrics.TopSite.tilePressed.record(extra: [GleanMetrics.TopSite.TilePressedKeys.position : position, GleanMetrics.TopSite.TilePressedKeys.tileType : tileType])
+            } else {
+                let msg = "Uninstrumented pref metric: \(category), \(method), \(object), \(value), \(String(describing: extras))"
+                Sentry.shared.send(message: msg, severity: .debug)
+            }
         // Preferences
-        case (.action, .change, .setting, let preference, let extras):
-            if let to = extras?["go"] as? String {
+        case (.action, .change, .setting, _, let extras):
+            if let preference = extras?["pref"] as? String, let to = (extras?["to"] ?? "undefined") as? String {
                 GleanMetrics.Preferences.changed.record(
                 extra: [GleanMetrics.Preferences.ChangedKeys.preference: preference,
                         GleanMetrics.Preferences.ChangedKeys.changedTo: to])
             } else {
-                GleanMetrics.Preferences.changed.record(
-                    extra: [GleanMetrics.Preferences.ChangedKeys.preference: preference,
-                            GleanMetrics.Preferences.ChangedKeys.changedTo: "undefined"])
+                let msg = "Uninstrumented pref metric: \(category), \(method), \(object), \(value), \(String(describing: extras))"
+                Sentry.shared.send(message: msg, severity: .debug)
             }
         // QR Codes
         case (.action, .scan, .qrCodeText, _, _),
              (.action, .scan, .qrCodeURL, _, _):
             GleanMetrics.QrCode.scanned.add()
         // Tabs
-        case (.action, .add, .tab, let value, _):
-            GleanMetrics.Tabs.open[value].add()
-        case (.action, .close, .tab, let value, _):
-            GleanMetrics.Tabs.close[value].add()
+        case (.action, .add, .tab, let privateOrNormal, _):
+            GleanMetrics.Tabs.open[privateOrNormal].add()
+        case (.action, .close, .tab, let privateOrNormal, _):
+            GleanMetrics.Tabs.close[privateOrNormal].add()
+        case (.action, .closeAll, .tab, let privateOrNormal, _):
+            GleanMetrics.Tabs.closeAll[privateOrNormal].add()
+        case (.action, .tap, .addNewTabButton, _, _):
+            GleanMetrics.Tabs.newTabPressed.add()
+        case (.action, .tap, .tab, _, _):
+            GleanMetrics.Tabs.clickTab.record()
+        case (.action, .open, .tabTray, _, _):
+            GleanMetrics.Tabs.openTabTray.record()
+        case (.action, .close, .tabTray, _, _):
+            GleanMetrics.Tabs.closeTabTray.record()
+        // Settings Menu
+        case (.action, .open, .settingsMenuSetAsDefaultBrowser, _, _):
+            GleanMetrics.SettingsMenu.setAsDefaultBrowserPressed.add()
         // Start Search Button
         case (.action, .tap, .startSearchButton, _, _):
             GleanMetrics.Search.startSearchPressed.add()
+        // Default Browser
+        case (.action, .tap, .dismissDefaultBrowserCard, _, _):
+            GleanMetrics.DefaultBrowserCard.dismissPressed.add()
+        case (.action, .tap, .goToSettingsDefaultBrowserCard, _, _):
+            GleanMetrics.DefaultBrowserCard.goToSettingsPressed.add()
+        case (.action, .open, .asDefaultBrowser, _, _):
+            GleanMetrics.App.openedAsDefaultBrowser.add()
+        case (.action, .tap, .dismissDefaultBrowserOnboarding, _, _):
+            GleanMetrics.DefaultBrowserOnboarding.dismissPressed.add()
+        case (.action, .tap, .goToSettingsDefaultBrowserOnboarding, _, _):
+            GleanMetrics.DefaultBrowserOnboarding.goToSettingsPressed.add()
+        // Onboarding
+        case (.action, .press, .dismissedOnboarding, _, let extras):
+            if let slideNum = extras?["slide-num"] as? Int32 {
+                GleanMetrics.Onboarding.finish.record(GleanMetrics.Onboarding.FinishExtra(slideNum: slideNum))
+            } else {
+                let msg = "Missing slide-num in onboarding metric: \(category), \(method), \(object), \(value), \(String(describing: extras))"
+                Sentry.shared.send(message: msg, severity: .debug)
+            }
+        // Widget
+        case (.action, .open, .mediumTabsOpenUrl, _, _):
+            GleanMetrics.Widget.mTabsOpenUrl.add()
+        case (.action, .open, .largeTabsOpenUrl, _, _):
+            GleanMetrics.Widget.lTabsOpenUrl.add()
+        case (.action, .open, .smallQuickActionSearch, _, _):
+            GleanMetrics.Widget.sQuickActionSearch.add()
+        case (.action, .open, .mediumQuickActionSearch, _, _):
+            GleanMetrics.Widget.mQuickActionSearch.add()
+        case (.action, .open, .mediumQuickActionPrivateSearch, _, _):
+            GleanMetrics.Widget.mQuickActionPrivateSearch.add()
+        case (.action, .open, .mediumQuickActionCopiedLink, _, _):
+            GleanMetrics.Widget.mQuickActionCopiedLink.add()
+        case (.action, .open, .mediumQuickActionClosePrivate, _, _):
+            GleanMetrics.Widget.mQuickActionClosePrivate.add()
+        case (.action, .open, .mediumTopSitesWidget, _, _):
+            GleanMetrics.Widget.mTopSitesWidget.add()
+
+        // Pocket
+        case (.action, .tap, .pocketStory, _, let extras):
+            if let position = extras?[EventExtraKey.pocketTilePosition.rawValue] as? String {
+                GleanMetrics.Pocket.openStoryPosition["Position-"+position].add()
+            } else {
+                let msg = "Uninstrumented pref metric: \(category), \(method), \(object), \(value), \(String(describing: extras))"
+                Sentry.shared.send(message: msg, severity: .debug)
+            }
+        case (.action, .view, .pocketSectionImpression, _, _):
+            GleanMetrics.Pocket.sectionImpressions.add()
+
+        // Library
+        case (.action, .tap, .libraryPanel, let type, _):
+            GleanMetrics.Library.panelPressed[type].add()
+        // Sync
+        case (.action, .open, .syncTab, _, _):
+            GleanMetrics.Sync.openTab.add()
+        case (.action, .tap, .syncSignIn, _, _):
+            GleanMetrics.Sync.signInSyncPressed.add()
+        case (.action, .tap, .syncCreateAccount, _, _):
+            GleanMetrics.Sync.createAccountPressed.add()
+        // App menu
+        case (.action, .tap, .logins, _, _):
+            GleanMetrics.AppMenu.logins.add()
+        case (.action, .tap, .signIntoSync, _, _):
+            GleanMetrics.AppMenu.signIntoSync.add()
+        case (.action, .tap, .home, _, _):
+            GleanMetrics.AppMenu.home.add()
+        case (.action, .tap, .library, _, _):
+            GleanMetrics.AppMenu.library.add()
+        case (.action, .tap, .blockImagesEnabled, _, _):
+            GleanMetrics.AppMenu.blockImagesEnabled.add()
+        case (.action, .tap, .blockImagesDisabled, _, _):
+            GleanMetrics.AppMenu.blockImagesDisabled.add()
+        case (.action, .tap, .nightModeEnabled, _, _):
+            GleanMetrics.AppMenu.nightModeEnabled.add()
+        case (.action, .tap, .nightModeDisabled, _, _):
+            GleanMetrics.AppMenu.nightModeDisabled.add()
+        case (.action, .tap, .whatsNew, _, _):
+            GleanMetrics.AppMenu.whatsNew.add()
+        case (.action, .open, .settings, _, _):
+            GleanMetrics.AppMenu.settings.add()
+
+        // Page Menu
+        case (.action, .tap, .sharePageWith, _, _):
+            GleanMetrics.PageActionMenu.sharePageWith.add()
+        case (.action, .tap, .sendToDevice, _, _):
+            GleanMetrics.PageActionMenu.sendToDevice.add()
+        case (.action, .tap, .copyAddress, _, _):
+            GleanMetrics.PageActionMenu.copyAddress.add()
+        case (.action, .tap, .reportSiteIssue, _, _):
+            GleanMetrics.PageActionMenu.reportSiteIssue.add()
+        case (.action, .tap, .findInPage, _, _):
+            GleanMetrics.PageActionMenu.findInPage.add()
+        case (.action, .tap, .pinToTopSites, _, _):
+            GleanMetrics.PageActionMenu.pinToTopSites.add()
+        case (.action, .tap, .removePinnedSite, _, _):
+            GleanMetrics.PageActionMenu.removePinnedSite.add()
+        case (.action, .tap, .requestDesktopSite, _, _):
+            GleanMetrics.PageActionMenu.requestDesktopSite.add()
+        case (.action, .tap, .requestMobileSite, _, _):
+            GleanMetrics.PageActionMenu.requestMobileSite.add()
+
+        // Inactive Tab Tray
+        case (.action, .tap, .inactiveTabTray, EventValue.openInactiveTab.rawValue, _):
+            GleanMetrics.InactiveTabsTray.openInactiveTab.add()
+        case (.action, .tap, .inactiveTabTray, EventValue.inactiveTabExpand.rawValue, _):
+            GleanMetrics.InactiveTabsTray.toggleInactiveTabTray[EventValue.inactiveTabExpand.rawValue].add()
+        case (.action, .tap, .inactiveTabTray, EventValue.inactiveTabCollapse.rawValue, _):
+            GleanMetrics.InactiveTabsTray.toggleInactiveTabTray[EventValue.inactiveTabCollapse.rawValue].add()
+        case (.action, .tap, .inactiveTabTray, EventValue.openRecentlyClosedList.rawValue, _):
+            GleanMetrics.InactiveTabsTray.openRecentlyClosedList.add()
+        case (.action, .tap, .inactiveTabTray, EventValue.openRecentlyClosedTab.rawValue, _):
+            GleanMetrics.InactiveTabsTray.openRecentlyClosedTab.add()
+            
+        // Firefox Homepage
+        case (.action, .tap, .firefoxHomepage, EventValue.yourLibrarySection.rawValue, let extras):
+            if let panel = extras?[EventObject.libraryPanel.rawValue] as? String {
+                GleanMetrics.FirefoxHomePage.yourLibrary[panel].add()
+            }
+        case (.action, .open, .firefoxHomepage, EventValue.openHomeFromAwesomebar.rawValue, _):
+            GleanMetrics.FirefoxHomePage.openFromAwesomebar.add()
+        case (.action, .open, .firefoxHomepage, EventValue.openHomeFromPhotonMenuButton.rawValue, _):
+            GleanMetrics.FirefoxHomePage.openFromMenuHomeButton.add()
+
+        case (.action, .view, .firefoxHomepage, EventValue.recentlySavedBookmarkItemView.rawValue, let extras):
+            if let bookmarksCount = extras?[EventObject.recentlySavedBookmarkImpressions.rawValue] as? String {
+                GleanMetrics.FirefoxHomePage.recentlySavedBookmarkView.record(extra: [.bookmarkCount : bookmarksCount])
+            }
+        case (.action, .view, .firefoxHomepage, EventValue.recentlySavedReadingListView.rawValue, let extras):
+            if let readingListItemsCount = extras?[EventObject.recentlySavedReadingItemImpressions.rawValue] as? String {
+                GleanMetrics.FirefoxHomePage.readingListView.record(extra: [.readingListCount: readingListItemsCount])
+            }
+        case (.action, .tap, .firefoxHomepage, EventValue.recentlySavedSectionShowAll.rawValue, _):
+            GleanMetrics.FirefoxHomePage.recentlySavedShowAll.add()
+        case (.action, .tap, .firefoxHomepage, EventValue.recentlySavedBookmarkItemAction.rawValue, _):
+            GleanMetrics.FirefoxHomePage.recentlySavedBookmarkItem.add()
+        case (.action, .tap, .firefoxHomepage, EventValue.recentlySavedReadingListAction.rawValue, _):
+            GleanMetrics.FirefoxHomePage.recentlySavedReadingItem.add()
+
+        case (.action, .tap, .firefoxHomepage, EventValue.jumpBackInSectionShowAll.rawValue, _):
+            GleanMetrics.FirefoxHomePage.jumpBackInShowAll.add()
+        case (.action, .view, .jumpBackInImpressions, _, _):
+            GleanMetrics.FirefoxHomePage.jumpBackInSectionView.add()
+        case (.action, .tap, .firefoxHomepage, EventValue.jumpBackInSectionTabOpened.rawValue, _):
+            GleanMetrics.FirefoxHomePage.jumpBackInTabOpened.add()
+
         default:
-            print("Uninstrumented metric recorded: \(category), \(method), \(object), \(value), \(String(describing: extras))")
+            let msg = "Uninstrumented metric recorded: \(category), \(method), \(object), \(value), \(String(describing: extras))"
+            Sentry.shared.send(message: msg, severity: .debug)
         }
     }
 }

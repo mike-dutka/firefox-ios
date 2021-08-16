@@ -31,10 +31,15 @@ open class Favicon: Identifiable {
 // cursor results, perhaps as a tuple.
 open class Site: Identifiable {
     open var id: Int?
-    var guid: String?
+    open var guid: String?
 
     open var tileURL: URL {
         return URL(string: url)?.domainURL ?? URL(string: "about:blank")!
+    }
+    
+    // i.e. `http://www.example.com/` --> `example`
+    open var secondLevelDomain: String? {
+        return URL(string: url)?.host?.components(separatedBy: ".").suffix(2).first
     }
 
     public let url: String

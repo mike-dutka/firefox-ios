@@ -4,18 +4,20 @@
 
 import Foundation
 import Shared
-import EarlGrey
 
 class DomainAutocompleteTests: KIFTestCase {
     override func setUp() {
         super.setUp()
-        BrowserUtils.configEarlGrey()
-        BrowserUtils.dismissFirstRunUI()
+        BrowserUtils.dismissFirstRunUI(tester())
     }
 
     func testAutocomplete() {
+        tester().wait(forTimeInterval: 3)
+        tester().waitForAnimationsToFinish()
+        tester().wait(forTimeInterval: 3)
         BrowserUtils.addHistoryEntry("Foo bar baz", url: URL(string: "https://foo.bar.baz.org/dingbat")!)
-
+        tester().tapView(withAccessibilityIdentifier: "urlBar-cancel")
+        tester().wait(forTimeInterval: 1)
         tester().tapView(withAccessibilityIdentifier: "url")
         let textField = tester().waitForView(withAccessibilityLabel: "Address and Search") as! UITextField
 
@@ -46,6 +48,7 @@ class DomainAutocompleteTests: KIFTestCase {
 
     func testAutocompleteAfterDeleteWithBackSpace() {
         tester().waitForAnimationsToFinish()
+        tester().wait(forTimeInterval: 1)
         tester().tapView(withAccessibilityIdentifier: "url")
         let textField = tester().waitForView(withAccessibilityLabel: "Address and Search") as! UITextField
         tester().enterText(intoCurrentFirstResponder: "facebook")
@@ -57,7 +60,7 @@ class DomainAutocompleteTests: KIFTestCase {
         tester().waitForAnimationsToFinish()
 
         // Tap on Go to perform a search
-        EarlGrey.selectElement(with: grey_accessibilityLabel("go")).perform(grey_tap())
+        tester().tapView(withAccessibilityLabel: "go")
         tester().waitForAnimationsToFinish()
         tester().wait(forTimeInterval: 1)
 
@@ -72,6 +75,7 @@ class DomainAutocompleteTests: KIFTestCase {
     // Bug https://bugzilla.mozilla.org/show_bug.cgi?id=1541832 scenario 1
     func testAutocompleteOnechar() {
         tester().waitForAnimationsToFinish()
+        tester().wait(forTimeInterval: 1)
         tester().tapView(withAccessibilityIdentifier: "url")
         let textField = tester().waitForView(withAccessibilityLabel: "Address and Search") as! UITextField
         tester().enterText(intoCurrentFirstResponder: "f")
@@ -81,15 +85,15 @@ class DomainAutocompleteTests: KIFTestCase {
 
     // Bug https://bugzilla.mozilla.org/show_bug.cgi?id=1541832 scenario 2
     func testAutocompleteOneCharAfterRemovingPreviousTerm() {
+        tester().wait(forTimeInterval: 3)
         tester().tapView(withAccessibilityIdentifier: "url")
         let textField = tester().waitForView(withAccessibilityLabel: "Address and Search") as! UITextField
         tester().enterText(intoCurrentFirstResponder: "foo")
 
         // Remove the completion part and the the foo chars one by one
         for _ in 1...4 {
-            EarlGrey.selectElement(with: grey_accessibilityID("address"))
-                .inRoot(grey_kindOfClass(UITextField.self))
-                .perform(grey_typeText("\u{0008}"))
+            tester().tapView(withAccessibilityIdentifier: "address")
+            tester().enterText(intoCurrentFirstResponder: "\u{0008}")
         }
         tester().waitForAnimationsToFinish()
         tester().enterText(intoCurrentFirstResponder: "f")
@@ -99,6 +103,7 @@ class DomainAutocompleteTests: KIFTestCase {
 
     // Bug https://bugzilla.mozilla.org/show_bug.cgi?id=1541832 scenario 3
     func testAutocompleteOneCharAfterRemovingWithClearButton() {
+        tester().wait(forTimeInterval: 1)
         tester().tapView(withAccessibilityIdentifier: "url")
         let textField = tester().waitForView(withAccessibilityLabel: "Address and Search") as! UITextField
         tester().enterText(intoCurrentFirstResponder: "foo")
@@ -109,8 +114,9 @@ class DomainAutocompleteTests: KIFTestCase {
 
     override func tearDown() {
         super.tearDown()
-        EarlGrey.selectElement(with: grey_accessibilityID("urlBar-cancel")).perform(grey_tap())
-        BrowserUtils.resetToAboutHome()
-        BrowserUtils.clearPrivateData()
+        tester().tapView(withAccessibilityIdentifier: "urlBar-cancel")
+        BrowserUtils.resetToAboutHomeKIF(tester())
+        tester().wait(forTimeInterval: 3)
+        BrowserUtils.clearPrivateDataKIF(tester())
     }
 }

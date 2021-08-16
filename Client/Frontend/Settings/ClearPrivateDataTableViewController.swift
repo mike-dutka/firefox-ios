@@ -35,8 +35,14 @@ class ClearPrivateDataTableViewController: ThemedTableViewController {
             (CookiesClearable(tabManager: self.tabManager), true),
             (SiteDataClearable(tabManager: self.tabManager), true),
             (TrackingProtectionClearable(), true),
-            (DownloadedFilesClearable(), false) // Don't clear downloaded files by default
+            (DownloadedFilesClearable(), false), // Don't clear downloaded files by default
         ]
+
+        if let experimental = Experiments.shared.getVariables(featureId: .search).getVariables("spotlight"),
+           experimental.getBool("enabled") == true { // i.e. defaults to false
+            items.append((SpotlightClearable(), false)) // On device only, so don't clear by default.)
+        }
+
         return items
     }()
 
@@ -144,9 +150,6 @@ class ClearPrivateDataTableViewController: ThemedTableViewController {
                     .allSucceed()
                     .uponQueue(.main) { result in
                         assert(result.isSuccess, "Private data cleared successfully")
-
-                        LeanPlumClient.shared.track(event: .clearPrivateData)
-
                         self.profile.prefs.setObject(self.toggles, forKey: TogglesPrefKey)
 
                         // Disable the Clear Private Data button after it's clicked.

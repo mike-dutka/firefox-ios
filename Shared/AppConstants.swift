@@ -4,10 +4,22 @@
 
 import UIKit
 
+public enum AppName: String, CustomStringConvertible {
+    case shortName = "Firefox"
+    case longName = "Firefox Daylight"
+
+    public var description: String {
+        return self.rawValue
+    }
+}
+
 public enum AppBuildChannel: String {
     case release = "release"
     case beta = "beta"
     case developer = "developer"
+
+    // Used for unknown cases
+    case other = "other"
 }
 
 public enum KVOConstants: String {
@@ -28,6 +40,8 @@ public struct KeychainKey {
 public struct AppConstants {
     public static let IsRunningTest = NSClassFromString("XCTestCase") != nil || ProcessInfo.processInfo.arguments.contains(LaunchArguments.Test)
 
+    public static let IsRunningPerfTest = NSClassFromString("XCTestCase") != nil || ProcessInfo.processInfo.arguments.contains(LaunchArguments.PerformanceTest)
+    
     public static let FxAiOSClientId = "1b1a3e44c54fbb58"
 
     /// Build Channel.
@@ -38,6 +52,8 @@ public struct AppConstants {
             return AppBuildChannel.beta
         #elseif MOZ_CHANNEL_FENNEC
             return AppBuildChannel.developer
+        #else
+            return AppBuildChannel.other
         #endif
     }()
 
@@ -54,6 +70,7 @@ public struct AppConstants {
     }()
 
     public static let PrefSendUsageData = "settings.sendUsageData"
+    public static let PrefStudiesToggle = "settings.studiesToggle"
 
     /// Enables support for International Domain Names (IDN)
     /// Disabled because of https://bugzilla.mozilla.org/show_bug.cgi?id=1312294
@@ -69,19 +86,6 @@ public struct AppConstants {
         #endif
     }()
 
-    /// Toggle the use of Leanplum.
-    public static let MOZ_ENABLE_LEANPLUM: Bool = {
-        #if MOZ_CHANNEL_RELEASE
-            return true
-        #elseif MOZ_CHANNEL_BETA
-            return true
-        #elseif MOZ_CHANNEL_FENNEC
-            return true
-        #else
-            return false
-        #endif
-    }()
-
     /// The maximum length of a URL stored by Firefox. Shared with Places on desktop.
     public static let DB_URL_LENGTH_MAX = 65536
 
@@ -90,44 +94,4 @@ public struct AppConstants {
 
     /// The maximum length of a bookmark description stored by Firefox. Shared with Places on desktop.
     public static let DB_DESCRIPTION_LENGTH_MAX = 1024
-
-    ///  Toggle FxA Leanplum A/B test for prompting push permissions
-    public static let MOZ_FXA_LEANPLUM_AB_PUSH_TEST: Bool = {
-        #if MOZ_CHANNEL_RELEASE
-            return true
-        #elseif MOZ_CHANNEL_BETA
-            return true
-        #elseif MOZ_CHANNEL_FENNEC
-            return true
-        #else
-            return false
-        #endif
-    }()
-
-    ///  Toggle use of Document Services — initially language detection.
-    public static let MOZ_DOCUMENT_SERVICES: Bool = {
-        #if MOZ_CHANNEL_RELEASE
-        return false
-        #elseif MOZ_CHANNEL_BETA
-        return true
-        #elseif MOZ_CHANNEL_FENNEC
-        return true
-        #else
-        return true
-        #endif
-    }()
-    
-    /// Put it behind a feature flag as the strings didn't land in time
-    public static let MOZ_SHAKE_TO_RESTORE: Bool = {
-        #if MOZ_CHANNEL_RELEASE
-        return false
-        #elseif MOZ_CHANNEL_BETA
-        return true
-        #elseif MOZ_CHANNEL_FENNEC
-        return true
-        #else
-        return true
-        #endif
-    }()
-
 }

@@ -12,8 +12,6 @@ import Shared
 class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataSource, UIGestureRecognizerDelegate, Themeable {
     fileprivate(set) var actions: [[PhotonActionSheetItem]]
 
-    var syncManager: SyncManager? // used to display the sync button
-
     private var site: Site?
     private let style: PresentationStyle
     private var tintColor = UIColor.theme.actionMenu.foreground
@@ -64,6 +62,8 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
         super.init(nibName: nil, bundle: nil)
         self.title = title
         self.closeButton.setTitle(closeButtonTitle, for: .normal)
+
+        self.tableView.estimatedRowHeight = PhotonActionSheetUX.RowHeight
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -83,7 +83,7 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
         view.accessibilityIdentifier = "Action Sheet"
 
         tableView.backgroundColor = .clear
-
+        tableView.addObserver(self, forKeyPath: "contentSize", options: .new, context: nil)
         // In a popover the popover provides the blur background
         // Not using a background color allows the view to style correctly with the popover arrow
         if self.popoverPresentationController == nil {
@@ -105,9 +105,10 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
         }
 
         if style == .popover {
+            let width = UIDevice.current.userInterfaceIdiom == .pad ? 400 : 250
             tableView.snp.makeConstraints { make in
                 make.top.bottom.equalTo(self.view)
-                make.width.equalTo(400)
+                make.width.equalTo(width)
             }
         } else {
             tableView.snp.makeConstraints { make in
@@ -152,7 +153,8 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
 
         tintColor = UIColor.theme.actionMenu.foreground
         closeButton.backgroundColor = UIColor.theme.actionMenu.closeButtonBackground
-
+        tableView.headerView(forSection: 0)?.backgroundColor = UIColor.Photon.DarkGrey05
+        
         tableView.reloadData()
     }
 
@@ -162,6 +164,11 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
         }
     }
 
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        tableView.removeObserver(self, forKeyPath: "contentSize")
+    }
+    
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
 
@@ -178,14 +185,16 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
         tableView.isScrollEnabled = true
         tableView.showsVerticalScrollIndicator = false
         tableView.layer.cornerRadius = PhotonActionSheetUX.CornerRadius
-        tableView.separatorStyle = .none
+        // Don't show separators on ETP menu
+        if title != nil {
+            tableView.separatorStyle = .none
+        }
+        tableView.separatorColor = UIColor.clear
+        tableView.separatorInset = .zero
         tableView.cellLayoutMarginsFollowReadableWidth = false
         tableView.accessibilityIdentifier = "Context Menu"
 
-        tableView.tableFooterView = UIView(frame: CGRect(width: tableView.frame.width, height: PhotonActionSheetUX.Padding))
-
-        // UITableView has a large default footer height, remove this extra space
-        tableView.sectionFooterHeight = 1
+        tableView.tableFooterView = UIView()
 
         applyTheme()
 
@@ -196,6 +205,12 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
         }
     }
 
+    override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
+        if style == .popover {
+            self.preferredContentSize = tableView.contentSize
+        }
+    }
+    
     // Nested tableview rows get additional height
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         if let section = actions[safe: indexPath.section], let action = section[safe: indexPath.row] {
@@ -204,7 +219,7 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
             }
         }
 
-        return PhotonActionSheetUX.RowHeight
+        return UITableView.automaticDimension
     }
 
     override func viewDidLayoutSubviews() {
@@ -216,9 +231,6 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
             heightConstraint?.deactivate()
             // The height of the menu should be no more than 85 percent of the screen
             heightConstraint = make.height.equalTo(min(self.tableView.contentSize.height, maxHeight * 0.90)).constraint
-        }
-        if style == .popover {
-            self.preferredContentSize = self.tableView.contentSize
         }
     }
 
@@ -274,7 +286,7 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
             self.dismiss(nil)
             return
         }
-
+        
         // Switches can be toggled on/off without dismissing the menu
         if action.accessory == .Switch {
             let generator = UIImpactFeedbackGenerator(style: .medium)
@@ -284,6 +296,7 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
             self.tableView.deselectRow(at: indexPath, animated: true)
             self.tableView.reloadData()
         } else {
+            action.isEnabled = !action.isEnabled
             self.dismiss(nil)
         }
 
@@ -298,47 +311,61 @@ class PhotonActionSheet: UIViewController, UITableViewDelegate, UITableViewDataS
         let cell = tableView.dequeueReusableCell(withIdentifier: PhotonActionSheetUX.CellName, for: indexPath) as! PhotonActionSheetCell
         let action = actions[indexPath.section][indexPath.row]
         cell.tintColor = self.tintColor
-        let syncManager = action.accessory == .Sync ? self.syncManager : nil
-        cell.configure(with: action, syncManager: syncManager)
+        cell.configure(with: action)
+        
+        // For menus other than ETP, don't show top and bottom separator lines
+        if (title == nil) {
+            cell.bottomBorder.isHidden = !(indexPath != [tableView.numberOfSections - 1, tableView.numberOfRows(inSection: tableView.numberOfSections - 1) - 1])
+        }
         return cell
     }
 
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        return 0
+    }
+    
+    func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
+        return UIView()
+    }
+    
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
         if section == 0 {
             if site != nil {
                 return PhotonActionSheetUX.TitleHeaderSectionHeightWithSite
             } else if title != nil {
                 return PhotonActionSheetUX.TitleHeaderSectionHeight
+            } else {
+                return 0
             }
-            return 6
+        } else {
+            if site != nil || title != nil {
+                return PhotonActionSheetUX.SeparatorRowHeight
+            }
         }
 
         return PhotonActionSheetUX.SeparatorRowHeight
     }
-
+    
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-        // If we have multiple sections show a separator for each one except the first.
-        if section > 0 {
-            return tableView.dequeueReusableHeaderFooterView(withIdentifier: "SeparatorSectionHeader")
-        }
-
         if let site = site {
             let header = tableView.dequeueReusableHeaderFooterView(withIdentifier: PhotonActionSheetUX.SiteHeaderName) as! PhotonActionSheetSiteHeaderView
             header.tintColor = self.tintColor
             header.configure(with: site)
             return header
         } else if let title = title {
-            let header = tableView.dequeueReusableHeaderFooterView(withIdentifier: PhotonActionSheetUX.TitleHeaderName) as! PhotonActionSheetTitleHeaderView
-            header.tintColor = self.tintColor
-            header.configure(with: title)
-            return header
+            if section > 0 {
+                return tableView.dequeueReusableHeaderFooterView(withIdentifier: "SeparatorSectionHeader")
+            } else {
+                let header = tableView.dequeueReusableHeaderFooterView(withIdentifier: PhotonActionSheetUX.TitleHeaderName) as! PhotonActionSheetTitleHeaderView
+                header.tintColor = self.tintColor
+                header.configure(with: title)
+                return header
+            }
         }
-
-        // A header height of at least 1 is required to make sure the default header size isnt used when laying out with AutoLayout
-        let view = tableView.dequeueReusableHeaderFooterView(withIdentifier: "EmptyHeader")
-        view?.snp.makeConstraints { make in
-            make.height.equalTo(1)
+        else {
+            let view = UIView()
+            view.backgroundColor = UIColor.theme.tableView.separator
+            return view
         }
-        return view
     }
 }

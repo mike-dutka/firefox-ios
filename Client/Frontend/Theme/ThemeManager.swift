@@ -1,7 +1,7 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-import Foundation
+import UIKit
 
 enum ThemeManagerPrefs: String {
     case systemThemeIsOn = "prefKeySystemThemeSwitchOnOff"
@@ -52,13 +52,20 @@ class ThemeManager {
 
     // UIViewControllers / UINavigationControllers need to have `preferredStatusBarStyle` and call this.
     var statusBarStyle: UIStatusBarStyle {
-        if #available(iOS 13.0, *) {
-            if UIScreen.main.traitCollection.userInterfaceStyle == .dark && currentName == .normal {
-                return .darkContent
-            }
+        if UIScreen.main.traitCollection.userInterfaceStyle == .dark && currentName == .normal {
+            return .darkContent
         }
-
+        
         return currentName == .dark ? .lightContent : .default
+    }
+
+    var userInterfaceStyle: UIUserInterfaceStyle {
+        switch currentName {
+        case .dark:
+            return .dark
+        default:
+            return .light
+        }
     }
 
     func updateCurrentThemeBasedOnScreenBrightness() {

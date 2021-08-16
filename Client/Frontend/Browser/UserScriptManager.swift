@@ -7,15 +7,15 @@ import WebKit
 class UserScriptManager {
 
     // Scripts can use this to verify the *app* (not JS on the web) is calling into them.
-    public static let securityToken = UUID().uuidString
+    public static let appIdToken = UUID().uuidString
 
     // Singleton instance.
     public static let shared = UserScriptManager()
 
     private let compiledUserScripts: [String : WKUserScript]
 
-    private let noImageModeUserScript = WKUserScript(source: "window.__firefox__.NoImageMode.setEnabled(true)", injectionTime: .atDocumentStart, forMainFrameOnly: true)
-    private let nightModeUserScript = WKUserScript(source: "window.__firefox__.NightMode.setEnabled(true)", injectionTime: .atDocumentStart, forMainFrameOnly: true)
+    private let noImageModeUserScript = WKUserScript.createInDefaultContentWorld(source: "window.__firefox__.NoImageMode.setEnabled(true)", injectionTime: .atDocumentStart, forMainFrameOnly: true)
+    private let nightModeUserScript = WKUserScript.createInDefaultContentWorld(source: "window.__firefox__.NightMode.setEnabled(true)", injectionTime: .atDocumentStart, forMainFrameOnly: true)
 
     private init() {
         var compiledUserScripts: [String : WKUserScript] = [:]
@@ -30,10 +30,18 @@ class UserScriptManager {
             let name = (mainFrameOnly ? "MainFrame" : "AllFrames") + "AtDocument" + (injectionTime == .atDocumentStart ? "Start" : "End")
             if let path = Bundle.main.path(forResource: name, ofType: "js"),
                 let source = try? NSString(contentsOfFile: path, encoding: String.Encoding.utf8.rawValue) as String {
-                let wrappedSource = "(function() { const SECURITY_TOKEN = '\(UserScriptManager.securityToken)'; \(source) })()"
-                let userScript = WKUserScript(source: wrappedSource, injectionTime: injectionTime, forMainFrameOnly: mainFrameOnly)
+                let wrappedSource = "(function() { const APP_ID_TOKEN = '\(UserScriptManager.appIdToken)'; \(source) })()"
+                let userScript = WKUserScript.createInDefaultContentWorld(source: wrappedSource, injectionTime: injectionTime, forMainFrameOnly: mainFrameOnly)
                 compiledUserScripts[name] = userScript
             }
+            let webcompatName = "Webcompat\(name)"
+            if let webCompatPath = Bundle.main.path(forResource: webcompatName, ofType: "js"),
+                let source = try? NSString(contentsOfFile: webCompatPath, encoding: String.Encoding.utf8.rawValue) as String {
+                let wrappedSource = "(function() { const APP_ID_TOKEN = '\(UserScriptManager.appIdToken)'; \(source) })()"
+                let userScript = WKUserScript.createInPageContentWorld(source: wrappedSource, injectionTime: injectionTime, forMainFrameOnly: mainFrameOnly)
+                compiledUserScripts[webcompatName] = userScript
+            }
+            
         }
 
         self.compiledUserScripts = compiledUserScripts
@@ -53,6 +61,10 @@ class UserScriptManager {
             let name = (mainFrameOnly ? "MainFrame" : "AllFrames") + "AtDocument" + (injectionTime == .atDocumentStart ? "Start" : "End")
             if let userScript = compiledUserScripts[name] {
                 tab.webView?.configuration.userContentController.addUserScript(userScript)
+            }
+            let webcompatName = "Webcompat\(name)"
+            if let webcompatUserScript = compiledUserScripts[webcompatName] {
+                tab.webView?.configuration.userContentController.addUserScript(webcompatUserScript)
             }
         }
         // If Night Mode is enabled, inject a small user script to ensure

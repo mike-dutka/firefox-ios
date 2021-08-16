@@ -101,7 +101,8 @@ class DevicePickerViewController: UITableViewController {
 
             self.devices = state.remoteDevices.map { d in
                 let t = "\(d.deviceType)"
-                return RemoteDevice(id: d.id, name: d.displayName, type: t, isCurrentDevice: d.isCurrentDevice, lastAccessTime: d.lastAccessTime, availableCommands: nil)
+                let lastAccessTime = d.lastAccessTime == nil ? nil : UInt64(clamping: d.lastAccessTime!)
+                return RemoteDevice(id: d.id, name: d.displayName, type: t, isCurrentDevice: d.isCurrentDevice, lastAccessTime: lastAccessTime, availableCommands: nil)
             }
 
             if self.devices.isEmpty {
@@ -328,11 +329,7 @@ class DevicePickerTableViewCell: UITableViewCell {
         nameLabel.font = DevicePickerViewControllerUX.DeviceRowTextFont
         nameLabel.numberOfLines = 2
         nameLabel.lineBreakMode = .byWordWrapping
-        if #available(iOS 13.0, *) {
-            self.tintColor = UIColor.label
-        } else {
-            self.tintColor = UIColor.gray
-        }
+        self.tintColor = UIColor.label
         self.preservesSuperviewLayoutMargins = false
         self.selectionStyle = .none
     }

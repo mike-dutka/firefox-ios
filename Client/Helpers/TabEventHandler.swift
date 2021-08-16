@@ -53,11 +53,11 @@ protocol TabEventHandler: AnyObject {
     func tab(_ tab: Tab, didChangeURL url: URL)
     func tab(_ tab: Tab, didLoadPageMetadata metadata: PageMetadata)
     func tabMetadataNotAvailable(_ tab: Tab)
+    func tab(_ tab: Tab, didLoadReadability page: ReadabilityResult)
     func tab(_ tab: Tab, didLoadFavicon favicon: Favicon?, with: Data?)
     func tabDidGainFocus(_ tab: Tab)
     func tabDidLoseFocus(_ tab: Tab)
     func tabDidClose(_ tab: Tab)
-    func tab(_ tab: Tab, didDeriveMetadata metadata: DerivedMetadata)
     func tabDidToggleDesktopMode(_ tab: Tab)
     func tabDidChangeContentBlocking(_ tab: Tab)
 }
@@ -68,11 +68,11 @@ extension TabEventHandler {
     func tab(_ tab: Tab, didChangeURL url: URL) {}
     func tab(_ tab: Tab, didLoadPageMetadata metadata: PageMetadata) {}
     func tabMetadataNotAvailable(_ tab: Tab) {}
+    func tab(_ tab: Tab, didLoadReadability page: ReadabilityResult) {}
     func tab(_ tab: Tab, didLoadFavicon favicon: Favicon?, with: Data?) {}
     func tabDidGainFocus(_ tab: Tab) {}
     func tabDidLoseFocus(_ tab: Tab) {}
     func tabDidClose(_ tab: Tab) {}
-    func tab(_ tab: Tab, didDeriveMetadata metadata: DerivedMetadata) {}
     func tabDidToggleDesktopMode(_ tab: Tab) {}
     func tabDidChangeContentBlocking(_ tab: Tab) {}
 }
@@ -80,12 +80,12 @@ extension TabEventHandler {
 enum TabEventLabel: String {
     case didChangeURL
     case didLoadPageMetadata
+    case didLoadReadability
     case pageMetadataNotAvailable
     case didLoadFavicon
     case didGainFocus
     case didLoseFocus
     case didClose
-    case didDeriveMetadata
     case didToggleDesktopMode
     case didChangeContentBlocking
 }
@@ -95,11 +95,11 @@ enum TabEvent {
     case didChangeURL(URL)
     case didLoadPageMetadata(PageMetadata)
     case pageMetadataNotAvailable
+    case didLoadReadability(ReadabilityResult)
     case didLoadFavicon(Favicon?, with: Data?)
     case didGainFocus
     case didLoseFocus
     case didClose
-    case didDeriveMetadata(DerivedMetadata)
     case didToggleDesktopMode
     case didChangeContentBlocking
 
@@ -119,6 +119,8 @@ enum TabEvent {
             handler.tab(tab, didLoadPageMetadata: metadata)
         case .pageMetadataNotAvailable:
             handler.tabMetadataNotAvailable(tab)
+        case .didLoadReadability(let result):
+            handler.tab(tab, didLoadReadability: result)
         case .didLoadFavicon(let favicon, let data):
             handler.tab(tab, didLoadFavicon: favicon, with: data)
         case .didGainFocus:
@@ -127,8 +129,6 @@ enum TabEvent {
             handler.tabDidLoseFocus(tab)
         case .didClose:
             handler.tabDidClose(tab)
-        case .didDeriveMetadata(let metadata):
-            handler.tab(tab, didDeriveMetadata: metadata)
         case .didToggleDesktopMode:
             handler.tabDidToggleDesktopMode(tab)
         case .didChangeContentBlocking:

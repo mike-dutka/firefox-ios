@@ -59,7 +59,7 @@ class LoginsHelper: TabContentScript {
         return realm
     }
 
-    func loginRecordFromScript(_ script: [String: Any], url: URL) -> LoginRecord? {
+    func loginRecordFromScript(_ script: [String: Any], url: URL) -> Login? {
         guard let username = script["username"] as? String,
             let password = script["password"] as? String,
             let origin = getOrigin(url.absoluteString) else {
@@ -72,9 +72,9 @@ class LoginsHelper: TabContentScript {
             "password": password
         ]
 
-        if let string = script["formSubmitURL"] as? String,
-            let formSubmitURL = getOrigin(string) {
-            dict["formSubmitURL"] = formSubmitURL
+        if let string = script["formSubmitUrl"] as? String,
+            let formSubmitUrl = getOrigin(string) {
+            dict["formSubmitUrl"] = formSubmitUrl
         }
 
         if let passwordField = script["passwordField"] as? String {
@@ -85,7 +85,7 @@ class LoginsHelper: TabContentScript {
             dict["usernameField"] = usernameField
         }
 
-        return LoginRecord(fromJSONDict: dict)
+        return Login(fromJSONDict: dict)
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceiveScriptMessage message: WKScriptMessage) {
@@ -194,7 +194,6 @@ class LoginsHelper: TabContentScript {
             self.tab?.removeSnackbar(bar)
             self.snackBar = nil
             _ = self.profile.logins.add(login: login)
-            LeanPlumClient.shared.track(event: .savedLoginAndPassword)
         }
         snackBar?.addButton(dontSave)
         snackBar?.addButton(save)
@@ -205,7 +204,7 @@ class LoginsHelper: TabContentScript {
         guard new.isValid.isSuccess else {
             return
         }
-
+        var new = new
         new.id = old.id
 
         let formatted: String
@@ -271,7 +270,7 @@ class LoginsHelper: TabContentScript {
 
             let json = JSON(dict)
             let injectJavaScript = "window.__firefox__.logins.inject(\(json.stringify()!))"
-            self.tab?.webView?.evaluateJavaScript(injectJavaScript)
+            self.tab?.webView?.evaluateJavascriptInDefaultContentWorld(injectJavaScript)
         }
     }
 }
