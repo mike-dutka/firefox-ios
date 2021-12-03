@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import Foundation
 
@@ -12,10 +12,9 @@ import Foundation
 ///
 enum NimbusFeatureId: String {
     case nimbusValidation = "nimbus-validation"
-    case onboardingDefaultBrowser = "onboarding-default-browser"
     case inactiveTabs = "inactiveTabs"
-    case librarySectionExperiment = "library-section-experiment"
     case search = "search"
+    case homescreen = "homescreen"
 }
 
 /// A set of common branch ids used in experiments. Branch ids can be application/experiment specific, so
@@ -25,15 +24,9 @@ enum NimbusExperimentBranch {
     static let a2 = "a2"
     static let control = "control"
     static let treatment = "treatment"
-    static let defaultBrowserTreatment = "defaultBrowserTreatment"
 
     enum InactiveTab {
         static let control = "inactiveTabControl"
         static let treatment = "inactiveTabTreatment"
-    }
-
-    enum LibrarySectionABTest {
-        static let control = "librarySectionABTestShowLibrary"
-        static let variation = "librarySectionABTestShowRecentlySaved"
     }
 }

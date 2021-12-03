@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import Foundation
 
@@ -55,24 +55,17 @@ extension UIView {
     }
 
     /**
-     * rounds the requested corners of a view with the provided radius
+     * Rounds the requested corners of a view with the provided radius.
      */
-    func addRoundedCorners(_ cornersToRound: UIRectCorner, cornerRadius: CGSize, color: UIColor) {
-        let rect = bounds
-        let maskPath = UIBezierPath(roundedRect: rect, byRoundingCorners: cornersToRound, cornerRadii: cornerRadius)
+    func addRoundedCorners(_ cornersToRound: UIRectCorner, radius: CGFloat) {
+        let maskPath = UIBezierPath(roundedRect: bounds,
+                                    byRoundingCorners: cornersToRound,
+                                    cornerRadii: CGSize(width: radius, height: radius))
 
         // Create the shape layer and set its path
         let maskLayer = CAShapeLayer()
-        maskLayer.frame = rect
         maskLayer.path = maskPath.cgPath
-
-        let roundedLayer = CALayer()
-        roundedLayer.backgroundColor = color.cgColor
-        roundedLayer.frame = rect
-        roundedLayer.mask = maskLayer
-
-        layer.insertSublayer(roundedLayer, at: 0)
-        backgroundColor = UIColor.clear
+        layer.mask = maskLayer
     }
 
     /**
@@ -99,6 +92,6 @@ protocol CardTheme {
 
 extension CardTheme {
     var theme: BuiltinThemeName {
-        return BuiltinThemeName(rawValue: ThemeManager.instance.current.name) ?? .normal
+        return BuiltinThemeName(rawValue: LegacyThemeManager.instance.current.name) ?? .normal
     }
 }

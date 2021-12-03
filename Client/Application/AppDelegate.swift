@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import Shared
 import Storage
@@ -27,10 +27,7 @@ let LatestAppVersionProfileKey = "latestAppVersion"
 let AllowThirdPartyKeyboardsKey = "settings.allowThirdPartyKeyboards"
 private let InitialPingSentKey = "initialPingSent"
 
-class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestoration {
-    public static func viewController(withRestorationIdentifierPath identifierComponents: [String], coder: NSCoder) -> UIViewController? {
-        return nil
-    }
+class AppDelegate: UIResponder, UIApplicationDelegate {
 
     var window: UIWindow?
     var browserViewController: BrowserViewController!
@@ -125,8 +122,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
         let profile = getProfile(application)
 
         telemetry = TelemetryWrapper(profile: profile)
-        NSUserDefaultsPrefs(prefix: "profile").setBool(true, forKey: "isColdLaunch")
-        FeatureFlagsManager.shared.setupFeatures(with: profile)
+        FeatureFlagsManager.shared.initializeFeatures(with: profile)
+        ThemeManager.shared.updateProfile(with: profile)
 
         // Start intialzing the Nimbus SDK. This should be done after Glean
         // has been started.
@@ -157,7 +154,14 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
             }
         }
 
-        self.updateAuthenticationInfo()
+        NotificationCenter.default.addObserver(forName: .DisplayThemeChanged, object: nil, queue: .main) { (notification) -> Void in
+            if !LegacyThemeManager.instance.systemThemeIsOn {
+                self.window?.overrideUserInterfaceStyle = LegacyThemeManager.instance.userInterfaceStyle
+            } else {
+                self.window?.overrideUserInterfaceStyle = .unspecified
+            }
+        }
+
         SystemUtils.onFirstRun()
 
         RustFirefoxAccounts.startup(prefs: profile.prefs).uponQueue(.main) { _ in
@@ -172,11 +176,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
 
     // TODO: Move to scene controller for iOS 13
     private func setupRootViewController() {
+        if !LegacyThemeManager.instance.systemThemeIsOn {
+            self.window?.overrideUserInterfaceStyle = LegacyThemeManager.instance.userInterfaceStyle
+        }
+
         browserViewController = BrowserViewController(profile: self.profile!, tabManager: self.tabManager)
         browserViewController.edgesForExtendedLayout = []
-
-        browserViewController.restorationIdentifier = NSStringFromClass(BrowserViewController.self)
-        browserViewController.restorationClass = AppDelegate.self
 
         let navigationController = UINavigationController(rootViewController: browserViewController)
         navigationController.delegate = self
@@ -246,8 +251,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
 
         pushNotificationSetup()
 
-        // user research variable setup for New tab user research
-        _ = NewTabUserResearch()
         // user research variable setup for Chron tabs user research
         _ = ChronTabsUserResearch()
 
@@ -268,13 +271,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
                 InstallType.updateCurrentVersion(version: AppInfo.appVersion)
                 // Profile setup
                 profile.prefs.setString(AppInfo.appVersion, forKey: LatestAppVersionProfileKey)
-                
+
             } else if profile.prefs.boolForKey(PrefsKeys.KeySecondRun) == nil {
                 profile.prefs.setBool(true, forKey: PrefsKeys.KeySecondRun)
             }
         }
 
-        
+
         BGTaskScheduler.shared.register(forTaskWithIdentifier: "org.mozilla.ios.sync.part1", using: DispatchQueue.global()) { task in
             guard self.profile?.hasSyncableAccount() ?? false else {
                 self.shutdownProfileWhenNotActive(application)
@@ -408,7 +411,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
     func applicationWillResignActive(_ application: UIApplication) {
         updateTopSitesWidget()
         UserDefaults.standard.setValue(Date(), forKey: "LastActiveTimestamp")
-        NSUserDefaultsPrefs(prefix: "profile").setBool(false, forKey: "isColdLaunch")
         hide()
     }
 
@@ -459,22 +461,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UIViewControllerRestorati
         }
 
         profile?._shutdown()
-    }
-
-    func applicationWillEnterForeground(_ application: UIApplication) {
-        // The reason we need to call this method here instead of `applicationDidBecomeActive`
-        // is that this method is only invoked whenever the application is entering the foreground where as
-        // `applicationDidBecomeActive` will get called whenever the Touch ID authentication overlay disappears.
-        self.updateAuthenticationInfo()
-    }
-
-    fileprivate func updateAuthenticationInfo() {
-        if let authInfo = KeychainWrapper.sharedAppContainerKeychain.authenticationInfo() {
-            if !LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: nil) {
-                authInfo.useTouchID = false
-                KeychainWrapper.sharedAppContainerKeychain.setAuthenticationInfo(authInfo)
-            }
-        }
     }
 
     fileprivate func setUpWebServer(_ profile: Profile) {

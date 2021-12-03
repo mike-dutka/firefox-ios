@@ -1,12 +1,11 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import Foundation
 import WebKit
 import Storage
 import Shared
-import SwiftyJSON
 import XCGLogger
 
 fileprivate var debugTabCount = 0
@@ -49,6 +48,16 @@ struct TabState {
     var favicon: Favicon?
 }
 
+public enum TabGroupTimerState: String, Codable {
+    case navSearchLoaded
+    case tabNavigatedToDifferentUrl
+    case tabSwitched
+    case tabSelected
+    case newTab
+    case openInNewTab
+    case none
+}
+
 enum TabUrlType: String {
     case regular
     case search
@@ -74,7 +83,15 @@ class Tab: NSObject {
     var tabState: TabState {
         return TabState(isPrivate: _isPrivate, url: url, title: displayTitle, favicon: displayFavicon)
     }
-
+    
+    var timerPerWebsite: [String: StopWatchTimer] = [:]
+    
+    // Tab Groups
+    var tabGroupData: TabGroupData = TabGroupData(searchTerm: "", searchUrl: "", nextReferralUrl: "", tabHistoryCurrentState: TabGroupTimerState.none.rawValue , tabGroupTimerState: TabGroupTimerState.none.rawValue)
+    
+    var tabGroupsTimerHelper = StopWatchTimer()
+    var shouldResetTabGroupData: Bool = false
+    
     // PageMetadata is derived from the page content itself, and as such lags behind the
     // rest of the tab.
     var pageMetadata: PageMetadata?
@@ -83,10 +100,10 @@ class Tab: NSObject {
 
     var consecutiveCrashes: UInt = 0
     
-    // Setting defualt page as topsites
+    // Setting default page as topsites
     var newTabPageType: NewTabPage = .topSites
     var tabUUID: String = UUID().uuidString
-    private var screenshotUUIDString: String? //UUID().uuidString
+    private var screenshotUUIDString: String?
     
     var screenshotUUID: UUID? {
         get {
@@ -99,7 +116,8 @@ class Tab: NSObject {
     
     var adsTelemetryUrlList: [String] = [String]()
     var adsProviderName: String = ""
-    
+    var hasHomeScreenshot: Bool = false
+
     // To check if current URL is the starting page i.e. either blank page or internal page like topsites
     var isURLStartingPage: Bool {
         guard url != nil else { return true }
@@ -159,29 +177,19 @@ class Tab: NSObject {
         }
         return self.url
     }
-    
+
     var isFxHomeTab: Bool {
-        if let numberOfUrls = self.sessionData?.urls.count,
-           let offset = self.sessionData?.currentPage,
-           let url = self.sessionData?.urls[numberOfUrls - 1 + offset],
-           url.absoluteString.hasPrefix("internal://") {
-            return true
-        }
+        if let url = url, url.absoluteString.hasPrefix("internal://") { return true }
         return false
     }
     
     var isCustomHomeTab: Bool {
         guard let profile = self.browserViewController?.profile else { return false }
         
-        // Note: sessionData holds your navigation history on that tab, & sessionData.currentPage
-        //  is where you are currently. With numberOfUrls - 1 + offset, we're grabbing the url
-        //  for the last known position of navigation for that tab.
         if let customHomeUrl = HomeButtonHomePageAccessors.getHomePage(profile.prefs),
-           let numberOfUrls = self.sessionData?.urls.count,
-           let offset = self.sessionData?.currentPage,
-           let url = self.sessionData?.urls[numberOfUrls - 1 + offset],
-           let baseDomain = url.baseDomain,
            let customHomeBaseDomain = customHomeUrl.baseDomain,
+           let url = url,
+           let baseDomain = url.baseDomain,
            baseDomain.hasPrefix(customHomeBaseDomain) {
             return true
         }
@@ -279,6 +287,70 @@ class Tab: NSObject {
 
         TelemetryWrapper.recordEvent(category: .action, method: .add, object: .tab, value: isPrivate ? .privateTab : .normalTab)
     }
+    
+    func updateObservationForKey(key: HistoryMetadataKey, observation: HistoryMetadataObservation) {
+        if let profile = self.browserViewController?.profile {
+            _ = profile.places.noteHistoryMetadataObservation(key: key, observation: observation)
+        }
+    }
+
+    func updateTimerAndObserving(state: TabGroupTimerState, searchTerm: String? = nil, searchProviderUrl: String? = nil, nextUrl: String = "") {
+        switch state {
+        case .navSearchLoaded:
+            shouldResetTabGroupData = false
+            tabGroupsTimerHelper.startOrResume()
+            tabGroupData.tabAssociatedSearchUrl = searchProviderUrl ?? ""
+            tabGroupData.tabAssociatedSearchTerm = searchTerm ?? ""
+            tabGroupData.tabAssociatedNextUrl = nextUrl
+            tabGroupData.tabHistoryCurrentState = state.rawValue
+        case .newTab:
+            shouldResetTabGroupData = false
+            tabGroupsTimerHelper.resetTimer()
+            tabGroupsTimerHelper.startOrResume()
+            tabGroupData.tabHistoryCurrentState = state.rawValue
+        case .tabNavigatedToDifferentUrl:
+            if !tabGroupData.tabAssociatedNextUrl.isEmpty && tabGroupData.tabAssociatedSearchUrl.isEmpty || shouldResetTabGroupData {
+                // reset tab group
+                tabGroupData = TabGroupData(searchTerm: "", searchUrl: "", nextReferralUrl: "", tabHistoryCurrentState: TabGroupTimerState.none.rawValue , tabGroupTimerState: TabGroupTimerState.none.rawValue)
+                shouldResetTabGroupData = true
+            } else if tabGroupData.tabAssociatedNextUrl.isEmpty {
+                let key = tabGroupData.tabHistoryMetadatakey()
+                if key.referrerUrl != nextUrl {
+                    let observation = HistoryMetadataObservation(url: key.url, referrerUrl: key.referrerUrl, searchTerm: key.searchTerm, viewTime: tabGroupsTimerHelper.elapsedTime, documentType: nil, title: nil)
+                    updateObservationForKey(key: key, observation: observation)
+                    tabGroupData.tabAssociatedNextUrl = nextUrl
+                }
+                tabGroupsTimerHelper.resetTimer()
+                tabGroupsTimerHelper.startOrResume()
+                tabGroupData.tabHistoryCurrentState = state.rawValue
+            }
+        case .tabSelected:
+            if !shouldResetTabGroupData {
+                if tabGroupsTimerHelper.isPaused {
+                    tabGroupsTimerHelper.startOrResume()
+                }
+                tabGroupData.tabHistoryCurrentState = state.rawValue
+            }
+        case .tabSwitched:
+            if !shouldResetTabGroupData {
+                let key = tabGroupData.tabHistoryMetadatakey()
+                let observation = HistoryMetadataObservation(url: key.url, referrerUrl: key.referrerUrl, searchTerm: key.searchTerm, viewTime: tabGroupsTimerHelper.elapsedTime, documentType: nil, title: nil)
+                updateObservationForKey(key: key, observation: observation)
+                tabGroupsTimerHelper.pauseOrStop()
+                tabGroupData.tabHistoryCurrentState = state.rawValue
+            }
+        case .openInNewTab:
+            shouldResetTabGroupData = false
+            if let searchUrl = searchProviderUrl {
+                tabGroupData.tabAssociatedSearchUrl = searchUrl
+                tabGroupData.tabAssociatedSearchTerm = searchTerm ?? ""
+                tabGroupData.tabAssociatedNextUrl = nextUrl
+            }
+            tabGroupData.tabHistoryCurrentState = state.rawValue
+        case .none:
+            tabGroupData.tabHistoryCurrentState = state.rawValue
+        }
+    }
 
     class func toRemoteTab(_ tab: Tab) -> RemoteTab? {
         if tab.isPrivate {
@@ -362,7 +434,8 @@ class Tab: NSObject {
             var jsonDict = [String: AnyObject]()
             jsonDict["history"] = urls as AnyObject?
             jsonDict["currentPage"] = currentPage as AnyObject?
-            guard let json = JSON(jsonDict).stringify()?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            
+            guard let json = jsonDict.asString?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
                 return
             }
 
@@ -444,18 +517,25 @@ class Tab: NSObject {
 
     var displayTitle: String {
         if let title = webView?.title, !title.isEmpty {
+            let key = tabGroupData.tabHistoryMetadatakey()
+            if tabGroupData.tabHistoryCurrentState == TabGroupTimerState.navSearchLoaded.rawValue ||
+                tabGroupData.tabHistoryCurrentState == TabGroupTimerState.tabNavigatedToDifferentUrl.rawValue ||
+                tabGroupData.tabHistoryCurrentState == TabGroupTimerState.openInNewTab.rawValue {
+                let observation = HistoryMetadataObservation(url: key.url, referrerUrl: key.referrerUrl, searchTerm: key.searchTerm, viewTime: nil, documentType: nil, title: title)
+                updateObservationForKey(key: key, observation: observation)
+            }
             return title
         }
 
         // When picking a display title. Tabs with sessionData are pending a restore so show their old title.
         // To prevent flickering of the display title. If a tab is restoring make sure to use its lastTitle.
         if let url = self.url, InternalURL(url)?.isAboutHomeURL ?? false, sessionData == nil, !restoring {
-            return Strings.AppMenuOpenHomePageTitleString
+            return .AppMenuOpenHomePageTitleString
         }
 
         //lets double check the sessionData in case this is a non-restored new tab
         if let firstURL = sessionData?.urls.first, sessionData?.urls.count == 1, InternalURL(firstURL)?.isAboutHomeURL ?? false {
-            return Strings.AppMenuOpenHomePageTitleString
+            return .AppMenuOpenHomePageTitleString
         }
 
         if let url = self.url, !InternalURL.isValid(url: url), let shownUrl = url.displayURL?.absoluteString {
@@ -531,7 +611,12 @@ class Tab: NSObject {
             restore(webView)
         }
     }
-
+    
+    @objc func reloadPage() {
+        reload()
+        self.webView?.scrollView.refreshControl?.endRefreshing()
+    }
+    
     func addContentScript(_ helper: TabContentScript, name: String) {
         contentScriptManager.addContentScript(helper, name: name, forTab: self)
     }
@@ -590,7 +675,15 @@ class Tab: NSObject {
     }
 
     func setScreenshot(_ screenshot: UIImage?) {
-        self.screenshot = screenshot
+        // check if screenshot is same color as background
+        if let val = screenshot, let avgColor = val.averageColor() {
+            let backgroundColor = LegacyThemeManager.instance.current.browser.background
+            guard !avgColor.isEqual(backgroundColor) else {
+                self.screenshot = nil
+                return
+            }
+            self.screenshot = screenshot
+        }
     }
 
     func toggleChangeUserAgent() {
@@ -650,7 +743,7 @@ class Tab: NSObject {
     }
 
     func applyTheme() {
-        UITextField.appearance().keyboardAppearance = isPrivate ? .dark : (ThemeManager.instance.currentName == .dark ? .dark : .light)
+        UITextField.appearance().keyboardAppearance = isPrivate ? .dark : (LegacyThemeManager.instance.currentName == .dark ? .dark : .light)
     }
     
     func getProviderForUrl() -> SearchEngine {
@@ -755,7 +848,7 @@ class TabWebView: WKWebView, MenuHelperInterface {
     // the theme if the webview is showing "about:blank" (nil).
     func applyTheme() {
         if url == nil {
-            let backgroundColor = ThemeManager.instance.current.browser.background.hexString
+            let backgroundColor = LegacyThemeManager.instance.current.browser.background.hexString
             evaluateJavascriptInDefaultContentWorld("document.documentElement.style.backgroundColor = '\(backgroundColor)';")
         }
     }

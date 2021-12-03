@@ -1,14 +1,17 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import UIKit
 import Storage
 
 struct JumpBackInCollectionCellUX {
-    static let cellHeight: CGFloat = 58
+    static let cellHeight: CGFloat = 100
     static let verticalCellSpacing: CGFloat = 8
-    static let iPadHorizontalSpacing: CGFloat = 16
+    static let iPadHorizontalSpacing: CGFloat = 48
+    static let iPadCellSpacing: CGFloat = 16
+    static let generalSpacing: CGFloat = 8
+    static let sectionInsetSpacing: CGFloat = 4
 }
 
 struct JumpBackInLayoutVariables {
@@ -17,38 +20,18 @@ struct JumpBackInLayoutVariables {
     let maxItemsToDisplay: Int
 }
 
-class FxHomeJumpBackInCollectionCell: UICollectionViewCell {
+class FxHomeJumpBackInCollectionCell: UICollectionViewCell, ReusableCell {
 
     // MARK: - Properties
-    var profile: Profile?
-    var viewModel: FirefoxHomeJumpBackInViewModel!
-
-    var layoutVariables: JumpBackInLayoutVariables {
-        let horizontalVariables = JumpBackInLayoutVariables(columns: 2, scrollDirection: .horizontal, maxItemsToDisplay: 4)
-        let verticalVariables = JumpBackInLayoutVariables(columns: 1, scrollDirection: .vertical, maxItemsToDisplay: 2)
-
-        let deviceIsiPad = UIDevice.current.userInterfaceIdiom == .pad
-        let deviceIsInLandscapeMode = UIApplication.shared.statusBarOrientation.isLandscape
-        let horizontalSizeClassIsCompact = traitCollection.horizontalSizeClass == .compact
-
-        if deviceIsiPad {
-            if horizontalSizeClassIsCompact { return verticalVariables }
-            return horizontalVariables
-
-        } else {
-            if deviceIsInLandscapeMode { return horizontalVariables }
-            return verticalVariables
-        }
-    }
+    var viewModel: FirefoxHomeJumpBackInViewModel?
 
     lazy var collectionView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()
-        layout.scrollDirection = layoutVariables.scrollDirection
+        layout.scrollDirection = viewModel?.layoutVariables.scrollDirection ?? UICollectionView.ScrollDirection.horizontal
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: layout)
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         collectionView.isScrollEnabled = false
         collectionView.backgroundColor = UIColor.clear
-        collectionView.clipsToBounds = false
         collectionView.dataSource = self
         collectionView.delegate = self
         collectionView.register(JumpBackInCell.self, forCellWithReuseIdentifier: JumpBackInCell.cellIdentifier)
@@ -82,45 +65,77 @@ class FxHomeJumpBackInCollectionCell: UICollectionViewCell {
 
 extension FxHomeJumpBackInCollectionCell: UICollectionViewDataSource {
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        viewModel.updateDataAnd(layoutVariables)
-        return viewModel.jumpableTabs.count
+        return viewModel?.jumpList.itemsToDisplay ?? 0
     }
 
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
         let cell = collectionView.dequeueReusableCell(withReuseIdentifier: JumpBackInCell.cellIdentifier, for: indexPath) as! JumpBackInCell
+        guard let viewModel = viewModel else { return UICollectionViewCell() }
 
-        if let item = viewModel.jumpableTabs[safe: indexPath.row] {
-            let itemURL = item.url?.absoluteString ?? ""
-            let site = Site(url: itemURL, title: item.displayTitle, bookmarked: true)
-
-            profile?.favicons.getFaviconImage(forSite: site).uponQueue(.main, block: { result in
-                guard let image = result.successValue else { return }
-                cell.heroImage.image = image
-                cell.setNeedsLayout()
-            })
-
-            cell.itemTitle.text = site.title
-            // TODO: Determine source string here, if from synced tabs. Simply update `cell.itemDetails.text`
+        if indexPath.row == (viewModel.jumpList.itemsToDisplay - 1),
+           let group = viewModel.jumpList.group {
+            configureCellForGroups(group: group, cell: cell)
+        } else {
+            configureCellForTab(item: viewModel.jumpList.tabs[indexPath.row], cell: cell)
         }
 
         return cell
+    }
+
+    private func configureCellForGroups(group: ASGroup<Tab>, cell: JumpBackInCell) {
+        let firstGroupItem = group.groupedItems.first
+        let site = Site(url: firstGroupItem?.lastKnownUrl?.absoluteString ?? "", title: firstGroupItem?.lastTitle ?? "")
+
+        cell.itemTitle.text = group.searchTerm.localizedCapitalized
+        cell.itemDetails.text = String(format: .FirefoxHomepage.JumpBackIn.GroupSiteCount, group.groupedItems.count)
+        cell.faviconImage.image = UIImage(imageLiteralResourceName: "recently_closed").withRenderingMode(.alwaysTemplate)
+        cell.siteNameLabel.text = String.localizedStringWithFormat(.FirefoxHomepage.JumpBackIn.GroupSiteCount, group.groupedItems.count)
+
+        guard let viewModel = viewModel else { return }
+        viewModel.getHeroImage(forSite: site) { image in
+            cell.heroImage.image = image
+        }
+    }
+
+    private func configureCellForTab(item: Tab, cell: JumpBackInCell) {
+        let itemURL = item.lastKnownUrl?.absoluteString ?? ""
+        let site = Site(url: itemURL, title: item.displayTitle)
+
+        cell.itemTitle.text = site.title
+        cell.siteNameLabel.text = site.tileURL.shortDisplayString.capitalized
+
+        guard let viewModel = viewModel else { return }
+        viewModel.getFaviconImage(forSite: site) { image in
+            cell.faviconImage.image = image
+        }
+
+        viewModel.getHeroImage(forSite: site) { image in
+            cell.heroImage.image = image
+        }
     }
 }
 
 extension FxHomeJumpBackInCollectionCell: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        if let tab = viewModel.jumpableTabs[safe: indexPath.row] {
-            viewModel.switchTo(tab)
+        guard let viewModel = viewModel else { return }
+        if indexPath.row == viewModel.jumpList.itemsToDisplay - 1,
+           let group = viewModel.jumpList.group {
+            viewModel.switchTo(group: group)
+
+        } else {
+            let tab = viewModel.jumpList.tabs[indexPath.row]
+            viewModel.switchTo(tab: tab)
         }
     }
 }
 
 extension FxHomeJumpBackInCollectionCell: UICollectionViewDelegateFlowLayout {
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        guard let viewModel = viewModel else { return CGSize() }
 
         var itemWidth: CGFloat
         let totalHorizontalSpacing = collectionView.bounds.width
-        let columns = layoutVariables.columns
+        let columns = viewModel.layoutVariables.columns
         if columns == 2 {
             itemWidth = (totalHorizontalSpacing - JumpBackInCollectionCellUX.iPadHorizontalSpacing) / columns
         } else {
@@ -135,43 +150,52 @@ extension FxHomeJumpBackInCollectionCell: UICollectionViewDelegateFlowLayout {
         if UIDevice.current.userInterfaceIdiom == .phone {
             return JumpBackInCollectionCellUX.verticalCellSpacing
         }
-        return JumpBackInCollectionCellUX.iPadHorizontalSpacing
+
+        return JumpBackInCollectionCellUX.iPadCellSpacing
     }
 
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumInteritemSpacingForSectionAt section: Int) -> CGFloat {
-        if UIDevice.current.userInterfaceIdiom == .phone { return 0 }
-        return JumpBackInCollectionCellUX.verticalCellSpacing
+        return 0
+    }
+
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, insetForSectionAt section: Int) -> UIEdgeInsets {
+        return UIEdgeInsets(top: JumpBackInCollectionCellUX.generalSpacing,
+                            left: JumpBackInCollectionCellUX.sectionInsetSpacing,
+                            bottom: JumpBackInCollectionCellUX.generalSpacing,
+                            right: JumpBackInCollectionCellUX.sectionInsetSpacing)
     }
 }
 
 private struct JumpBackInCellUX {
-    static let generalCornerRadius: CGFloat = 4
+    static let generalCornerRadius: CGFloat = 12
     static let titleFontSize: CGFloat = 17
+    static let siteFontSize: CGFloat = 15
     static let detailsFontSize: CGFloat = 12
     static let labelsWrapperSpacing: CGFloat = 4
     static let stackViewSpacing: CGFloat = 8
     static let stackViewShadowRadius: CGFloat = 4
     static let stackViewShadowOffset: CGFloat = 2
-    static let heroImageDimension: CGFloat = 24
+    static let heroImageWidth: CGFloat = 108
+    static let heroImageHeight: CGFloat = 80
 }
 
+// MARK: - JumpBackInCell
 /// A cell used in FxHomeScreen's Jump Back In section.
-class JumpBackInCell: UICollectionViewCell {
+class JumpBackInCell: UICollectionViewCell, ReusableCell {
 
-    // MARK: - Properties
-    static let cellIdentifier = "jumpBackInCell"
-
-    // UI
+    // MARK: - UI Elements
     let heroImage: UIImageView = .build { imageView in
-        imageView.contentMode = .scaleAspectFit
+        imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
         imageView.layer.masksToBounds = true
         imageView.layer.cornerRadius = JumpBackInCellUX.generalCornerRadius
+        imageView.backgroundColor = .systemBackground
     }
 
     let itemTitle: UILabel = .build { label in
         label.adjustsFontSizeToFitWidth = false
         label.font = UIFont.systemFont(ofSize: JumpBackInCellUX.titleFontSize)
+        label.numberOfLines = 2
     }
 
     let itemDetails: UILabel = .build { label in
@@ -179,12 +203,17 @@ class JumpBackInCell: UICollectionViewCell {
         label.font = UIFont.systemFont(ofSize: JumpBackInCellUX.detailsFontSize)
     }
 
-    let stackView: UIStackView = .build { stackView in
-        stackView.axis = .vertical
-        stackView.alignment = .leading
-        stackView.distribution = .fillProportionally
-        stackView.spacing = 2
-        stackView.translatesAutoresizingMaskIntoConstraints = false
+    let faviconImage: UIImageView = .build { imageView in
+        imageView.contentMode = .scaleAspectFit
+        imageView.clipsToBounds = true
+        imageView.layer.masksToBounds = true
+        imageView.layer.cornerRadius = JumpBackInCellUX.generalCornerRadius
+    }
+
+    let siteNameLabel: UILabel = .build { label in
+        label.adjustsFontSizeToFitWidth = false
+        label.font = UIFont.systemFont(ofSize: JumpBackInCellUX.siteFontSize)
+        label.textColor = .label
     }
 
     // MARK: - Inits
@@ -201,6 +230,20 @@ class JumpBackInCell: UICollectionViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        heroImage.image = nil
+        faviconImage.image = nil
+        siteNameLabel.text = nil
+        itemDetails.text = nil
+        itemTitle.text = nil
+        applyTheme()
+    }
+
     // MARK: - Helpers
     private func setupObservers() {
         NotificationCenter.default.addObserver(self, selector: #selector(handleNotifications), name: .DisplayThemeChanged, object: nil)
@@ -213,24 +256,26 @@ class JumpBackInCell: UICollectionViewCell {
         contentView.layer.shadowColor = UIColor.theme.homePanel.shortcutShadowColor
         contentView.layer.shadowOpacity = 0.12
 
-        stackView.addArrangedSubview(itemTitle)
-        stackView.addArrangedSubview(itemDetails)
-        contentView.addSubview(heroImage)
-        contentView.addSubview(stackView)
+        contentView.addSubviews(heroImage, itemTitle, faviconImage, siteNameLabel)
 
         NSLayoutConstraint.activate([
             heroImage.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            heroImage.heightAnchor.constraint(equalToConstant: JumpBackInCellUX.heroImageDimension),
-            heroImage.widthAnchor.constraint(equalToConstant: JumpBackInCellUX.heroImageDimension),
+            heroImage.heightAnchor.constraint(equalToConstant: JumpBackInCellUX.heroImageHeight),
+            heroImage.widthAnchor.constraint(equalToConstant: JumpBackInCellUX.heroImageWidth),
             heroImage.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
 
-            itemTitle.heightAnchor.constraint(equalToConstant: 22),
-            itemDetails.heightAnchor.constraint(lessThanOrEqualToConstant: 16),
+            itemTitle.topAnchor.constraint(equalTo: heroImage.topAnchor),
+            itemTitle.leadingAnchor.constraint(equalTo: heroImage.trailingAnchor, constant: 20),
+            itemTitle.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
 
-            stackView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 10),
-            stackView.leadingAnchor.constraint(equalTo: heroImage.trailingAnchor, constant: 12),
-            stackView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
-            stackView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -10)
+            faviconImage.leadingAnchor.constraint(equalTo: heroImage.trailingAnchor, constant: 20),
+            faviconImage.bottomAnchor.constraint(equalTo: heroImage.bottomAnchor),
+            faviconImage.heightAnchor.constraint(equalToConstant: 24),
+            faviconImage.widthAnchor.constraint(equalToConstant: 24),
+
+            siteNameLabel.leadingAnchor.constraint(equalTo: faviconImage.trailingAnchor, constant: 8),
+            siteNameLabel.centerYAnchor.constraint(equalTo: faviconImage.centerYAnchor),
+            siteNameLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
         ])
     }
 
@@ -243,9 +288,17 @@ class JumpBackInCell: UICollectionViewCell {
     }
 }
 
-extension JumpBackInCell: Themeable {
+extension JumpBackInCell: NotificationThemeable {
     func applyTheme() {
-        contentView.backgroundColor = UIColor.theme.homePanel.recentlySavedBookmarkCellBackground
-        itemDetails.textColor = UIColor.theme.homePanel.activityStreamCellDescription
+        if LegacyThemeManager.instance.currentName == .dark {
+            [itemTitle, siteNameLabel, itemDetails].forEach { $0.textColor = UIColor.Photon.LightGrey10 }
+            faviconImage.tintColor = UIColor.Photon.LightGrey10
+            contentView.backgroundColor = UIColor.theme.homePanel.recentlySavedBookmarkCellBackground
+        } else {
+            [itemTitle, siteNameLabel, itemDetails].forEach { $0.textColor = UIColor.Photon.DarkGrey90 }
+            faviconImage.tintColor = UIColor.Photon.DarkGrey90
+            contentView.backgroundColor = UIColor.theme.homePanel.recentlySavedBookmarkCellBackground
+        }
     }
+
 }

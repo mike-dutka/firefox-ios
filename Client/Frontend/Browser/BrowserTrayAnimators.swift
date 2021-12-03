@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import UIKit
 import Shared
@@ -134,7 +134,7 @@ private extension BrowserToTrayAnimator {
 
         // Force subview layout on the collection view so we can calculate the correct end frame for the animation
         tabTray.view.layoutIfNeeded()
-        tabTray.focusTab()
+        tabTray.focusItem()
 
         // Build a tab cell that we will use to animate the scaling of the browser to the tab
         let expandedFrame = calculateExpandedCellFrameFromBVC(bvc)

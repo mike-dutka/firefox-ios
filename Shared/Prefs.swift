@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import Foundation
 
@@ -28,7 +28,6 @@ public struct PrefsKeys {
     public static let KeyETPCoverSheetShowType = "etpCoverSheetShowType"
     public static let KeyDefaultBrowserCardShowType = "defaultBrowserCardShowType"
     public static let KeyDidShowDefaultBrowserOnboarding = "didShowDefaultBrowserOnboarding"
-    public static let ShowNewTabToolbarButton = "newTabToolbarButton"
     public static let ContextMenuShowLinkPreviews = "showLinkPreviews"
     public static let NewTabCustomUrlPrefKey = "HomePageURLPref"
     public static let ChronTabsPrefKey = "chronTabsPrefKey"
@@ -39,7 +38,11 @@ public struct PrefsKeys {
     public static let KeyCurrentInstallVersion = "KeyCurrentInstallVersion"
     public static let KeySecondRun = "SecondRun"
     public static let StartAtHome = "startAtHome"
+    public static let PullToRefresh = "pullToRefresh"
     
+    // Firefox contextual hint
+    public static let ContextualHintJumpBackinKey = "ContextualHintJumpBackin"
+
     // Activity Stream
     public static let KeyTopSitesCacheIsValid = "topSitesCacheIsValid"
     public static let KeyTopSitesCacheSize = "topSitesCacheSize"
@@ -56,17 +59,23 @@ public struct PrefsKeys {
     public static let AppExtensionTelemetryOpenUrl = "AppExtensionTelemetryOpenUrl"
     public static let AppExtensionTelemetryEventArray = "AppExtensionTelemetryEvents"
     public static let KeyBlockPopups = "blockPopups"
-    public static let recentlySavedSectionEnabled = "recentlySavedSectionEnabled"
-    public static let jumpBackInSectionEnabled = "jumpBackInSectionEnabled"
-    
+    public static let RecentlySavedSectionEnabled = "recentlySavedSectionEnabled"
+    public static let JumpBackInSectionEnabled = "jumpBackInSectionEnabled"
+    public static let HistoryHighlightsSectionEnabled = "recentlySavedSectionEnabled"
+
     // Tabs Tray
     public static let KeyEnableInactiveTabs = "KeyInactiveTabs"
     public static let KeyInactiveTabsModel = "KeyInactiveTabsModel"
     public static let KeyInactiveTabsFirstTimeRun = "KeyInactiveTabsFirstTimeRun"
-    
+    public static let KeyEnableGroupedTabs = "KeyEnableGroupedTabs"
+    public static let KeyTabDisplayOrder = "KeyTabDisplayOrder"
+
     // Widgetkit Key
     public static let WidgetKitSimpleTabKey = "WidgetKitSimpleTabKey"
     public static let WidgetKitSimpleTopTab = "WidgetKitSimpleTopTab"
+
+    // ThemeManager key
+    public static let ThemeManagerCustomizationKey = "ThemeManagerCustomizationKey"
 }
 
 public struct PrefsDefaults {

@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import Foundation
 import MozillaAppServices
@@ -116,6 +116,8 @@ enum Experiments {
     static func usePreviewCollection(storage: UserDefaults = .standard) -> Bool {
         storage.bool(forKey: NIMBUS_USE_PREVIEW_COLLECTION_KEY)
     }
+    
+    static var customTargetingAttributes: [String: String] = [:]
 
     static var serverSettings: NimbusServerSettings? = {
         // If no URL is specified, or it's not valid continue with as if
@@ -138,7 +140,7 @@ enum Experiments {
 
     /// The `NimbusApi` object. This is the entry point to do anything with the Nimbus SDK on device.
     public static var shared: NimbusApi = {
-        guard FeatureFlagsManager.shared.isFeatureActive(.nimbus) else {
+        guard FeatureFlagsManager.shared.isFeatureActiveForBuild(.nimbus) else {
             return NimbusDisabled.shared
         }
 
@@ -152,7 +154,8 @@ enum Experiments {
         // thinks it is.
         let appSettings = NimbusAppSettings(
             appName: nimbusAppName,
-            channel: AppConstants.BuildChannel.nimbusString
+            channel: AppConstants.BuildChannel.nimbusString,
+            customTargetingAttributes: Experiments.customTargetingAttributes
         )
 
         let errorReporter: NimbusErrorReporter = { err in

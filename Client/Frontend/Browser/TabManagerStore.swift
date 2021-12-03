@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import Foundation
 import Storage
@@ -29,17 +29,6 @@ class TabManagerStore: FeatureFlagsProtocol {
 
     var isRestoringTabs: Bool {
         return lockedForReading
-    }
-    
-    var shouldOpenHome: Bool {
-        let isColdLaunch = NSUserDefaultsPrefs(prefix: "profile").boolForKey("isColdLaunch")
-        guard let coldLaunch = isColdLaunch, featureFlags.isFeatureActive(.startAtHome) else { return false }
-        
-        let lastActiveTimestamp = UserDefaults.standard.object(forKey: "LastActiveTimestamp") as? Date ?? Date()
-        let dateComponents = Calendar.current.dateComponents([.hour], from: lastActiveTimestamp, to: Date())
-        let hours = dateComponents.hour ?? 0
-        
-        return hours > 4 || coldLaunch
     }
 
     var hasTabsToRestoreAtStartup: Bool {
@@ -70,7 +59,7 @@ class TabManagerStore: FeatureFlagsProtocol {
                 }
             }
         }
-        
+
         // Clean up any screenshots that are no longer associated with a tab.
         _ = imageStore?.clearExcluding(savedUUIDs)
         return savedTabs.isEmpty ? nil : savedTabs
@@ -82,6 +71,12 @@ class TabManagerStore: FeatureFlagsProtocol {
         }
     }
     
+    func removeScreenshot(forTab tab: Tab?) {
+        if let tab = tab, let screenshotUUID = tab.screenshotUUID {
+            imageStore?.removeImage(screenshotUUID.uuidString)
+        }
+    }
+
     // Async write of the tab state. In most cases, code doesn't care about performing an operation
     // after this completes. Deferred completion is called always, regardless of Data.write return value.
     // Write failures (i.e. due to read locks) are considered inconsequential, as preserveTabs will be called frequently.
@@ -101,14 +96,14 @@ class TabManagerStore: FeatureFlagsProtocol {
 
         archiver.encode(savedTabs, forKey: "tabs")
         archiver.finishEncoding()
-        
+
         let simpleTabs = SimpleTab.convertToSimpleTabs(savedTabs)
-        
+
 
         let result = Success()
         writeOperation = DispatchWorkItem {
             let written = tabStateData.write(toFile: path, atomically: true)
-            
+
             SimpleTab.saveSimpleTab(tabs: simpleTabs)
             // Ignore write failure (could be restoring).
             log.debug("PreserveTabs write ok: \(written), bytes: \(tabStateData.length)")
@@ -131,9 +126,8 @@ class TabManagerStore: FeatureFlagsProtocol {
         assertIsMainThread("Restoration is a main-only operation")
         guard !lockedForReading, savedTabs.count > 0 else { return nil }
         lockedForReading = true
-        defer {
-            lockedForReading = false
-        }
+        defer { lockedForReading = false }
+        
         var savedTabs = savedTabs
         // Make sure to wipe the private tabs if the user has the pref turned on
         if clearPrivateTabs {
@@ -141,9 +135,7 @@ class TabManagerStore: FeatureFlagsProtocol {
         }
 
         var tabToSelect: Tab?
-        var fxHomeTab: Tab?
-        var customHomeTab: Tab?
-        
+
         for savedTab in savedTabs {
             // Provide an empty request to prevent a new tab from loading the home screen
             var tab = tabManager.addTab(flushToDisk: false, zombie: true, isPrivate: savedTab.isPrivate)
@@ -151,33 +143,12 @@ class TabManagerStore: FeatureFlagsProtocol {
             if savedTab.isSelected {
                 tabToSelect = tab
             }
-            
-            fxHomeTab = tab.isFxHomeTab ? tab : nil
-            customHomeTab = tab.isCustomHomeTab ? customHomeTab : nil
         }
 
         if tabToSelect == nil {
             tabToSelect = tabManager.tabs.first(where: { $0.isPrivate == false })
         }
-        
-        if shouldOpenHome {
-            let page = NewTabAccessors.getHomePage(prefs)
-            let customUrl = HomeButtonHomePageAccessors.getHomePage(prefs)
-            let homeUrl = URL(string: "internal://local/about/home")
-            
-            if page == .homePage, let customUrl = customUrl {
-                return customHomeTab ?? tabManager.addTab(URLRequest(url: customUrl))
-            } else if page == .topSites, let homeUrl = homeUrl {
-                let home = fxHomeTab ?? tabManager.addTab()
-                home.loadRequest(PrivilegedRequest(url: homeUrl) as URLRequest)
-                home.url = homeUrl
-                return home
-            }
-            else {
-                tabToSelect = tabManager.addTab()
-            }
-        }
-        
+
         return tabToSelect
     }
 
@@ -195,3 +166,4 @@ extension TabManagerStore {
         return SiteArchiver.tabsToRestore(tabsStateArchivePath: tabsStateArchivePath()).0.count
     }
 }
+

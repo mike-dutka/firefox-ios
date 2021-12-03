@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import UIKit
 
@@ -50,9 +50,13 @@ class RecentlyClosedTabsPanel: UIViewController, LibraryPanel {
         tableViewController.didMove(toParent: self)
 
         self.view.addSubview(tableViewController.view)
-        tableViewController.view.snp.makeConstraints { make in
-            make.edges.equalTo(self.view)
-        }
+        
+        NSLayoutConstraint.activate([
+            tableViewController.view.topAnchor.constraint(equalTo: view.topAnchor),
+            tableViewController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tableViewController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            tableViewController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
+        ])
     }
 }
 
@@ -104,7 +108,7 @@ class RecentlyClosedTabsPanelSiteTableViewController: SiteTableViewController {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        recentlyClosedTabsDelegate?.openRecentlyClosedSiteInSameTab(recentlyClosedTabs[indexPath.row].url)
+        recentlyClosedTabsDelegate?.openRecentlyClosedSiteInNewTab(recentlyClosedTabs[indexPath.row].url, isPrivate: false)
         let visitType = VisitType.typed    // Means History, too.
         libraryPanelDelegate?.libraryPanel(didSelectURL: recentlyClosedTabs[indexPath.row].url, visitType: visitType)
     }
@@ -149,7 +153,7 @@ extension RecentlyClosedTabsPanelSiteTableViewController: LibraryPanelContextMen
     }
 }
 
-extension RecentlyClosedTabsPanel: Themeable {
+extension RecentlyClosedTabsPanel: NotificationThemeable {
     func applyTheme() {
         tableViewController.tableView.reloadData()
     }

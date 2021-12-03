@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import Shared
 import Storage
@@ -14,14 +14,22 @@ class TabTrayViewModel {
     let tabTrayView: TabTrayViewDelegate
     let syncedTabsController: RemoteTabsPanel
 
-    init(tabTrayDelegate: TabTrayDelegate? = nil, profile: Profile, showChronTabs: Bool = false) {
+    var normalTabsCount: String {
+        (tabManager.normalTabs.count < 100) ? tabManager.normalTabs.count.description : "\u{221E}"
+    }
+
+    init(tabTrayDelegate: TabTrayDelegate? = nil,
+         profile: Profile,
+         showChronTabs: Bool = false,
+         tabToFocus: Tab? = nil,
+         tabManager: TabManager) {
         self.profile = profile
-        self.tabManager = BrowserViewController.foregroundBVC().tabManager
+        self.tabManager = tabManager
 
         if showChronTabs {
             self.tabTrayView = ChronologicalTabsViewController(tabTrayDelegate: tabTrayDelegate, profile: self.profile)
         } else {
-            self.tabTrayView = GridTabViewController(tabManager: self.tabManager, profile: profile, tabTrayDelegate: tabTrayDelegate)
+            self.tabTrayView = GridTabViewController(tabManager: self.tabManager, profile: profile, tabTrayDelegate: tabTrayDelegate, tabToFocus: tabToFocus)
         }
         self.syncedTabsController = RemoteTabsPanel(profile: self.profile)
     }
@@ -30,9 +38,9 @@ class TabTrayViewModel {
         if foriPhone {
             switch segmentIndex {
             case 0, 1:
-                return Strings.TabTrayV2Title
+                return .TabTrayV2Title
             case 2:
-                return Strings.AppMenuSyncedTabsTitleString
+                return .AppMenuSyncedTabsTitleString
             default:
                 return nil
             }

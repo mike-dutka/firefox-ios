@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0
 
 import XCTest
 
@@ -53,7 +53,11 @@ class PhotonActionSheetTest: BaseTestCase {
         pageObjectButtonCenter.press(forDuration: 1)
 
         // Wait to see the Share options sheet
-        waitForExistence(app.buttons["Close"], timeout: 15)
+        if iPad() {
+            waitForExistence(app.buttons["Copy"], timeout: 15)
+        } else {
+            waitForExistence(app.buttons["Close"], timeout: 15)
+        }
     }
 
     func testSendToDeviceFromPageOptionsMenu() {
