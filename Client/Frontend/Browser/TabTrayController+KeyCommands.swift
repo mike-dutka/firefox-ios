@@ -7,21 +7,28 @@ import UIKit
 
 extension GridTabViewController {
     override var keyCommands: [UIKeyCommand]? {
-        let toggleText: String = tabDisplayManager.isPrivate ? .SwitchToNonPBMKeyCodeTitle: .SwitchToPBMKeyCodeTitle
+        let toggleText: String = tabDisplayManager.isPrivate ? .KeyboardShortcuts.NormalBrowsingMode: .KeyboardShortcuts.PrivateBrowsingMode
         let commands = [
-            UIKeyCommand(action: #selector(didTogglePrivateModeKeyCommand), input: "`", modifierFlags: .command,  discoverabilityTitle: toggleText),
+            UIKeyCommand(action: #selector(didTogglePrivateModeKeyCommand), input: "`", modifierFlags: .command, discoverabilityTitle: toggleText),
             UIKeyCommand(input: "w", modifierFlags: .command, action: #selector(didCloseTabKeyCommand)),
 
-            UIKeyCommand(action: #selector(didCloseAllTabsKeyCommand), input: "w", modifierFlags: [.command, .shift],  discoverabilityTitle: .CloseAllTabsFromTabTrayKeyCodeTitle),
+            UIKeyCommand(action: #selector(didCloseAllTabsKeyCommand), input: "w", modifierFlags: [.command, .shift], discoverabilityTitle: .KeyboardShortcuts.CloseAllTabsInTabTray),
             UIKeyCommand(input: "\\", modifierFlags: [.command, .shift], action: #selector(didEnterTabKeyCommand)),
             UIKeyCommand(input: "\t", modifierFlags: [.command, .alternate], action: #selector(didEnterTabKeyCommand)),
-            UIKeyCommand(action: #selector(didOpenNewTabKeyCommand), input: "t", modifierFlags: .command, discoverabilityTitle: .OpenNewTabFromTabTrayKeyCodeTitle),
+            UIKeyCommand(action: #selector(didOpenNewTabKeyCommand), input: "t", modifierFlags: .command, discoverabilityTitle: .KeyboardShortcuts.OpenNewTabInTabTray),
+        ]
 
+        let arrowKeysCommands = [
             UIKeyCommand(input: UIKeyCommand.inputDownArrow, modifierFlags: [], action: #selector(didChangeSelectedTabKeyCommand(sender:))),
             UIKeyCommand(input: UIKeyCommand.inputUpArrow, modifierFlags: [], action: #selector(didChangeSelectedTabKeyCommand(sender:))),
         ]
 
-        return commands
+        // In iOS 15+, certain keys events are delivered to the text input or focus systems first, unless specified otherwise
+        if #available(iOS 15, *) {
+            arrowKeysCommands.forEach { $0.wantsPriorityOverSystemBehavior = true }
+        }
+
+        return commands + arrowKeysCommands
     }
 
     @objc func didTogglePrivateModeKeyCommand() {
@@ -38,12 +45,12 @@ extension GridTabViewController {
 
     @objc func didCloseAllTabsKeyCommand() {
         TelemetryWrapper.recordEvent(category: .action, method: .press, object: .keyCommand, extras: ["action": "close-all-tabs"])
-        closeTabsForCurrentTray()
+        closeTabsTrayBackground()
     }
 
     @objc func didEnterTabKeyCommand() {
         TelemetryWrapper.recordEvent(category: .action, method: .press, object: .keyCommand, extras: ["action": "enter-tab"])
-        _ = self.navigationController?.popViewController(animated: true)
+        dismissVC()
     }
 
     @objc func didOpenNewTabKeyCommand() {

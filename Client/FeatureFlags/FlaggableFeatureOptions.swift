@@ -9,13 +9,13 @@ import Foundation
 /// the FlaggableFeatureOptions protocol.
 protocol FlaggableFeatureOptions { }
 
-enum UserFeaturePreference: String, FlaggableFeatureOptions {
-    case enabled
-    case disabled
-}
-
 enum StartAtHomeSetting: String, FlaggableFeatureOptions {
     case afterFourHours
     case always
     case disabled
+}
+
+enum WallpaperVersion: String, FlaggableFeatureOptions {
+    case legacy
+    case v1
 }

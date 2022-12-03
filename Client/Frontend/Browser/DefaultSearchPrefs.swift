@@ -26,8 +26,8 @@ final class DefaultSearchPrefs {
         }
 
         // Split up the JSON into useful parts
-        locales = json["locales"] as? [String : Any]
-        regionOverrides = json["regionOverrides"] as? [String : Any]
+        locales = json["locales"] as? [String: Any]
+        regionOverrides = json["regionOverrides"] as? [String: Any]
         // These are the fallback defaults
         guard let defaultDict = json["default"] as? [String: Any],
               let searchList = defaultDict["visibleDefaultEngines"] as? [String],
@@ -40,7 +40,7 @@ final class DefaultSearchPrefs {
     }
 
     /*
-     Returns an array of the visibile engines. It overrides any of the returned engines from the regionOverrides list
+     Returns an array of the visible engines. It overrides any of the returned engines from the regionOverrides list
      Each language in the locales list has a default list of engines and then a region override list.
      */
     public func visibleDefaultEngines(for possibleLocales: [String], and region: String) -> [String] {
@@ -50,7 +50,7 @@ final class DefaultSearchPrefs {
             }
             .compactMap { localDict -> [String]? in
                 let visibleDefaultEngines = "visibleDefaultEngines"
-                
+
                 if let inner = localDict[region] as? [String: Any],
                    let array = inner[visibleDefaultEngines] as? [String] {
                     return array

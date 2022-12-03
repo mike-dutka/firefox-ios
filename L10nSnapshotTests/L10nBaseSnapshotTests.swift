@@ -14,7 +14,12 @@ class L10nBaseSnapshotTests: XCTestCase {
     var navigator: MMNavigator<FxUserState>!
     var userState: FxUserState!
 
-    var args = [LaunchArguments.ClearProfile, LaunchArguments.SkipWhatsNew, LaunchArguments.SkipETPCoverSheet,LaunchArguments.SkipIntro, LaunchArguments.SkipContextualHintJumpBackIn, LaunchArguments.ChronTabs]
+    var args = [LaunchArguments.ClearProfile,
+                LaunchArguments.SkipWhatsNew,
+                LaunchArguments.SkipETPCoverSheet,
+                LaunchArguments.SkipIntro,
+                LaunchArguments.SkipContextualHints,
+                LaunchArguments.TurnOffTabGroupsInUserPreferences]
 
     override func setUp() {
         super.setUp()
@@ -48,7 +53,10 @@ class L10nBaseSnapshotTests: XCTestCase {
             let result = XCTWaiter().wait(for: [expectation], timeout: timeout)
             if result != .completed {
                 let message = description ?? "Expect predicate \(predicateString) for \(element.description)"
-                self.recordFailure(withDescription: message, inFile: file, atLine: Int(line), expected: false)
+                var issue = XCTIssue(type: .assertionFailure, compactDescription: message)
+                let location = XCTSourceCodeLocation(filePath: file, lineNumber: Int(line))
+                issue.sourceCodeContext = XCTSourceCodeContext(location: location)
+                self.record(issue)
             }
         }
 

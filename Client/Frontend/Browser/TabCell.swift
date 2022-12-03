@@ -12,7 +12,7 @@ protocol TabTrayCell where Self: UICollectionViewCell {
     var isSelectedTab: Bool { get }
 
     /// Configure a tab cell using a Tab object, setting it's selected state at the same time
-    func configureWith(tab: Tab, isSelected selected: Bool)
+    func configureWith(tab: Tab, isSelected selected: Bool, theme: Theme)
 }
 
 // MARK: - Tab Cell
@@ -29,33 +29,27 @@ class TabCell: UICollectionViewCell, TabTrayCell, ReusableCell {
     lazy var backgroundHolder: UIView = .build { view in
         view.layer.cornerRadius = GridTabTrayControllerUX.CornerRadius
         view.clipsToBounds = true
-        view.backgroundColor = UIColor.theme.tabTray.cellBackground
     }
 
     lazy private var faviconBG: UIView = .build { view in
-        view.layer.cornerRadius = TopSiteCellUX.CellCornerRadius
-        view.layer.borderWidth = TopSiteCellUX.BorderWidth
+        view.layer.cornerRadius = TopSiteItemCell.UX.cellCornerRadius
+        view.layer.borderWidth = TopSiteItemCell.UX.borderWidth
         view.layer.shadowOffset = CGSize(width: 0, height: 2)
-        view.layer.shadowRadius = TopSiteCellUX.ShadowRadius
-        view.backgroundColor = UIColor.theme.homePanel.shortcutBackground
-        view.layer.borderColor = TopSiteCellUX.BorderColor.cgColor
-        view.layer.shadowColor = UIColor.theme.homePanel.shortcutShadowColor
-        view.layer.shadowOpacity = UIColor.theme.homePanel.shortcutShadowOpacity
+        view.layer.shadowRadius = TopSiteItemCell.UX.shadowRadius
     }
 
     lazy var screenshotView: UIImageView = .build { view in
         view.contentMode = .scaleAspectFill
         view.clipsToBounds = true
         view.isUserInteractionEnabled = false
-        view.backgroundColor = UIColor.theme.tabTray.screenshotBackground
     }
-    
+
     lazy var smallFaviconView: UIImageView = .build { view in
         view.contentMode = .scaleAspectFill
         view.clipsToBounds = true
         view.isUserInteractionEnabled = false
         view.backgroundColor = UIColor.clear
-        view.layer.cornerRadius = TopSiteCellUX.IconCornerRadius
+        view.layer.cornerRadius = TopSiteItemCell.UX.iconCornerRadius
         view.layer.masksToBounds = true
     }
 
@@ -63,7 +57,6 @@ class TabCell: UICollectionViewCell, TabTrayCell, ReusableCell {
         label.isUserInteractionEnabled = false
         label.numberOfLines = 1
         label.font = DynamicFontHelper.defaultHelper.DefaultSmallFontBold
-        label.textColor = UIColor.theme.tabTray.tabTitleText
     }
 
     lazy var favicon: UIImageView = .build { favicon in
@@ -76,10 +69,10 @@ class TabCell: UICollectionViewCell, TabTrayCell, ReusableCell {
         button.setImage(UIImage.templateImageNamed("tab_close"), for: [])
         button.imageView?.contentMode = .scaleAspectFit
         button.contentMode = .center
-        button.tintColor = UIColor.theme.tabTray.cellCloseButton
         button.imageEdgeInsets = UIEdgeInsets(equalInset: GridTabTrayControllerUX.CloseButtonEdgeInset)
     }
 
+    // TODO: Handle visual effects theming FXIOS-5064
     var title = UIVisualEffectView(effect: UIBlurEffect(style: UIColor.theme.tabTray.tabTitleBlur))
     var animator: SwipeAnimator?
     var isSelectedTab = false
@@ -113,7 +106,7 @@ class TabCell: UICollectionViewCell, TabTrayCell, ReusableCell {
 
         setupConstraint()
     }
-    
+
     func setupConstraint() {
         NSLayoutConstraint.activate([
             backgroundHolder.topAnchor.constraint(equalTo: contentView.topAnchor),
@@ -127,14 +120,14 @@ class TabCell: UICollectionViewCell, TabTrayCell, ReusableCell {
             title.heightAnchor.constraint(equalToConstant: GridTabTrayControllerUX.TextBoxHeight),
 
             favicon.leadingAnchor.constraint(equalTo: title.leadingAnchor, constant: 6),
-            favicon.topAnchor.constraint(equalTo: title.topAnchor , constant: (GridTabTrayControllerUX.TextBoxHeight - GridTabTrayControllerUX.FaviconSize) / 2),
+            favicon.topAnchor.constraint(equalTo: title.topAnchor, constant: (GridTabTrayControllerUX.TextBoxHeight - GridTabTrayControllerUX.FaviconSize) / 2),
             favicon.heightAnchor.constraint(equalToConstant: GridTabTrayControllerUX.FaviconSize),
             favicon.widthAnchor.constraint(equalToConstant: GridTabTrayControllerUX.FaviconSize),
 
             closeButton.heightAnchor.constraint(equalToConstant: GridTabTrayControllerUX.CloseButtonSize),
             closeButton.widthAnchor.constraint(equalToConstant: GridTabTrayControllerUX.CloseButtonSize),
             closeButton.centerYAnchor.constraint(equalTo: title.contentView.centerYAnchor),
-            closeButton.rightAnchor.constraint(equalTo: title.rightAnchor),
+            closeButton.trailingAnchor.constraint(equalTo: title.trailingAnchor),
 
             titleText.leadingAnchor.constraint(equalTo: favicon.trailingAnchor, constant: 6),
             titleText.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: 6),
@@ -147,16 +140,16 @@ class TabCell: UICollectionViewCell, TabTrayCell, ReusableCell {
 
             faviconBG.centerYAnchor.constraint(equalTo: centerYAnchor, constant: 10),
             faviconBG.centerXAnchor.constraint(equalTo: centerXAnchor),
-            faviconBG.heightAnchor.constraint(equalToConstant: TopSiteCellUX.BackgroundSize.height),
-            faviconBG.widthAnchor.constraint(equalToConstant: TopSiteCellUX.BackgroundSize.width),
+            faviconBG.heightAnchor.constraint(equalToConstant: TopSiteItemCell.UX.imageBackgroundSize.height),
+            faviconBG.widthAnchor.constraint(equalToConstant: TopSiteItemCell.UX.imageBackgroundSize.width),
 
-            smallFaviconView.heightAnchor.constraint(equalToConstant: TopSiteCellUX.IconSize.height),
-            smallFaviconView.widthAnchor.constraint(equalToConstant: TopSiteCellUX.IconSize.width),
+            smallFaviconView.heightAnchor.constraint(equalToConstant: TopSiteItemCell.UX.iconSize.height),
+            smallFaviconView.widthAnchor.constraint(equalToConstant: TopSiteItemCell.UX.iconSize.width),
             smallFaviconView.centerYAnchor.constraint(equalTo: faviconBG.centerYAnchor),
             smallFaviconView.centerXAnchor.constraint(equalTo: faviconBG.centerXAnchor),
         ])
     }
-    
+
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
@@ -168,23 +161,28 @@ class TabCell: UICollectionViewCell, TabTrayCell, ReusableCell {
     }
 
     // MARK: - Configure tab cell with a Tab
-    func configureWith(tab: Tab, isSelected selected: Bool) {
+    func configureWith(tab: Tab, isSelected selected: Bool, theme: Theme) {
         isSelectedTab = selected
 
-        titleText.text = getTabTrayTitle(tab: tab)
+        applyColors(theme)
+
+        titleText.text = tab.getTabTrayTitle()
         accessibilityLabel = getA11yTitleLabel(tab: tab)
         isAccessibilityElement = true
         accessibilityHint = .TabTraySwipeToCloseAccessibilityHint
 
+        favicon.image = UIImage(named: ImageIdentifiers.defaultFavicon)
+
         if let favIcon = tab.displayFavicon, let url = URL(string: favIcon.url) {
-            favicon.sd_setImage(with: url, placeholderImage: UIImage(named: "defaultFavicon"), options: [], completed: nil)
-        } else {
-            favicon.image = UIImage(named: "defaultFavicon")
-            favicon.tintColor = UIColor.theme.tabTray.faviconTint
+            ImageLoadingHandler.shared.getImageFromCacheOrDownload(with: url,
+                                                                   limit: ImageLoadingConstants.NoLimitImageSize) { image, error in
+                guard error == nil, let image = image else { return }
+                self.favicon.image = image
+            }
         }
 
         if selected {
-            setTabSelected(tab.isPrivate)
+            setTabSelected(tab.isPrivate, theme: theme)
         } else {
             layer.shadowOffset = .zero
             layer.shadowPath = nil
@@ -213,9 +211,18 @@ class TabCell: UICollectionViewCell, TabTrayCell, ReusableCell {
         }
     }
 
+    private func applyColors(_ theme: Theme) {
+        backgroundHolder.backgroundColor = theme.colors.layer1
+        closeButton.tintColor = theme.colors.indicatorActive
+        titleText.textColor = theme.colors.textPrimary
+        screenshotView.backgroundColor = theme.colors.layer1
+        favicon.tintColor = theme.colors.textPrimary
+    }
+
     override func prepareForReuse() {
         // Reset any close animations.
         super.prepareForReuse()
+        screenshotView.image = nil
         backgroundHolder.transform = .identity
         backgroundHolder.alpha = 1
         self.titleText.font = DynamicFontHelper.defaultHelper.DefaultSmallFontBold
@@ -243,9 +250,9 @@ class TabCell: UICollectionViewCell, TabTrayCell, ReusableCell {
         delegate?.tabCellDidClose(self)
     }
 
-    private func setTabSelected(_ isPrivate: Bool) {
+    private func setTabSelected(_ isPrivate: Bool, theme: Theme) {
         // This creates a border around a tabcell. Using the shadow creates a border _outside_ of the tab frame.
-        layer.shadowColor = (isPrivate ? UIColor.theme.tabTray.privateModePurple : UIConstants.SystemBlueColor).cgColor
+        layer.shadowColor = (isPrivate ? theme.colors.borderAccentPrivate : theme.colors.borderAccent).cgColor
         layer.shadowOpacity = 1
         layer.shadowRadius = 0 // A 0 radius creates a solid border instead of a gradient blur
         layer.masksToBounds = false
@@ -267,20 +274,8 @@ class TabCell: UICollectionViewCell, TabTrayCell, ReusableCell {
 // MARK: - Extension Tab Tray Cell protocol
 extension TabTrayCell {
 
-    /// Use the display title unless it's an empty string, then use the base domain from the url
-    func getTabTrayTitle(tab: Tab) -> String? {
-        let baseDomain = tab.sessionData?.urls.last?.baseDomain ?? tab.url?.baseDomain
-        var backUpName: String = "" // In case display title is empty
-        if let baseDomain = baseDomain {
-            backUpName = baseDomain.contains("local") ? .AppMenuOpenHomePageTitleString : baseDomain
-        } else if let url = tab.url, let about = InternalURL(url)?.aboutComponent {
-            backUpName = about
-        }
-        return tab.displayTitle.isEmpty ? backUpName : tab.displayTitle
-    }
-
     func getA11yTitleLabel(tab: Tab) -> String? {
-        let baseName = getTabTrayTitle(tab: tab)
+        let baseName = tab.getTabTrayTitle()
 
         if isSelectedTab, let baseName = baseName, !baseName.isEmpty {
             return baseName + ". " + String.TabTrayCurrentlySelectedTabAccessibilityLabel

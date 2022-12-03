@@ -4,23 +4,22 @@
 
 import UIKit
 import AuthenticationServices
-import SwiftKeychainWrapper
 
 let CredentialProviderAuthenticationDelay = 0.25
 
 class CredentialProviderPresenter {
     weak var view: CredentialProviderViewProtocol?
     public let profile: Profile
-    
+
     init(view: CredentialProviderViewProtocol, profile: Profile = ExtensionProfile(localName: "profile")) {
         self.view = view
         self.profile = profile
     }
-    
+
     func extensionConfigurationRequested() {
         view?.showWelcome()
     }
-        
+
     func showPasscodeRequirement() {
         view?.showPasscodeRequirement()
     }
@@ -43,7 +42,6 @@ class CredentialProviderPresenter {
             }
         }
     }
-    
 
     func showCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
     if self.profile.logins.reopenIfClosed() != nil {
@@ -54,15 +52,19 @@ class CredentialProviderPresenter {
                 case .failure:
                     self?.cancel(with: .failed)
                 case .success(let loginRecords):
-                    
+
                     var sortedLogins = loginRecords.sorted(by: <)
                     for (index, element) in sortedLogins.enumerated() {
-                        if let identifier = serviceIdentifiers.first?.identifier.asURL?.domainURL.absoluteString.titleFromHostname, element.passwordCredentialIdentity.serviceIdentifier.identifier.contains(identifier) {
+                        if let identifier = serviceIdentifiers
+                            .first?
+                            .identifier.asURL?.domainURL
+                            .absoluteString.titleFromHostname,
+                            element.passwordCredentialIdentity.serviceIdentifier.identifier.contains(identifier) {
                             sortedLogins.remove(at: index)
                             sortedLogins.insert(element, at: 0)
                         }
                     }
-                    
+
                     let dataSource = sortedLogins.map { ($0.passwordCredentialIdentity, $0.passwordCredential) }
                     DispatchQueue.main.async {
                         self?.view?.show(itemList: dataSource)
@@ -71,7 +73,6 @@ class CredentialProviderPresenter {
             }
         }
     }
-    
 
     func credentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
         // Force a short delay before we trigger authentication. See https://github.com/mozilla-mobile/firefox-ios/issues/9354

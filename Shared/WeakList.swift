@@ -42,6 +42,10 @@ open class WeakList<T: AnyObject>: Sequence {
         return items.count
     }
 
+    open var isEmpty: Bool {
+        return items.isEmpty
+    }
+
     open func removeAll() {
         items.removeAll()
     }
@@ -63,11 +67,11 @@ open class WeakList<T: AnyObject>: Sequence {
     open func firstIndexDel(where predicate: (WeakRef<T>) -> Bool) -> Int? {
         return items.firstIndex(where: predicate)
     }
-    
+
     open func makeIterator() -> AnyIterator<T> {
         var index = 0
 
-        return AnyIterator() {
+        return AnyIterator {
             if index >= self.items.count {
                 return nil
             }

@@ -1,21 +1,21 @@
+/* (No Comment) */
+"New Private Tab" = "לשונית פרטית חדשה";
+
+/* (No Comment) */
+"New Tab" = "לשונית חדשה";
+
 /* Privacy - Camera Usage Description */
-"NSCameraUsageDescription" = "רכיב זה מאפשר לך לצלם ולהעלות תמונות.";
+"NSCameraUsageDescription" = "‏Firefox משתמש במצלמה שלך כדי לסרוק קודי QR, לצלם תמונות ולהקליט סרטונים.";
 
 /* Privacy - Location When In Use Usage Description */
 "NSLocationWhenInUseUsageDescription" = "אתרים אליהם נכנסים עשויים לבקש את המיקום של המשתמש.";
 
 /* Privacy - Microphone Usage Description */
-"NSMicrophoneUsageDescription" = "רכיב זה מאפשר לך להסריט ולהעלות סרטונים.";
+"NSMicrophoneUsageDescription" = "‏Firefox משתמש במיקרופון שלך כדי להקליט ולהעלות אודיו.";
 
 /* Privacy - Photo Library Additions Usage Description */
 "NSPhotoLibraryAddUsageDescription" = "זה מאפשר לך לשמור תמונות.";
 
 /* (No Comment) */
-"ShortcutItemTitleNewPrivateTab" = "לשונית פרטית חדשה";
-
-/* (No Comment) */
-"ShortcutItemTitleNewTab" = "לשונית חדשה";
-
-/* (No Comment) */
-"ShortcutItemTitleQRCode" = "סריקת קוד QR";
+"Scan QR Code" = "סריקת קוד QR";
 

@@ -1,3 +1,7 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = NO
 ALWAYS_SEARCH_USER_PATHS = NO
 ALWAYS_USE_SEPARATE_HEADERMAPS = NO
@@ -12,7 +16,6 @@ DEVELOPMENT_TEAM = 43AQ936H96
 ENABLE_BITCODE = NO
 ENABLE_TESTABILITY = YES;
 ENABLE_STRICT_OBJC_MSGSEND = YES;
-FRAMEWORK_SEARCH_PATHS = $(PROJECT_DIR)/Carthage/Build/iOS
 GCC_DYNAMIC_NO_PIC = NO;
 HEADER_SEARCH_PATHS = $(inherited) /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include $(SRCROOT) $(SDKROOT)/usr/include/libxml2
 INCLUDE_SETTINGS_BUNDLE = NO

@@ -4,66 +4,36 @@
 
 import UIKit
 
-private struct RecentlyVisitedCellUX {
-    static let generalCornerRadius: CGFloat = 10
-    static let heroImageDimension: CGFloat = 24
-}
-
-struct RecentlyVisitedCellOptions {
-    let title: String
-    let heroImage: UIImage?
-    let corners: UIRectCorner?
-    let hideBottomLine: Bool
-    let isFillerCell: Bool
-
-    init(title: String,
-         shouldHideBottomLine: Bool,
-         with corners: UIRectCorner? = nil,
-         and heroImage: UIImage? = nil,
-         andIsFillerCell: Bool) {
-
-        self.title = title
-        self.hideBottomLine = shouldHideBottomLine
-        self.corners = corners
-        self.heroImage = heroImage
-        self.isFillerCell = andIsFillerCell
-    }
-
-    init(shouldHideBottomLine: Bool,
-         with corners: UIRectCorner? = nil,
-         andIsFillerCell: Bool) {
-
-        self.init(title: "",
-                  shouldHideBottomLine: shouldHideBottomLine,
-                  with: corners,
-                  and: nil,
-                  andIsFillerCell: andIsFillerCell)
-    }
-}
-
 /// A cell used in FxHomeScreen's History Highlights section.
-class HistoryHighlightsCell: UICollectionViewCell, ReusableCell {
+class HistoryHighlightsCell: BlurrableCollectionViewCell, ReusableCell {
+
+    struct UX {
+        static let verticalSpacing: CGFloat = 20
+        static let horizontalSpacing: CGFloat = 16
+        static let generalCornerRadius: CGFloat = 10
+        static let heroImageDimension: CGFloat = 24
+        static let shadowRadius: CGFloat = 4
+        static let shadowOffset: CGFloat = 2
+    }
 
     // MARK: - UI Elements
     let heroImage: UIImageView = .build { imageView in
         imageView.contentMode = .scaleAspectFit
         imageView.clipsToBounds = true
         imageView.layer.masksToBounds = true
-        imageView.layer.cornerRadius = RecentlyVisitedCellUX.generalCornerRadius
-        imageView.image = UIImage.templateImageNamed("recently_closed")
+        imageView.layer.cornerRadius = UX.generalCornerRadius
+        imageView.image = UIImage.templateImageNamed(ImageIdentifiers.stackedTabsIcon)
     }
 
     let itemTitle: UILabel = .build { label in
-        // Limiting max size to accomodate for non-self-sizing parent cell.
         label.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .body,
-                                                                   maxSize: 23)
+                                                                   size: 15)
         label.adjustsFontForContentSizeCategory = true
     }
 
     let itemDescription: UILabel = .build { label in
-        // Limiting max size to accomodate for non-self-sizing parent cell.
         label.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .caption1,
-                                                                   maxSize: 18)
+                                                                   size: 12)
         label.adjustsFontForContentSizeCategory = true
     }
 
@@ -86,17 +56,24 @@ class HistoryHighlightsCell: UICollectionViewCell, ReusableCell {
             itemTitle.isHidden = isFillerCell
             heroImage.isHidden = isFillerCell
             bottomLine.isHidden = isFillerCell
-//            self.isUserInteractionEnabled = isFillerCell
         }
     }
+
+    // MARK: - Variables
+    var notificationCenter: NotificationProtocol = NotificationCenter.default
+    private var cellModel: HistoryHighlightsModel?
 
     // MARK: - Inits
 
     override init(frame: CGRect) {
         super.init(frame: .zero)
 
+        isAccessibilityElement = true
+        accessibilityIdentifier = AccessibilityIdentifiers.FirefoxHomepage.HistoryHighlights.itemCell
+
         applyTheme()
-        setupObservers()
+        setupNotifications(forObserver: self,
+                           observing: [.DisplayThemeChanged])
         setupLayout()
     }
 
@@ -105,63 +82,125 @@ class HistoryHighlightsCell: UICollectionViewCell, ReusableCell {
     }
 
     deinit {
-        NotificationCenter.default.removeObserver(self)
+        notificationCenter.removeObserver(self)
     }
 
     // MARK: - Public methods
-    public func updateCell(with options: RecentlyVisitedCellOptions) {
+    public func updateCell(with options: HistoryHighlightsModel) {
+        cellModel = options
         itemTitle.text = options.title
+
+        if let descriptionCount = options.description {
+            itemDescription.text = descriptionCount
+            itemDescription.isHidden = false
+        }
+
         bottomLine.alpha = options.hideBottomLine ? 0 : 1
         isFillerCell = options.isFillerCell
-        itemDescription.isHidden = itemDescription.text?.isEmpty ?? false
+        accessibilityLabel = options.accessibilityLabel
 
-        if let corners = options.corners {
-            contentView.addRoundedCorners([corners], radius: RecentlyVisitedCellUX.generalCornerRadius)
-        }
+        heroImage.image = UIImage.templateImageNamed(ImageIdentifiers.stackedTabsIcon)
+        adjustLayout()
+    }
+
+    override func prepareForReuse() {
+        super.prepareForReuse()
+
+        heroImage.image = nil
+        itemDescription.isHidden = true
+
+        contentView.layer.shadowRadius = 0.0
+        contentView.layer.shadowOpacity = 0.0
+        contentView.layer.shadowPath = nil
     }
 
     // MARK: - Setup Helper methods
-    private func setupObservers() {
-        NotificationCenter.default.addObserver(self, selector: #selector(handleNotifications), name: .DisplayThemeChanged, object: nil)
-    }
-
     private func setupLayout() {
         contentView.addSubview(heroImage)
         contentView.addSubview(textStack)
         contentView.addSubview(bottomLine)
 
         NSLayoutConstraint.activate([
-            heroImage.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
-            heroImage.heightAnchor.constraint(equalToConstant: RecentlyVisitedCellUX.heroImageDimension),
-            heroImage.widthAnchor.constraint(equalToConstant: RecentlyVisitedCellUX.heroImageDimension),
+            heroImage.leadingAnchor.constraint(equalTo: contentView.leadingAnchor,
+                                               constant: UX.horizontalSpacing),
+            heroImage.heightAnchor.constraint(equalToConstant: UX.heroImageDimension),
+            heroImage.widthAnchor.constraint(equalToConstant: UX.heroImageDimension),
             heroImage.centerYAnchor.constraint(equalTo: textStack.centerYAnchor),
 
-            textStack.leadingAnchor.constraint(equalTo: heroImage.trailingAnchor, constant: 12),
-            textStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -8),
+            textStack.leadingAnchor.constraint(equalTo: heroImage.trailingAnchor,
+                                               constant: UX.horizontalSpacing),
+            textStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor,
+                                                constant: -UX.horizontalSpacing),
             textStack.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
 
             bottomLine.heightAnchor.constraint(equalToConstant: 0.5),
             bottomLine.leadingAnchor.constraint(equalTo: itemTitle.leadingAnchor),
-            bottomLine.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -25),
+            bottomLine.trailingAnchor.constraint(equalTo: contentView.trailingAnchor,
+                                                 constant: -UX.horizontalSpacing),
             bottomLine.bottomAnchor.constraint(equalTo: contentView.bottomAnchor)
         ])
     }
 
-    // MARK: - Nofications
-    @objc private func handleNotifications(_ notification: Notification) {
-        switch notification.name {
-        case .DisplayThemeChanged:
-            applyTheme()
-        default: break
+    private func setupShadow(_ shouldAddShadow: Bool, cornersToRound: CACornerMask?) {
+        contentView.layer.maskedCorners = cornersToRound ?? .layerMaxXMinYCorner
+        contentView.layer.cornerRadius = UX.generalCornerRadius
+
+        var needsShadow = shouldAddShadow
+        if let cornersToRound = cornersToRound {
+            needsShadow = cornersToRound.contains(.layerMinXMaxYCorner) ||
+                cornersToRound.contains(.layerMaxXMaxYCorner) ||
+                shouldAddShadow
+        }
+
+        if needsShadow {
+            let size: CGFloat = 5
+            let distance: CGFloat = 0
+            let rect = CGRect(
+                x: -size,
+                y: contentView.frame.height - (size * 0.4) + distance,
+                width: contentView.frame.width + size * 2,
+                height: size
+            )
+
+            contentView.layer.shadowColor = UIColor.theme.homePanel.shortcutShadowColor
+            contentView.layer.shadowRadius = UX.shadowRadius
+            contentView.layer.shadowOpacity = UIColor.theme.homePanel.shortcutShadowOpacity
+            contentView.layer.shadowPath = UIBezierPath(ovalIn: rect).cgPath
         }
     }
-}
 
-extension HistoryHighlightsCell: Themeable {
-    func applyTheme() {
+    private func applyTheme() {
         contentView.backgroundColor = UIColor.theme.homePanel.recentlySavedBookmarkCellBackground
         heroImage.tintColor = UIColor.theme.homePanel.recentlyVisitedCellGroupImage
         bottomLine.backgroundColor = UIColor.theme.homePanel.recentlyVisitedCellBottomLine
     }
+
+    private func adjustLayout() {
+        // If blur is disabled set background color
+        if shouldApplyWallpaperBlur {
+            contentView.addBlurEffectWithClearBackgroundAndClipping(using: .systemThickMaterial)
+            contentView.backgroundColor = .clear
+            contentView.layer.maskedCorners = cellModel?.corners ?? .layerMaxXMinYCorner
+            contentView.layer.cornerRadius = UX.generalCornerRadius
+        } else {
+            contentView.removeVisualEffectView()
+            contentView.backgroundColor = LegacyThemeManager.instance.current.homePanel.topSitesContainerView
+            setupShadow(cellModel?.shouldAddShadow ?? false, cornersToRound: cellModel?.corners)
+        }
+    }
 }
 
+// MARK: - Notifiable
+extension HistoryHighlightsCell: Notifiable {
+    func handleNotifications(_ notification: Notification) {
+        ensureMainThread { [weak self] in
+            switch notification.name {
+            case .DisplayThemeChanged:
+                self?.applyTheme()
+            case .WallpaperDidChange:
+                self?.adjustLayout()
+            default: break
+            }
+        }
+    }
+}

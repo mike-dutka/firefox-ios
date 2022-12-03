@@ -1,3 +1,9 @@
+/* (No Comment) */
+"New Private Tab" = "Cluaisín Nua Príobháideach";
+
+/* (No Comment) */
+"New Tab" = "Cluaisín Nua";
+
 /* Privacy - Camera Usage Description */
 "NSCameraUsageDescription" = "Ligeann seo duit pictiúir a thógáil agus a uaslódáil.";
 
@@ -8,14 +14,8 @@
 "NSMicrophoneUsageDescription" = "Ligeann seo duit físeáin a thógáil agus a uaslódáil.";
 
 /* Privacy - Photo Library Additions Usage Description */
-"NSPhotoLibraryAddUsageDescription" = "This lets you save photos.";
+"NSPhotoLibraryAddUsageDescription" = "Thug seo cumas duit pictiúir a shábháil.";
 
 /* (No Comment) */
-"ShortcutItemTitleNewPrivateTab" = "Cluaisín Nua Príobháideach";
-
-/* (No Comment) */
-"ShortcutItemTitleNewTab" = "Cluaisín Nua";
-
-/* (No Comment) */
-"ShortcutItemTitleQRCode" = "Scan QR Code";
+"Scan QR Code" = "Scan an cód QR";
 

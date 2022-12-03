@@ -18,7 +18,7 @@ struct EmptyPrivateTabsViewUX {
 // View we display when there are no private tabs created
 class EmptyPrivateTabsView: UIView {
     // MARK: - Properties
-    
+
     // UI
     let titleLabel: UILabel = .build { label in
         label.text =  .PrivateBrowsingTitle
@@ -34,54 +34,44 @@ class EmptyPrivateTabsView: UIView {
     }
     let learnMoreButton: UIButton = .build { button in
         button.setTitle( .PrivateBrowsingLearnMore, for: [])
-        button.setTitleColor(UIColor.theme.tabTray.privateModeLearnMore, for: [])
         button.titleLabel?.font = EmptyPrivateTabsViewUX.LearnMoreFont
     }
     let iconImageView: UIImageView = .build { imageView in
         imageView.image = UIImage.templateImageNamed("largePrivateMask")
-        imageView.tintColor = UIColor.Photon.Grey60
     }
 
     // MARK: - Inits
-    
+
     override init(frame: CGRect) {
         super.init(frame: frame)
-        
+
         addSubviews(iconImageView, titleLabel, descriptionLabel, learnMoreButton)
-        
+
         NSLayoutConstraint.activate([
             iconImageView.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -70),
             iconImageView.centerXAnchor.constraint(equalTo: centerXAnchor),
             iconImageView.widthAnchor.constraint(equalToConstant: 120),
             iconImageView.heightAnchor.constraint(equalToConstant: 120),
-            
+
             titleLabel.topAnchor.constraint(equalTo: iconImageView.bottomAnchor, constant: 0),
             titleLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            
+
             descriptionLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: CGFloat(EmptyPrivateTabsViewUX.TextMargin)),
             descriptionLabel.centerXAnchor.constraint(equalTo: centerXAnchor),
-            
+
             learnMoreButton.topAnchor.constraint(equalTo: descriptionLabel.bottomAnchor, constant: CGFloat(EmptyPrivateTabsViewUX.LearnMoreMargin)),
             learnMoreButton.centerXAnchor.constraint(equalTo: centerXAnchor),
         ])
-
-        applyTheme()
-
-        NotificationCenter.default.addObserver(self, selector: #selector(applyTheme), name: .DisplayThemeChanged, object: nil)
     }
 
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-}
-
-extension EmptyPrivateTabsView: NotificationThemeable {
-    @objc func applyTheme() {
-        titleLabel.textColor = UIColor.theme.tabTray.tabTitleText
-        descriptionLabel.textColor = UIColor.theme.tabTray.tabTitleText
+    func applyTheme(_ theme: Theme) {
+        titleLabel.textColor = theme.colors.textPrimary
+        descriptionLabel.textColor = theme.colors.textPrimary
+        learnMoreButton.setTitleColor(theme.colors.borderAccentPrivate, for: [])
+        iconImageView.tintColor = theme.colors.indicatorActive
     }
 }

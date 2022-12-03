@@ -1,5 +1,11 @@
+/* (No Comment) */
+"New Private Tab" = "新規プライベートタブ";
+
+/* (No Comment) */
+"New Tab" = "新規タブ";
+
 /* Privacy - Camera Usage Description */
-"NSCameraUsageDescription" = "写真を撮影してアップロードできます。";
+"NSCameraUsageDescription" = "Firefox が QR コードのスキャンや写真、動画を撮影するためにカメラを使用します。";
 
 /* Privacy - Face ID Usage Description */
 "NSFaceIDUsageDescription" = "保存されたログイン情報にアクセスするには Face ID が必要です。";
@@ -8,17 +14,11 @@
 "NSLocationWhenInUseUsageDescription" = "訪れたウェブサイトがあなたの位置情報を要求しています。";
 
 /* Privacy - Microphone Usage Description */
-"NSMicrophoneUsageDescription" = "動画を撮影してアップロードできます。";
+"NSMicrophoneUsageDescription" = "Firefox が音声を録音してアップロードするためにマイクを使用します。";
 
 /* Privacy - Photo Library Additions Usage Description */
 "NSPhotoLibraryAddUsageDescription" = "これにより写真を保存できます。";
 
 /* (No Comment) */
-"ShortcutItemTitleNewPrivateTab" = "新規プライベートタブ";
-
-/* (No Comment) */
-"ShortcutItemTitleNewTab" = "新規タブ";
-
-/* (No Comment) */
-"ShortcutItemTitleQRCode" = "QR コードをスキャン";
+"Scan QR Code" = "QR コードをスキャン";
 
