@@ -83,7 +83,7 @@
 "Back" = "Назад";
 
 /* Block pop-up windows setting */
-"Block Pop-up Windows" = "Блакаваць усплывальныя вокны";
+"Block Pop-up Windows" = "Блакіраваць усплывальныя вокны";
 
 /* The label for the Title field when editing a bookmark */
 "Bookmark.DetailFieldTitle.Label" = "Загаловак";
@@ -176,7 +176,7 @@
 "ContextMenu.CopyImageButtonTitle" = "Капіяваць відарыс";
 
 /* Context menu item for copying an image URL to the clipboard */
-"ContextMenu.CopyImageLinkButtonTitle" = "Скапіяваць спасылку на відарыс";
+"ContextMenu.CopyImageLinkButtonTitle" = "Капіяваць спасылку на відарыс";
 
 /* Context menu item for copying a link URL to the clipboard */
 "ContextMenu.CopyLinkButtonTitle" = "Капіяваць спасылку";
@@ -193,17 +193,8 @@
 /* Context menu item for sharing a link URL */
 "ContextMenu.ShareLinkButtonTitle" = "Падзяліцца спасылкай";
 
-/* Contextual hints are little popups that appear for the users informing them of new features. This one introduces search bar placement to existing users. It tells them that the search bar can now be moved to the bottom of the screen. */
-"ContextualHint.SearchBarPlacement.ExistingUsers" = "Цяпер вы можаце перанесці паліцу інструментаў уніз, каб было зручней уводзіць даныя";
-
-/* Contextual hints are little popups that appear for the users informing them of new features. This one introduces search bar placement to new users. It tells them that by default, the search bar will appear at the bottom of the device. */
-"ContextualHint.SearchBarPlacement.NewUsers" = "Каб было зручней уводзіць даныя, паліца інструментаў цяпер тыпова знаходзіцца ўнізе.";
-
-/* Contextual hints are little popups that appear for the users informing them of new features. This one talks about the more personalized home feature. */
-"ContextualHints.FirefoxHomepage.JumpBackIn.PersonalizedHomeOldCopy.v106" = "Цяпер ваша персаналізаваная хатняя старонка Firefox палягчае працяг працы адтуль, дзе вы спыніліся. Знайдзіце свае апошнія карткі, закладкі і вынікі пошуку.";
-
 /* Contextual hints are little popups that appear for the users informing them of new features. This one is a call to action for the popup describing search bar placement. It indicates a user can navigate to the settings page that allows them to customize the placement of the search bar. */
-"ContextualHints.SearchBarPlacement.CallToAction" = "Налады паліцы інструментаў";
+"ContextualHints.SearchBarPlacement.CallToAction" = "Налады паліцы прылад";
 
 /* Contextual hints are little popups that appear for the users informing them of new features. This one talks about the inactive tabs feature. */
 "ContextualHints.TabTray.InactiveTabs" = "Карткі, якія вы не праглядалі на працягу двух тыдняў, будуць перанесеныя сюды.";
@@ -224,7 +215,7 @@
 "Could not load page." = "Немагчыма загрузіць старонку.";
 
 /* Description for the new ETP mode i.e. standard vs strict */
-"CoverSheet.v24.ETP.Description" = "Убудаваная ўзмоцненая ахова ад сачэння дапамагае спыніць рэкламу, якая вас асочвае. Уключыце Строгую ахову каб заблакаваць яшчэ болей трэкераў, рэкламы і ўсплывальных вокнаў.";
+"CoverSheet.v24.ETP.Description" = "Убудаваная ўзмоцненая ахова ад сачэння дапамагае спыніць рэкламу, якая вас асочвае. Уключыце Строгую ахову каб заблакіраваць яшчэ болей трэкераў, рэкламы і ўсплывальных вокнаў.";
 
 /* Text for the new ETP settings button */
 "CoverSheet.v24.ETP.Settings.Button" = "Перайсці ў налады";
@@ -752,7 +743,7 @@
 "Menu.Bookmarks.Label" = "Закладкі";
 
 /* The title for the button that lets you copy the url from the location bar. */
-"Menu.Copy.Title" = "Скапіяваць адрас";
+"Menu.Copy.Title" = "Капіяваць адрас";
 
 /* Toast displayed to user after copy url pressed. */
 "Menu.CopyURL.Confirm" = "URL скапіяваны ў буфер абмену";
@@ -869,7 +860,7 @@
 "Menu.TrackingProtectionDescription.Fingerprinters" = "Налады вашага браўзера і камп'ютара унікальныя. Збіральнікі лічбавых адбіткаў выкарыстоўваюць набор гэтых унікальных параметраў, каб стварыць ваш профіль, які можна будзе скарыстаць для асочвання вас пры вэб-сёрфінгу.";
 
 /* Description of social network trackers. */
-"Menu.TrackingProtectionDescription.SocialNetworksNew" = "Сацыяльныя сеткі размяшчаюць трэкеры на іншых сайтах, каб стварыць ваш больш поўны таргетаваны профіль. Блакаванне гэтых трэкераў зменшыць колькасць звестак якія збіраюцца пра вашу дзейнасць у Інтэрнэце.";
+"Menu.TrackingProtectionDescription.SocialNetworksNew" = "Сацыяльныя сеткі размяшчаюць трэкеры на іншых сайтах, каб стварыць ваш больш поўны таргетаваны профіль. Блакіраванне гэтых трэкераў зменшыць колькасць звестак якія збіраюцца пра вашу дзейнасць у Інтэрнэце.";
 
 /* The title that shows the number of fingerprinting scripts blocked */
 "Menu.TrackingProtectionFingerprintersBlocked.Title" = "Збіральнікі адбіткаў пальцаў";
@@ -902,7 +893,7 @@
 "OK" = "OK";
 
 /* Restore Tabs Affirmative Action */
-"Okay" = "Добра";
+"Okay" = "Так";
 
 /* Describes the action on the first onboarding page in our Onboarding screen. This string will be on a button so user can continue the onboarding. */
 "Onboarding.IntroAction.v102" = "Пачаць";
@@ -956,7 +947,7 @@
 "Onboarding.WallpaperTitle.v102" = "Выберыце шпалеры Firefox";
 
 /* String used to describes the description of what Firefox is on the welcome onboarding page for 106 version in our Onboarding screens. */
-"Onboarding.Welcome.Description.v106" = "Firefox ставіць людзей вышэй за прыбытак і па змаўчанні абараняе вашу прыватнасць.";
+"Onboarding.Welcome.Description.v106" = "Firefox ставіць людзей вышэй за прыбытак і заўсёды абараняе вашу прыватнасць.";
 
 /* String used to describes the title of what Firefox is on the welcome onboarding page for 106 version in our Onboarding screens. */
 "Onboarding.Welcome.Title.v106" = "Сардэчна запрашаем у незалежны інтэрнэт";
@@ -1070,7 +1061,7 @@
 "ScanQRCode.Error.OK.Button" = "OK";
 
 /* Text for the instructions label, displayed in the QR scanner view */
-"ScanQRCode.Instructions.Label" = "Размясціце QR-код унутры рамкі сканавання";
+"ScanQRCode.Instructions.Label" = "Размясціце QR-код унутры рамкі сканіравання";
 
 /* Text of the prompt that is shown to the user when the data is invalid */
 "ScanQRCode.InvalidDataError.Message" = "Несапраўдныя звесткі";
@@ -1079,7 +1070,7 @@
 "ScanQRCode.PermissionError.Message.v100" = "Прайдзіце ў ‘Налады’ прылады > ‘Firefox’. Дазвольце Firefox доступ да камеры.";
 
 /* Title for the QR code scanner view. */
-"ScanQRCode.View.Title" = "Сканаваць QR-код";
+"ScanQRCode.View.Title" = "Сканіраваць QR-код";
 
 /* Open search section of settings */
 "Search" = "Пошук";
@@ -1478,7 +1469,7 @@
 "Settings.NewTab.TopSectionNameFooter" = "Выберыце, што загружаць пры адкрыцці новай карткі";
 
 /* Label for the block images toggle displayed in the settings menu. Enabling this toggle will hide images on any webpage the user visits. */
-"Settings.NoImageModeBlockImages.Label.v99" = "Блакаваць відарысы";
+"Settings.NoImageModeBlockImages.Label.v99" = "Блакіраваць відарысы";
 
 /* Description displayed under the ”Offer to Open Copied Link” option. See https://bug1223660.bmoattachments.org/attachment.cgi?id=8898349 */
 "Settings.OfferClipboardBar.Status" = "Пры адкрыцці Firefox";
@@ -1592,7 +1583,7 @@
 "Settings.TrackingProtection.Alert.Title" = "Увага!";
 
 /* The Title on info view which shows a list of all blocked websites */
-"Settings.TrackingProtection.Info.BlocksTitle" = "ЗАБЛАКАВАНЫ";
+"Settings.TrackingProtection.Info.BlocksTitle" = "ЗАБЛАКІРАВАНЫ";
 
 /* 'Learn more' info link on the Tracking Protection settings screen. */
 "Settings.TrackingProtection.LearnMore" = "Падрабязней";
