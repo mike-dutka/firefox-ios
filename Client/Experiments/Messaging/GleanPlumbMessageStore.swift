@@ -8,7 +8,6 @@ import Foundation
 /// will primarily help us determine if messages are expired, and perhaps what caused expiry.
 
 protocol GleanPlumbMessageStoreProtocol {
-
     /// Return associated metadata for preexisting or new messages.
     func getMessageMetadata(messageId: String) -> GleanPlumbMessageMetaData
 
@@ -22,12 +21,12 @@ protocol GleanPlumbMessageStoreProtocol {
     func onMessageDismissed(_ message: GleanPlumbMessage)
 
     /// Handle all points of expiry and Telemetry.
-    func onMessageExpired(_ message: GleanPlumbMessageMetaData, shouldReport: Bool)
-
+    func onMessageExpired(_ message: GleanPlumbMessageMetaData,
+                          surface: MessageSurfaceId,
+                          shouldReport: Bool)
 }
 
 class GleanPlumbMessageStore: GleanPlumbMessageStoreProtocol {
-
     // MARK: - Properties
 
     private let decoder = JSONDecoder()
@@ -39,8 +38,7 @@ class GleanPlumbMessageStore: GleanPlumbMessageStoreProtocol {
 
     /// Returns the metadata that persists on system. If there's none, it returns default data.
     func getMessageMetadata(messageId: String) -> GleanPlumbMessageMetaData {
-
-        /// Return preexisting Message Metadata.
+        // Return preexisting Message Metadata.
         if let metadata = get(key: messageId) { return metadata }
 
         return GleanPlumbMessageMetaData(id: messageId,
@@ -53,12 +51,20 @@ class GleanPlumbMessageStore: GleanPlumbMessageStoreProtocol {
     func onMessageDisplayed(_ message: GleanPlumbMessage) {
         message.metadata.impressions += 1
 
+        if message.isExpired {
+            onMessageExpired(message.metadata,
+                             surface: message.surface,
+                             shouldReport: true)
+        }
+
         set(key: message.id, metadata: message.metadata)
     }
 
     /// For the MVP, we always expire the message.
     func onMessagePressed(_ message: GleanPlumbMessage) {
-       onMessageExpired(message.metadata, shouldReport: false)
+        onMessageExpired(message.metadata,
+                         surface: message.surface,
+                         shouldReport: false)
 
         set(key: message.id, metadata: message.metadata)
     }
@@ -66,7 +72,9 @@ class GleanPlumbMessageStore: GleanPlumbMessageStoreProtocol {
     /// Depending on the surface, we may do different things with dismissal. But for the MVP,
     /// dismissal expires the message.
     func onMessageDismissed(_ message: GleanPlumbMessage) {
-        onMessageExpired(message.metadata, shouldReport: false)
+        onMessageExpired(message.metadata,
+                         surface: message.surface,
+                         shouldReport: false)
         message.metadata.dismissals += 1
 
         set(key: message.id, metadata: message.metadata)
@@ -75,16 +83,23 @@ class GleanPlumbMessageStore: GleanPlumbMessageStoreProtocol {
     /// Updates a message's metadata and reports expiration Telemetry when applicable.
     /// A message expires in three ways (dismissal, interaction and max impressions), but only
     /// impressions should report an expired message.
-    func onMessageExpired(_ messageData: GleanPlumbMessageMetaData, shouldReport: Bool) {
+    func onMessageExpired(
+        _ messageData: GleanPlumbMessageMetaData,
+        surface: MessageSurfaceId,
+        shouldReport: Bool
+    ) {
         messageData.isExpired = true
 
         if shouldReport {
-            TelemetryWrapper.recordEvent(category: .information,
-                                         method: .view,
-                                         object: .homeTabBanner,
-                                         value: .messageExpired,
-                                         extras:
-                                            [TelemetryWrapper.EventExtraKey.messageKey.rawValue: messageData.id])
+            TelemetryWrapper.recordEvent(
+                category: .information,
+                method: .view,
+                object: .messaging,
+                value: .messageExpired,
+                extras: [
+                    TelemetryWrapper.EventExtraKey.messageKey.rawValue: messageData.id,
+                    TelemetryWrapper.EventExtraKey.messageSurface.rawValue: surface.rawValue
+                ])
         }
     }
 
@@ -108,8 +123,7 @@ class GleanPlumbMessageStore: GleanPlumbMessageStoreProtocol {
 
     /// Return persisted message metadata.
     private func get(key: String) -> GleanPlumbMessageMetaData? {
-
-        /// Return a persisted message's metadata.
+        // Return a persisted message's metadata.
         if let decodableMessageMetaData = UserDefaults.standard.data(forKey: generateKey(from: key)),
            let decodedData = try? decoder.decode(GleanPlumbMessageMetaData.self, from: decodableMessageMetaData) {
             return decodedData

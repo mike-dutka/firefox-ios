@@ -6,7 +6,6 @@ import Foundation
 import Shared
 
 class TopSitesSettingsViewController: SettingsTableViewController, FeatureFlaggable {
-
     // MARK: - Initializers
     init() {
         super.init(style: .grouped)
@@ -28,15 +27,23 @@ class TopSitesSettingsViewController: SettingsTableViewController, FeatureFlagga
     // MARK: - Methods
     override func generateSettings() -> [SettingSection] {
         var sections = [Setting]()
-        let topSitesSetting = BoolSetting(with: .topSites,
-                                          titleText: NSAttributedString(string: .Settings.Homepage.Shortcuts.ShortcutsToggle))
+        let topSitesSetting = BoolSetting(
+            prefs: profile.prefs,
+            theme: themeManager.currentTheme,
+            prefKey: PrefsKeys.UserFeatureFlagPrefs.TopSiteSection,
+            defaultValue: true,
+            titleText: .Settings.Homepage.Shortcuts.ShortcutsToggle
+        )
         sections.append(topSitesSetting)
 
-        if featureFlags.isFeatureEnabled(.sponsoredTiles, checking: .buildOnly) {
-            let sponsoredShortcutSetting = BoolSetting(with: .sponsoredTiles,
-                                                       titleText: NSAttributedString(string: .Settings.Homepage.Shortcuts.SponsoredShortcutsToggle))
-            sections.append(sponsoredShortcutSetting)
-        }
+        let sponsoredShortcutSetting = BoolSetting(
+            prefs: profile.prefs,
+            theme: themeManager.currentTheme,
+            prefKey: PrefsKeys.UserFeatureFlagPrefs.SponsoredShortcuts,
+            defaultValue: true,
+            titleText: .Settings.Homepage.Shortcuts.SponsoredShortcutsToggle
+        )
+        sections.append(sponsoredShortcutSetting)
 
         let toggleSection = SettingSection(title: nil,
                                            children: sections)
@@ -65,7 +72,7 @@ extension TopSitesSettingsViewController {
         init(settings: SettingsTableViewController) {
             self.profile = settings.profile
             super.init(title: NSAttributedString(string: .Settings.Homepage.Shortcuts.Rows,
-                                                 attributes: [NSAttributedString.Key.foregroundColor: UIColor.theme.tableView.rowText]))
+                                                 attributes: [NSAttributedString.Key.foregroundColor: settings.themeManager.currentTheme.colors.textPrimary]))
         }
 
         override func onClick(_ navigationController: UINavigationController?) {

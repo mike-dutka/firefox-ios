@@ -1,14 +1,14 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
+import Common
 import Shared
 
-private let log = Logger.syncLogger
-
 public class RustShared {
-    static func moveDatabaseFileToBackupLocation(databasePath: String) {
+    static func moveDatabaseFileToBackupLocation(databasePath: String,
+                                                 logger: Logger = DefaultLogger.shared) {
         let databaseURL = URL(fileURLWithPath: databasePath)
         let databaseContainingDirURL = databaseURL.deletingLastPathComponent()
         let baseFilename = databaseURL.lastPathComponent
@@ -16,11 +16,11 @@ public class RustShared {
         // Attempt to make a backup as long as the database file still exists.
         guard FileManager.default.fileExists(atPath: databasePath) else {
             // No backup was attempted since the database file did not exist.
-            SentryIntegration.shared.sendWithStacktrace(message: "The Rust database was deleted while in use", tag: SentryTag.rustLogins)
+            logger.log("The Rust database was deleted while in use",
+                       level: .info,
+                       category: .storage)
             return
         }
-
-        SentryIntegration.shared.sendWithStacktrace(message: "Unable to open Rust database", tag: SentryTag.rustLogins, severity: .warning, description: "Attempting to move '\(baseFilename)'")
 
         // Note that a backup file might already exist! We append a counter to avoid this.
         var bakCounter = 0
@@ -37,27 +37,28 @@ public class RustShared {
 
             let shmBaseFilename = baseFilename + "-shm"
             let walBaseFilename = baseFilename + "-wal"
-            log.debug("Moving \(shmBaseFilename) and \(walBaseFilename)…")
+            logger.log("Moving database \(shmBaseFilename) and \(walBaseFilename)…",
+                       level: .debug,
+                       category: .storage)
 
             let shmDatabasePath = databaseContainingDirURL.appendingPathComponent(shmBaseFilename).path
             if FileManager.default.fileExists(atPath: shmDatabasePath) {
-                log.debug("\(shmBaseFilename) exists.")
                 try FileManager.default.moveItem(atPath: shmDatabasePath, toPath: "\(bakDatabasePath)-shm")
             }
 
             let walDatabasePath = databaseContainingDirURL.appendingPathComponent(walBaseFilename).path
             if FileManager.default.fileExists(atPath: walDatabasePath) {
-                log.debug("\(walBaseFilename) exists.")
                 try FileManager.default.moveItem(atPath: shmDatabasePath, toPath: "\(bakDatabasePath)-wal")
             }
 
-            log.debug("Finished moving Rust database (\(baseFilename)) successfully.")
+            logger.log("Finished moving Rust database \(baseFilename) successfully",
+                       level: .debug,
+                       category: .storage)
         } catch let error as NSError {
-            SentryIntegration.shared.sendWithStacktrace(
-                message: "Unable to move Rust database to backup location",
-                tag: SentryTag.rustLogins,
-                severity: .error,
-                description: "Attempted to move to '\(bakBaseFilename)'. \(error.localizedDescription)")
+            logger.log("Unable to move Rust database to backup location",
+                       level: .warning,
+                       category: .storage,
+                       description: "Attempted to move to '\(bakBaseFilename)'. \(error.localizedDescription)")
         }
     }
 }

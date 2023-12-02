@@ -1,12 +1,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
-import XCGLogger
-
-private let log = Logger.syncLogger
 
 public class ReadingListStorageError: MaybeErrorType {
     var message: String
@@ -24,7 +21,7 @@ open class SQLiteReadingList {
     let allColumns = ["client_id", "client_last_modified", "id", "last_modified", "url", "title", "added_by", "archived", "favorite", "unread"].joined(separator: ",")
     let notificationCenter: NotificationCenter
 
-    required public init(db: BrowserDB,
+    public required init(db: BrowserDB,
                          notificationCenter: NotificationCenter = NotificationCenter.default) {
         self.db = db
         self.notificationCenter = notificationCenter
@@ -32,7 +29,6 @@ open class SQLiteReadingList {
 }
 
 extension SQLiteReadingList: ReadingList {
-
     public func getAvailableRecords(completion: @escaping ([ReadingListItem]) -> Void) {
         let sql = "SELECT \(allColumns) FROM items ORDER BY client_last_modified DESC"
         let deferredResponse = db.runQuery(sql, args: nil, factory: SQLiteReadingList.ReadingListItemFactory) >>== { cursor in

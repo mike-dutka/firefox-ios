@@ -1,13 +1,13 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import Shared
 import Storage
-import XCGLogger
 import WebKit
-import os.log
+import Common
+import SiteImageView
 
 private class FetchInProgressError: MaybeErrorType {
     internal var description: String {
@@ -16,14 +16,13 @@ private class FetchInProgressError: MaybeErrorType {
 }
 
 @objcMembers
-class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemeable {
-
+class HistoryPanel: UIViewController,
+                    LibraryPanel,
+                    Themeable {
     struct UX {
         static let WelcomeScreenItemWidth = 170
         static let IconSize = 23
-        static let IconBorderColor = UIColor.Photon.Grey30
         static let IconBorderWidth: CGFloat = 0.5
-        static let actionIconColor = UIColor.Photon.Grey40 // Works for light and dark theme.
         static let EmptyTabContentOffset: CGFloat = -180
     }
 
@@ -31,7 +30,8 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
     typealias HistoryPanelSections = HistoryPanelViewModel.Sections
     typealias a11yIds = AccessibilityIdentifiers.LibraryPanels.HistoryPanel
 
-    var libraryPanelDelegate: LibraryPanelDelegate?
+    weak var libraryPanelDelegate: LibraryPanelDelegate?
+    weak var historyCoordinatorDelegate: HistoryCoordinatorDelegate?
     var recentlyClosedTabsDelegate: RecentlyClosedPanelDelegate?
     var state: LibraryPanelMainState
 
@@ -39,13 +39,15 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
     let viewModel: HistoryPanelViewModel
     private let clearHistoryHelper: ClearHistorySheetProvider
     var keyboardState: KeyboardState?
-    private lazy var siteImageHelper = SiteImageHelper(profile: profile)
-    var chevronImage = UIImage(named: ImageIdentifiers.menuChevron)
-    private var themeManager: ThemeManager
+    var chevronImage = UIImage(named: StandardImageIdentifiers.Large.chevronRight)?.withRenderingMode(.alwaysTemplate)
+    var themeManager: ThemeManager
+    var themeObserver: NSObjectProtocol?
+    var notificationCenter: NotificationProtocol
+    private var logger: Logger
 
     // We'll be able to prefetch more often the higher this number is. But remember, it's expensive!
     private let historyPanelPrefetchOffset = 8
-    var diffableDatasource: UITableViewDiffableDataSource<HistoryPanelSections, AnyHashable>?
+    var diffableDataSource: UITableViewDiffableDataSource<HistoryPanelSections, AnyHashable>?
 
     var shouldShowToolBar: Bool {
         return state == .history(state: .mainView) || state == .history(state: .search)
@@ -88,7 +90,7 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
     }()
 
     private lazy var bottomDeleteButton: UIBarButtonItem = {
-        let button = UIBarButtonItem(image: UIImage.templateImageNamed(ImageIdentifiers.libraryPanelDelete),
+        let button = UIBarButtonItem(image: UIImage.templateImageNamed(StandardImageIdentifiers.Large.delete),
                                      style: .plain,
                                      target: self,
                                      action: #selector(bottomDeleteButtonAction))
@@ -104,9 +106,9 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
         searchbar.delegate = self
     }
 
-    lazy private var tableView: UITableView = .build { [weak self] tableView in
+    private lazy var tableView: UITableView = .build { [weak self] tableView in
         guard let self = self else { return }
-        tableView.dataSource = self.diffableDatasource
+        tableView.dataSource = self.diffableDataSource
         tableView.addGestureRecognizer(self.longPressRecognizer)
         tableView.accessibilityIdentifier = a11yIds.tableView
         tableView.prefetchDataSource = self
@@ -133,8 +135,9 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
     lazy var welcomeLabel: UILabel = .build { label in
         label.text = self.viewModel.emptyStateText
         label.textAlignment = .center
-        label.font = DynamicFontHelper.defaultHelper.DeviceFontLight
-        label.textColor = UIColor.theme.homePanel.welcomeScreenText
+        label.font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .body,
+                                                            size: 17,
+                                                            weight: .light)
         label.numberOfLines = 0
         label.adjustsFontSizeToFitWidth = true
     }
@@ -145,22 +148,21 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
 
     init(profile: Profile,
          tabManager: TabManager,
-         themeManager: ThemeManager = AppContainer.shared.resolve()) {
+         themeManager: ThemeManager = AppContainer.shared.resolve(),
+         notificationCenter: NotificationProtocol = NotificationCenter.default,
+         logger: Logger = DefaultLogger.shared) {
         self.clearHistoryHelper = ClearHistorySheetProvider(profile: profile, tabManager: tabManager)
         self.viewModel = HistoryPanelViewModel(profile: profile)
         self.profile = profile
         self.state = .history(state: .mainView)
         self.themeManager = themeManager
-
+        self.notificationCenter = notificationCenter
+        self.logger = logger
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-
-    deinit {
-        browserLog.debug("HistoryPanel Deinitialized.")
     }
 
     // MARK: - Lifecycle
@@ -173,16 +175,34 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
             NotificationCenter.default.addObserver(self, selector: #selector(handleNotifications), name: $0, object: nil)
         }
 
+        listenForThemeChange(view)
         handleRefreshControl()
         setupLayout()
-        configureDatasource()
+        configureDataSource()
+        applyTheme()
+
+        // Update theme of already existing view
+        bottomStackView.applyTheme(theme: themeManager.currentTheme)
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-
+        viewModel.shouldResetHistory = true
         bottomStackView.isHidden = !viewModel.isSearchInProgress
-        fetchDataAndUpdateLayout()
+        if viewModel.shouldResetHistory {
+            fetchDataAndUpdateLayout()
+        }
+        DispatchQueue.main.async {
+            self.refreshRecentlyClosedCell()
+        }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        TelemetryWrapper.recordEvent(category: .information,
+                                     method: .view,
+                                     object: .historyPanelOpened)
     }
 
     // MARK: - Private helpers
@@ -250,8 +270,7 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
         }
 
         // Set interaction behavior and style
-        cell.titleLabel.alpha = isEnabled ? 1.0 : 0.5
-        cell.leftImageView.alpha = isEnabled ? 1.0 : 0.5
+        cell.configureTapState(isEnabled: isEnabled)
         cell.selectionStyle = isEnabled ? .default : .none
         cell.isUserInteractionEnabled = isEnabled
     }
@@ -259,14 +278,13 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
     // MARK: - Datasource helpers
 
     func siteAt(indexPath: IndexPath) -> Site? {
-        guard let siteItem = diffableDatasource?.itemIdentifier(for: indexPath) as? Site else { return nil }
+        guard let siteItem = diffableDataSource?.itemIdentifier(for: indexPath) as? Site else { return nil }
 
         return siteItem
     }
 
-    private func showClearRecentHistory() {
+    func showClearRecentHistory() {
         clearHistoryHelper.showClearRecentHistory(onViewController: self) { [weak self] dateOption in
-
             // Delete groupings that belong to THAT section.
             switch dateOption {
             case .today, .yesterday:
@@ -320,7 +338,6 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
             showClearRecentHistory()
         default:
             // no need to do anything at all
-            browserLog.error("Error: Received unexpected notification \(notification.name)")
             break
         }
     }
@@ -328,16 +345,16 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
     // MARK: - UITableViewDataSource
 
     /// Handles dequeuing the appropriate type of cell when needed.
-    private func configureDatasource() {
-        diffableDatasource = UITableViewDiffableDataSource<HistoryPanelSections, AnyHashable>(tableView: tableView) { [weak self] (tableView, indexPath, item) -> UITableViewCell? in
-            guard let self = self else {
-                Logger.browserLogger.error("History Panel - self became nil inside diffableDatasource!")
-                return nil
-            }
+    private func configureDataSource() {
+        diffableDataSource = UITableViewDiffableDataSource<HistoryPanelSections, AnyHashable>(tableView: tableView) { [weak self] (tableView, indexPath, item) -> UITableViewCell? in
+            guard let self = self else { return nil }
 
             if let historyActionable = item as? HistoryActionablesModel {
-                guard let cell = tableView.dequeueReusableCell(withIdentifier: OneLineTableViewCell.cellIdentifier, for: indexPath) as? OneLineTableViewCell else {
-                    self.browserLog.error("History Panel - cannot create OneLineTableViewCell for historyActionable!")
+                guard let cell = tableView.dequeueReusableCell(withIdentifier: OneLineTableViewCell.cellIdentifier, for: indexPath) as? OneLineTableViewCell
+                else {
+                    self.logger.log("History Panel - cannot create OneLineTableViewCell for historyActionable",
+                                    level: .debug,
+                                    category: .library)
                     return nil
                 }
 
@@ -347,7 +364,9 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
 
             if let site = item as? Site {
                 guard let cell = tableView.dequeueReusableCell(withIdentifier: TwoLineImageOverlayCell.accessoryUsageReuseIdentifier, for: indexPath) as? TwoLineImageOverlayCell else {
-                    self.browserLog.error("History Panel - cannot create TwoLineImageOverlayCell for site!")
+                    self.logger.log("History Panel - cannot create TwoLineImageOverlayCell for site",
+                                    level: .debug,
+                                    category: .library)
                     return nil
                 }
 
@@ -357,7 +376,9 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
 
             if let searchTermGroup = item as? ASGroup<Site> {
                 guard let cell = tableView.dequeueReusableCell(withIdentifier: TwoLineImageOverlayCell.cellIdentifier, for: indexPath) as? TwoLineImageOverlayCell else {
-                    self.browserLog.error("History Panel - cannot create TwoLineImageOverlayCell for STG!")
+                    self.logger.log("History Panel - cannot create TwoLineImageOverlayCell for STG",
+                                    level: .debug,
+                                    category: .library)
                     return nil
                 }
 
@@ -371,13 +392,17 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
     }
 
     private func configureHistoryActionableCell(_ historyActionable: HistoryActionablesModel, _ cell: OneLineTableViewCell) -> OneLineTableViewCell {
-        cell.titleLabel.text = historyActionable.itemTitle
-        cell.leftImageView.image = historyActionable.itemImage
-        cell.leftImageView.tintColor = .theme.browser.tint
-        cell.leftImageView.backgroundColor = .theme.homePanel.historyHeaderIconsBackground
+        cell.leftImageView.tintColor = themeManager.currentTheme.colors.textPrimary
+        cell.leftImageView.backgroundColor = .clear
+
+        let viewModel = OneLineTableViewCellViewModel(title: historyActionable.itemTitle,
+                                                      leftImageView: historyActionable.itemImage,
+                                                      accessoryView: nil,
+                                                      accessoryType: .none)
+        cell.configure(viewModel: viewModel)
         cell.accessibilityIdentifier = historyActionable.itemA11yId
         setTappableStateAndStyle(with: historyActionable, on: cell)
-
+        cell.applyTheme(theme: themeManager.currentTheme)
         return cell
     }
 
@@ -386,21 +411,12 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
         cell.titleLabel.isHidden = site.title.isEmpty
         cell.descriptionLabel.text = site.url
         cell.descriptionLabel.isHidden = false
-        cell.leftImageView.layer.borderColor = UX.IconBorderColor.cgColor
+        cell.leftImageView.layer.borderColor = themeManager.currentTheme.colors.borderPrimary.cgColor
         cell.leftImageView.layer.borderWidth = UX.IconBorderWidth
+        cell.leftImageView.setFavicon(FaviconImageViewModel(siteURLString: site.url))
         cell.accessoryView = nil
-        getFavIcon(for: site) { [weak cell] image in
-            cell?.leftImageView.image = image
-            cell?.leftImageView.backgroundColor = UIColor.theme.general.faviconBackground
-        }
-
+        cell.applyTheme(theme: themeManager.currentTheme)
         return cell
-    }
-
-    private func getFavIcon(for site: Site, completion: @escaping (UIImage?) -> Void) {
-        siteImageHelper.fetchImageFor(site: site, imageType: .favicon, shouldFallback: false) { image in
-            completion(image)
-        }
     }
 
     private func configureASGroupCell(_ asGroup: ASGroup<Site>, _ cell: TwoLineImageOverlayCell) -> TwoLineImageOverlayCell {
@@ -411,9 +427,11 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
         cell.titleLabel.text = asGroup.displayTitle
         let imageView = UIImageView(image: chevronImage)
         cell.accessoryView = imageView
-        cell.leftImageView.image = UIImage(named: ImageIdentifiers.stackedTabsIcon)?.withTintColor(themeManager.currentTheme.colors.iconSecondary)
-        cell.leftImageView.backgroundColor = .theme.homePanel.historyHeaderIconsBackground
-
+        let tabTrayImage = UIImage(named: StandardImageIdentifiers.Large.tabTray) ?? UIImage()
+        let tintedTabTrayImage = tabTrayImage.withTintColor(themeManager.currentTheme.colors.iconSecondary)
+        cell.leftImageView.manuallySetImage(tintedTabTrayImage)
+        cell.leftImageView.backgroundColor = themeManager.currentTheme.colors.layer5
+        cell.applyTheme(theme: themeManager.currentTheme)
         return cell
     }
 
@@ -432,7 +450,9 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
         // Insert the ASGroup at the correct spot!
         viewModel.searchTermGroups.forEach { grouping in
             if let groupSection = viewModel.shouldAddGroupToSections(group: grouping) {
-                guard let individualItem = grouping.groupedItems.last, let lastVisit = individualItem.latestVisit else { return }
+                guard let individualItem = grouping.groupedItems.last,
+                      let lastVisit = individualItem.latestVisit
+                else { return }
 
                 let groupTimeInterval = TimeInterval.fromMicrosecondTimestamp(lastVisit.date)
 
@@ -457,14 +477,14 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
         }
         snapshot.appendItems(viewModel.historyActionables, toSection: .additionalHistoryActions)
 
-        diffableDatasource?.apply(snapshot, animatingDifferences: animatingDifferences, completion: nil)
+        diffableDataSource?.apply(snapshot, animatingDifferences: animatingDifferences, completion: nil)
         updateEmptyPanelState()
     }
 
     // MARK: - Swipe Action helpers
 
     func removeHistoryItem(at indexPath: IndexPath) {
-        guard let historyItem = diffableDatasource?.itemIdentifier(for: indexPath) else { return }
+        guard let historyItem = diffableDataSource?.itemIdentifier(for: indexPath) else { return }
 
         viewModel.removeHistoryItems(item: [historyItem], at: indexPath.section)
 
@@ -473,14 +493,21 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
         } else {
             applySnapshot(animatingDifferences: true)
         }
+
+        TelemetryWrapper.recordEvent(category: .action,
+                                     method: .swipe,
+                                     object: .historySingleItemRemoved)
     }
 
     func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        if let item = diffableDataSource?.itemIdentifier(for: indexPath),
+           item as? HistoryActionablesModel != nil {
+            return nil
+        }
 
         // For UX consistency, every cell in history panel SHOULD have a trailing action.
         let deleteAction = UIContextualAction(style: .destructive, title: .HistoryPanelDelete) { [weak self] (_, _, completion) in
             guard let self = self else {
-                Logger.browserLogger.error("History Panel - self became nil inside SwipeActionConfiguration!")
                 completion(false)
                 return
             }
@@ -509,7 +536,7 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
         // overlayView becomes the footer view, and for unknown reason, setting the bgcolor is ignored.
         // Create an explicit view for setting the color.
         let bgColor: UIView = .build { view in
-            view.backgroundColor = UIColor.theme.homePanel.panelBackground
+            view.backgroundColor = self.themeManager.currentTheme.colors.layer6
         }
         overlayView.addSubview(bgColor)
 
@@ -537,23 +564,18 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
     func applyTheme() {
         updateEmptyPanelState()
 
-        tableView.backgroundColor = UIColor.theme.homePanel.panelBackground
-        searchbar.backgroundColor = UIColor.theme.textField.backgroundInOverlay
-        let tintColor = UIColor.theme.textField.textAndTint
-        let searchBarImage = UIImage(named: ImageIdentifiers.libraryPanelHistory)?.withRenderingMode(.alwaysTemplate).tinted(withColor: tintColor)
+        tableView.backgroundColor = themeManager.currentTheme.colors.layer6
+        searchbar.backgroundColor = themeManager.currentTheme.colors.layer3
+        let tintColor = themeManager.currentTheme.colors.textPrimary
+        let searchBarImage = UIImage(named: StandardImageIdentifiers.Large.history)?
+            .withRenderingMode(.alwaysTemplate)
+            .tinted(withColor: tintColor)
         searchbar.setImage(searchBarImage, for: .search, state: .normal)
-        searchbar.tintColor = UIColor.theme.textField.textAndTint
-
-        let theme = BuiltinThemeName(rawValue: LegacyThemeManager.instance.current.name) ?? .normal
-        if theme == .dark {
-            navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.white]
-            bottomSearchButton.tintColor = .white
-            bottomDeleteButton.tintColor = .white
-        } else {
-            navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.black]
-            bottomSearchButton.tintColor = .black
-            bottomDeleteButton.tintColor = .black
-        }
+        searchbar.tintColor = themeManager.currentTheme.colors.textPrimary
+        navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: themeManager.currentTheme.colors.textPrimary]
+        bottomSearchButton.tintColor = themeManager.currentTheme.colors.iconPrimary
+        bottomDeleteButton.tintColor = themeManager.currentTheme.colors.iconPrimary
+        welcomeLabel.textColor = themeManager.currentTheme.colors.textSecondary
 
         tableView.reloadData()
     }
@@ -562,11 +584,10 @@ class HistoryPanel: UIViewController, LibraryPanel, Loggable, NotificationThemea
 // MARK: - UITableViewDelegate related helpers
 
 extension HistoryPanel: UITableViewDelegate {
-
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
 
-        guard let item = diffableDatasource?.itemIdentifier(for: indexPath) else { return }
+        guard let item = diffableDataSource?.itemIdentifier(for: indexPath) else { return }
 
         if let site = item as? Site {
             handleSiteItemTapped(site: site)
@@ -588,8 +609,10 @@ extension HistoryPanel: UITableViewDelegate {
     }
 
     private func handleSiteItemTapped(site: Site) {
-        guard let url = URL(string: site.url) else {
-            browserLog.error("Couldn't navigate to site: \(site.url)")
+        guard let url = URL(string: site.url, invalidCharacters: false) else {
+            self.logger.log("Couldn't navigate to site",
+                            level: .warning,
+                            category: .library)
             return
         }
 
@@ -609,7 +632,9 @@ extension HistoryPanel: UITableViewDelegate {
         case .clearHistory:
             showClearRecentHistory()
         case .recentlyClosed:
-            navigateToRecentlyClosed()
+            guard viewModel.hasRecentlyClosed else { return }
+            refreshControl?.endRefreshing()
+            historyCoordinatorDelegate?.showRecentlyClosedTab()
         default: break
         }
     }
@@ -618,17 +643,12 @@ extension HistoryPanel: UITableViewDelegate {
         exitSearchState()
         updatePanelState(newState: .history(state: .inFolder))
 
-        let asGroupListViewModel = SearchGroupedItemsViewModel(asGroup: asGroupItem, presenter: .historyPanel)
-        let asGroupListVC = SearchGroupedItemsViewController(viewModel: asGroupListViewModel, profile: profile)
-        asGroupListVC.libraryPanelDelegate = libraryPanelDelegate
-        asGroupListVC.title = asGroupItem.displayTitle
-
+        historyCoordinatorDelegate?.showSearchGroupedItems(asGroupItem)
         TelemetryWrapper.recordEvent(category: .action, method: .navigate, object: .navigateToGroupHistory, value: nil, extras: nil)
-
-        navigationController?.pushViewController(asGroupListVC, animated: true)
     }
 
-    @objc private func sectionHeaderTapped(sender: UIGestureRecognizer) {
+    @objc
+    private func sectionHeaderTapped(sender: UIGestureRecognizer) {
         guard let sectionNumber = sender.view?.tag else { return }
 
         viewModel.collapseSection(sectionIndex: sectionNumber)
@@ -649,8 +669,9 @@ extension HistoryPanel: UITableViewDelegate {
         let headerViewModel = SiteTableViewHeaderModel(title: actualSection.title ?? "",
                                                        isCollapsible: true,
                                                        collapsibleState:
-                                                        isCollapsed ? ExpandButtonState.right : ExpandButtonState.down)
+                                                        isCollapsed ? ExpandButtonState.trailing : ExpandButtonState.down)
         header.configure(headerViewModel)
+        header.applyTheme(theme: themeManager.currentTheme)
 
         // Configure tap to collapse/expand section
         header.tag = section
@@ -732,56 +753,46 @@ extension HistoryPanel {
         updatePanelState(newState: .history(state: .mainView))
 
         TelemetryWrapper.recordEvent(category: .action, method: .tap, object: .deleteHistory)
-        // TODO: Yoana remove notification and handle directly
-        NotificationCenter.default.post(name: .OpenClearRecentHistory, object: nil)
+        showClearRecentHistory()
     }
 
     // MARK: - User Interactions
 
     /// When long pressed, a menu appears giving the choice of pinning as a Top Site.
     func pinToTopSites(_ site: Site) {
-        profile.history.addPinnedTopSite(site).uponQueue(.main) { result in
+        profile.pinnedSites.addPinnedTopSite(site).uponQueue(.main) { result in
             if result.isSuccess {
-                SimpleToast().showAlertWithText(.AppMenu.AddPinToShortcutsConfirmMessage, bottomContainer: self.view)
+                SimpleToast().showAlertWithText(.AppMenu.AddPinToShortcutsConfirmMessage,
+                                                bottomContainer: self.view,
+                                                theme: self.themeManager.currentTheme)
             }
         }
     }
 
-    private func navigateToRecentlyClosed() {
-        guard viewModel.hasRecentlyClosed else { return }
-
-        let nextController = RecentlyClosedTabsPanel(profile: profile)
-        nextController.title = .RecentlyClosedTabsPanelTitle
-        nextController.libraryPanelDelegate = libraryPanelDelegate
-        nextController.recentlyClosedTabsDelegate = BrowserViewController.foregroundBVC()
-        refreshControl?.endRefreshing()
-        navigationController?.pushViewController(nextController, animated: true)
-    }
-
-    @objc private func onLongPressGestureRecognized(_ longPressGestureRecognizer: UILongPressGestureRecognizer) {
+    @objc
+    private func onLongPressGestureRecognized(_ longPressGestureRecognizer: UILongPressGestureRecognizer) {
         guard longPressGestureRecognizer.state == .began else { return }
         let touchPoint = longPressGestureRecognizer.location(in: tableView)
-        guard let indexPath = tableView.indexPathForRow(at: touchPoint) else { return }
+        guard let indexPath = tableView.indexPathForRow(at: touchPoint),
+              diffableDataSource?.itemIdentifier(for: indexPath) as? HistoryActionablesModel == nil
+        else { return }
 
-        if let _ = diffableDatasource?.itemIdentifier(for: indexPath) as? HistoryActionablesModel {
-            return
-        }
         presentContextMenu(for: indexPath)
     }
 
-    @objc private func onRefreshPulled() {
+    @objc
+    private func onRefreshPulled() {
         refreshControl?.beginRefreshing()
         resyncHistory()
     }
 }
 
 extension HistoryPanel: UITableViewDataSourcePrefetching {
-
     // Happens WAY too often. We should consider fetching the next set when the user HITS the bottom instead.
     func tableView(_ tableView: UITableView, prefetchRowsAt indexPaths: [IndexPath]) {
         guard !viewModel.isFetchInProgress, indexPaths.contains(where: shouldLoadRow) else { return }
 
-        fetchDataAndUpdateLayout(animating: false)
+        fetchDataAndUpdateLayout()
     }
 
     func shouldLoadRow(for indexPath: IndexPath) -> Bool {

@@ -1,15 +1,13 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
 import WebKit
 import CoreSpotlight
-import SDWebImage
-import Kingfisher
-
-private let log = Logger.browserLogger
+import SiteImageView
+import Common
 
 // A base protocol for something that can be cleared.
 protocol Clearable {
@@ -30,67 +28,76 @@ class ClearableError: MaybeErrorType {
 class HistoryClearable: Clearable {
     let profile: Profile
     let tabManager: TabManager
+    let siteImageHandler: SiteImageHandler
+    private let logger: Logger
 
-    init(profile: Profile, tabManager: TabManager) {
+    init(profile: Profile,
+         tabManager: TabManager,
+         siteImageHandler: SiteImageHandler = DefaultSiteImageHandler.factory(),
+         logger: Logger = DefaultLogger.shared) {
         self.profile = profile
         self.tabManager = tabManager
+        self.siteImageHandler = siteImageHandler
+        self.logger = logger
     }
 
     var label: String { .ClearableHistory }
 
     func clear() -> Success {
-
         // Treat desktop sites as part of browsing history.
         Tab.ChangeUserAgent.clear()
 
-        return profile.history.clearHistory().bindQueue(.main) { success in
-            // TODO: Remove clear cache for SDWebImage when we are ready to remove library
-            // Clear image cache - SDWebImage
-            SDImageCache.shared.clearDisk()
-            SDImageCache.shared.clearMemory()
-
-            // Clear image cache - Kingfisher
-            KingfisherManager.shared.cache.clearMemoryCache()
-            KingfisherManager.shared.cache.clearDiskCache()
-
-            self.profile.recentlyClosedTabs.clearTabs()
-            self.profile.places.deleteHistoryMetadataOlderThan(olderThan: INT64_MAX).uponQueue(.global(qos: .userInteractive)) { _ in }
-            CSSearchableIndex.default().deleteAllSearchableItems()
-            NotificationCenter.default.post(name: .PrivateDataClearedHistory, object: nil)
-            log.debug("HistoryClearable succeeded: \(success).")
-
-            self.tabManager.clearAllTabsHistory()
-
-            return Deferred(value: success)
+        // Clear everything in places
+        return profile.places.deleteEverythingHistory().bindQueue(.main) { success in
+            return self.clearAfterHistory(success: success)
         }
     }
+
+    func clearAfterHistory(success: Maybe<Void>) -> Success {
+        // Clear image data from Site Image Helper
+        siteImageHandler.clearAllCaches()
+
+        self.profile.recentlyClosedTabs.clearTabs()
+        self.profile.places.deleteHistoryMetadataOlderThan(olderThan: INT64_MAX).uponQueue(.global()) { _ in }
+        CSSearchableIndex.default().deleteAllSearchableItems()
+        NotificationCenter.default.post(name: .PrivateDataClearedHistory, object: nil)
+        logger.log("HistoryClearable succeeded: \(success).",
+                   level: .debug,
+                   category: .storage)
+
+        self.tabManager.clearAllTabsHistory()
+
+        return Deferred(value: success)
+    }
 }
 
-struct ClearableErrorType: MaybeErrorType {
-    let err: Error
-
-    init(err: Error) {
-        self.err = err
-    }
-
-    var description: String {
-        return "Couldn't clear: \(err)."
-    }
-}
-
-// Clear the web cache. Note, this has to close all open tabs in order to ensure the data
-// cached in them isn't flushed to disk.
+// Clear cached data. This includes the web cache and old log data. Note: this has to close all open
+// tabs in order to ensure the data cached in them isn't flushed to disk.
 class CacheClearable: Clearable {
     var label: String { .ClearableCache }
+    private let logger: Logger
+
+    init(logger: Logger = DefaultLogger.shared) {
+        self.logger = logger
+    }
 
     func clear() -> Success {
         let dataTypes = Set([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache])
         WKWebsiteDataStore.default().removeData(ofTypes: dataTypes, modifiedSince: .distantPast, completionHandler: {})
 
+        // Clear in-memory reader cache (private browsing content etc.)
         MemoryReaderModeCache.sharedInstance.clear()
+
+        // Clear out any persistent cached readerized content on disk
         DiskReaderModeCache.sharedInstance.clear()
 
-        log.debug("CacheClearable succeeded.")
+        // Ensure all log files are cleared. A new log file will be immediately created as soon as our
+        // next log message is sent but any older cached log data will be reset to free up disk space.
+        logger.deleteCachedLogFiles()
+
+        logger.log("CacheClearable succeeded.",
+                   level: .debug,
+                   category: .storage)
         return succeed()
     }
 }
@@ -107,52 +114,42 @@ class SpotlightClearable: Clearable {
     }
 }
 
-private func deleteLibraryFolderContents(_ folder: String) throws {
-    let manager = FileManager.default
-    let library = manager.urls(for: .libraryDirectory, in: .userDomainMask)[0]
-    let dir = library.appendingPathComponent(folder)
-    let contents = try manager.contentsOfDirectory(atPath: dir.path)
-    for content in contents {
-        do {
-            try manager.removeItem(at: dir.appendingPathComponent(content))
-        } catch where ((error as NSError).userInfo[NSUnderlyingErrorKey] as? NSError)?.code == Int(EPERM) {
-            // "Not permitted". We ignore this.
-            log.debug("Couldn't delete some library contents.")
-        }
-    }
-}
-
-private func deleteLibraryFolder(_ folder: String) throws {
-    let manager = FileManager.default
-    let library = manager.urls(for: .libraryDirectory, in: .userDomainMask)[0]
-    let dir = library.appendingPathComponent(folder)
-    try manager.removeItem(at: dir)
-}
-
 // Removes all app cache storage.
 class SiteDataClearable: Clearable {
-
     var label: String { .ClearableOfflineData }
+    private let logger: Logger
+
+    init(logger: Logger = DefaultLogger.shared) {
+        self.logger = logger
+    }
 
     func clear() -> Success {
         let dataTypes = Set([WKWebsiteDataTypeOfflineWebApplicationCache])
         WKWebsiteDataStore.default().removeData(ofTypes: dataTypes, modifiedSince: .distantPast, completionHandler: {})
 
-        log.debug("SiteDataClearable succeeded.")
+        logger.log("SiteDataClearable succeeded.",
+                   level: .debug,
+                   category: .storage)
         return succeed()
     }
 }
 
 // Remove all cookies stored by the site. This includes localStorage, sessionStorage, and WebSQL/IndexedDB.
 class CookiesClearable: Clearable {
-
     var label: String { .ClearableCookies }
+    private let logger: Logger
+
+    init(logger: Logger = DefaultLogger.shared) {
+        self.logger = logger
+    }
 
     func clear() -> Success {
         let dataTypes = Set([WKWebsiteDataTypeCookies, WKWebsiteDataTypeLocalStorage, WKWebsiteDataTypeSessionStorage, WKWebsiteDataTypeWebSQLDatabases, WKWebsiteDataTypeIndexedDBDatabases])
         WKWebsiteDataStore.default().removeData(ofTypes: dataTypes, modifiedSince: .distantPast, completionHandler: {})
 
-        log.debug("CookiesClearable succeeded.")
+        logger.log("CookiesClearable succeeded.",
+                   level: .debug,
+                   category: .storage)
         return succeed()
     }
 }

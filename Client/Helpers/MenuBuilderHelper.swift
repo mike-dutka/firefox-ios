@@ -6,7 +6,6 @@ import UIKit
 import Shared
 
 class MenuBuilderHelper {
-
     struct MenuIdentifiers {
         static let history = UIMenu.Identifier("com.mozilla.firefox.menus.history")
         static let bookmarks = UIMenu.Identifier("com.mozilla.firefox.menus.bookmarks")
@@ -44,12 +43,19 @@ class MenuBuilderHelper {
             }
         }
 
-        let viewMenu = UIMenu(options: .displayInline, children: [
+        var viewMenuChildren: [UIMenuElement] = [
             UIKeyCommand(title: .KeyboardShortcuts.ZoomIn, action: #selector(BrowserViewController.zoomIn), input: "+", modifierFlags: .command, discoverabilityTitle: .KeyboardShortcuts.ZoomIn),
             UIKeyCommand(title: .KeyboardShortcuts.ZoomOut, action: #selector(BrowserViewController.zoomOut), input: "-", modifierFlags: .command, discoverabilityTitle: .KeyboardShortcuts.ZoomOut),
             UIKeyCommand(title: .KeyboardShortcuts.ActualSize, action: #selector(BrowserViewController.resetZoom), input: "0", modifierFlags: .command, discoverabilityTitle: .KeyboardShortcuts.ActualSize),
             UIKeyCommand(title: .KeyboardShortcuts.ReloadPage, action: #selector(BrowserViewController.reloadTabKeyCommand), input: "r", modifierFlags: .command, discoverabilityTitle: .KeyboardShortcuts.ReloadPage)
-        ])
+        ]
+
+        // UIKeyCommand.f5 is only available since iOS 13.4 - Shortcut will only work from this version
+        viewMenuChildren.append(
+            UIKeyCommand(title: .KeyboardShortcuts.ReloadWithoutCache, action: #selector(BrowserViewController.reloadTabIgnoringCacheKeyCommand), input: UIKeyCommand.f5, modifierFlags: [.control], discoverabilityTitle: .KeyboardShortcuts.ReloadWithoutCache)
+        )
+
+        let viewMenu = UIMenu(options: .displayInline, children: viewMenuChildren)
 
         if #available(iOS 15, *) {
             viewMenu.children.forEach {

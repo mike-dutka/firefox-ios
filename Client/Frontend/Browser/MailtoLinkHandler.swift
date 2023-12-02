@@ -1,11 +1,10 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 
 open class MailtoLinkHandler {
-
     lazy var mailSchemeProviders: [String: MailProvider] = self.fetchMailSchemeProviders()
 
     func launchMailClientForScheme(_ scheme: String, metadata: MailToMetadata, defaultMailtoURL: URL) {
@@ -30,6 +29,8 @@ open class MailtoLinkHandler {
                         providerDict[scheme] = ReaddleSparkIntegration()
                     } else if scheme == "mymail-mailto://" {
                         providerDict[scheme] = MyMailIntegration()
+                    } else if scheme == "protonmail://" {
+                        providerDict[scheme] = ProtonMailIntegration()
                     } else if scheme == "mailru-mailto://" {
                         providerDict[scheme] = MailRuIntegration()
                     } else if scheme == "airmail://" {

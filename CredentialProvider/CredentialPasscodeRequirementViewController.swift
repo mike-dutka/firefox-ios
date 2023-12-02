@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import Shared
@@ -12,13 +12,13 @@ protocol CredentialPasscodeRequirementViewControllerDelegate: AnyObject {
 class CredentialPasscodeRequirementViewController: UIViewController {
     var delegate: CredentialPasscodeRequirementViewControllerDelegate?
 
-    lazy private var logoImageView: UIImageView = {
+    private lazy var logoImageView: UIImageView = {
         let image = UIImageView(image: UIImage(named: "logo-glyph"))
         image.translatesAutoresizingMaskIntoConstraints = false
         return image
     }()
 
-    lazy private var titleLabel: UILabel = {
+    private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
         label.text = .LoginsWelcomeViewTitle2
@@ -28,7 +28,7 @@ class CredentialPasscodeRequirementViewController: UIViewController {
         return label
     }()
 
-    lazy private var taglineLabel: UILabel = {
+    private lazy var taglineLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
         label.text = .LoginsWelcomeViewTagline
@@ -38,7 +38,7 @@ class CredentialPasscodeRequirementViewController: UIViewController {
         return label
     }()
 
-    lazy private var warningLabel: UILabel = {
+    private lazy var warningLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
         label.font = UIFont.systemFont(ofSize: 18)
@@ -48,13 +48,13 @@ class CredentialPasscodeRequirementViewController: UIViewController {
         return label
     }()
 
-    lazy private var cancelButton: UIButton = {
+    private lazy var cancelButton: UIButton = {
         let button = UIButton(type: .custom)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.backgroundColor = .systemRed
         button.layer.cornerRadius = 8
         button.setTitle(.CancelString, for: .normal)
-        button.titleLabel?.font = DynamicFontHelper().MediumSizeBoldFontAS
+        button.titleLabel?.font = LegacyDynamicFontHelper().MediumSizeBoldFontAS
         button.addTarget(self, action: #selector(cancelButtonTapped), for: .touchUpInside)
         return button
     }()
@@ -97,7 +97,8 @@ class CredentialPasscodeRequirementViewController: UIViewController {
         ])
     }
 
-    @objc func cancelButtonTapped(_ sender: UIButton) {
+    @objc
+    func cancelButtonTapped(_ sender: UIButton) {
         delegate?.credentialPasscodeRequirementViewControllerDidDismiss()
     }
 }

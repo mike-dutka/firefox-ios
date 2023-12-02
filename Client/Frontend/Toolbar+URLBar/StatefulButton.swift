@@ -2,8 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import UIKit
+import Shared
 
 enum ReloadButtonState: String {
     case reload = "Reload"
@@ -12,7 +14,6 @@ enum ReloadButtonState: String {
 }
 
 class StatefulButton: UIButton {
-
     // MARK: - Initializers
 
     convenience init(frame: CGRect, state: ReloadButtonState) {
@@ -20,7 +21,7 @@ class StatefulButton: UIButton {
         reloadButtonState = state
     }
 
-    required override init(frame: CGRect) {
+    override required init(frame: CGRect) {
         super.init(frame: frame)
     }
 
@@ -40,10 +41,18 @@ class StatefulButton: UIButton {
             case .reload:
                 setImage(UIImage.templateImageNamed("nav-refresh"), for: .normal)
             case .stop:
-                setImage(UIImage.templateImageNamed("nav-stop"), for: .normal)
+                setImage(UIImage.templateImageNamed(StandardImageIdentifiers.Large.cross), for: .normal)
             case .disabled:
                 self.isHidden = true
             }
         }
+    }
+}
+
+// MARK: - Theme protocols
+extension StatefulButton: ThemeApplicable {
+    func applyTheme(theme: Theme) {
+        tintColor = isEnabled ? theme.colors.iconSecondary : theme.colors.iconDisabled
+        imageView?.tintColor = tintColor
     }
 }

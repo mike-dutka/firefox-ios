@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import WebKit
 
@@ -18,7 +18,7 @@ struct FormPostData {
               let target = messageBodyDict["target"],
               let enctype = messageBodyDict["enctype"],
               let requestBodyString = messageBodyDict["requestBody"],
-              let action = URL(string: actionString),
+              let action = URL(string: actionString, invalidCharacters: false),
               let requestBody = requestBodyString.data(using: .utf8)
         else {
                 return nil
@@ -72,7 +72,6 @@ class FormPostHelper: TabContentScript {
 
     func userContentController(_ userContentController: WKUserContentController, didReceiveScriptMessage message: WKScriptMessage) {
         guard let formPostData = FormPostData(messageBody: message.body) else {
-            print("Unable to parse FormPostData from script message body.")
             return
         }
 

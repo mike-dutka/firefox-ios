@@ -1,17 +1,14 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
-import XCGLogger
-import SDWebImage
 import Kingfisher
-
-private let log = Logger.browserLogger
+import MozillaAppServices
 
 class UITestAppDelegate: AppDelegate, FeatureFlaggable {
-
     lazy var dirForTestProfile = { return "\(self.appRootDir())/profile.testProfile" }()
 
     private var internalProfile: Profile?
@@ -32,6 +29,7 @@ class UITestAppDelegate: AppDelegate, FeatureFlaggable {
 
         var profile: BrowserProfile
         let launchArguments = ProcessInfo.processInfo.arguments
+        let dirForTestProfile = self.dirForTestProfile
 
         launchArguments.forEach { arg in
             if arg.starts(with: LaunchArguments.ServerPort) {
@@ -54,7 +52,7 @@ class UITestAppDelegate: AppDelegate, FeatureFlaggable {
                                                                                           ofType: nil,
                                                                                           inDirectory: "test-fixtures")!)
                 try? FileManager.default.createDirectory(atPath: dirForTestProfile, withIntermediateDirectories: false, attributes: nil)
-                let output = URL(fileURLWithPath: "\(dirForTestProfile)/browser.db")
+                let output = URL(fileURLWithPath: "\(dirForTestProfile)/places.db")
 
                 let enumerator = FileManager.default.enumerator(atPath: dirForTestProfile)
                 let filePaths = enumerator?.allObjects as! [String]
@@ -62,12 +60,20 @@ class UITestAppDelegate: AppDelegate, FeatureFlaggable {
                     try? FileManager.default.removeItem(at: URL(fileURLWithPath: "\(dirForTestProfile)/\(item)"))
                 }
 
-                try! FileManager.default.copyItem(at: input, to: output)
+                do {
+                    try FileManager.default.copyItem(at: input, to: output)
+                } catch {
+                    fatalError("Could not copy items from \(input) to \(output): \(error)")
+                }
+
+                // Tests currently load a browserdb history, we make sure we migrate it everytime
+                UserDefaults.standard.setValue(false, forKey: PrefsKeys.PlacesHistoryMigrationSucceeded)
             }
 
             if arg.starts(with: LaunchArguments.LoadTabsStateArchive) {
+                let tabDirectory = "\(self.appRootDir())/profile.profile"
                 if launchArguments.contains(LaunchArguments.ClearProfile) {
-                    fatalError("Clearing profile and loading a \(TabManagerStoreImplementation.storePath) is not a supported combination.")
+                    fatalError("Clearing profile and loading tabs, not a supported combination.")
                 }
 
                 // Grab the name of file in the bundle's test-fixtures dir, and copy it to the runtime app dir.
@@ -75,29 +81,34 @@ class UITestAppDelegate: AppDelegate, FeatureFlaggable {
                 let input = URL(fileURLWithPath: Bundle(for: UITestAppDelegate.self).path(forResource: filenameArchive,
                                                                                           ofType: nil,
                                                                                           inDirectory: "test-fixtures")!)
-                try? FileManager.default.createDirectory(atPath: dirForTestProfile, withIntermediateDirectories: false, attributes: nil)
-                let deprecatedOutput = URL(fileURLWithPath: "\(dirForTestProfile)/\(TabManagerStoreImplementation.deprecatedStorePath)")
-
-                let enumerator = FileManager.default.enumerator(atPath: dirForTestProfile)
-                let filePaths = enumerator?.allObjects as! [String]
-                filePaths.filter { $0.contains(".archive") }.forEach { item in
-                    try! FileManager.default.removeItem(at: URL(fileURLWithPath: "\(dirForTestProfile)/\(item)"))
+                try? FileManager.default.createDirectory(atPath: tabDirectory, withIntermediateDirectories: false, attributes: nil)
+                let outputDir = URL(fileURLWithPath: "\(tabDirectory)/window-data")
+                let outputFile = URL(fileURLWithPath: "\(tabDirectory)/window-data/window-44BA0B7D-097A-484D-8358-91A6E374451D")
+                let enumerator = FileManager.default.enumerator(atPath: "\(tabDirectory)/window-data")
+                let filePaths = enumerator?.allObjects as? [String]
+                filePaths?.filter { $0.contains("window-") }.forEach { item in
+                    do {
+                        try FileManager.default.removeItem(at: URL(fileURLWithPath: "\(tabDirectory)/window-data/\(item)"))
+                    } catch {
+                        fatalError("Could not remove items at \(tabDirectory)/window-data/\(item): \(error)")
+                    }
                 }
 
-                // When we remove migration code for tabs, make sure we migrate the archive test-fixtures data.
-                // See FXIOS-4913 for more details. Correct output will be:
-                // let output = URL(fileURLWithPath: "\(dirForTestProfile)/\(TabManagerStoreImplementation.storePath)")
-                try! FileManager.default.copyItem(at: input, to: deprecatedOutput)
-            }
+                try? FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)
 
+                do {
+                    try FileManager.default.copyItem(at: input, to: outputFile)
+                } catch {
+                    fatalError("Could not copy items at from \(input) to \(outputFile): \(error)")
+                }
+            }
         }
 
         if launchArguments.contains(LaunchArguments.ClearProfile) {
             // Use a clean profile for each test session.
-            log.debug("Deleting all files in 'Documents' directory to clear the profile")
-            profile = BrowserProfile(localName: "testProfile", syncDelegate: application.syncDelegate, clear: true)
+            profile = BrowserProfile(localName: "testProfile", sendTabDelegate: application.sendTabDelegate, clear: true)
         } else {
-            profile = BrowserProfile(localName: "testProfile", syncDelegate: application.syncDelegate)
+            profile = BrowserProfile(localName: "testProfile", sendTabDelegate: application.sendTabDelegate)
         }
 
         if launchArguments.contains(LaunchArguments.SkipAddingGoogleTopSite) {
@@ -111,22 +122,13 @@ class UITestAppDelegate: AppDelegate, FeatureFlaggable {
             }
         }
 
-        // Don't show the ETP Coversheet New page.
-        if launchArguments.contains(LaunchArguments.SkipETPCoverSheet) {
-            profile.prefs.setString(ETPCoverSheetShowType.DoNotShow.rawValue, forKey: PrefsKeys.KeyETPCoverSheetShowType)
-        }
-
-        if launchArguments.contains(LaunchArguments.TurnOffTabGroupsInUserPreferences) {
-            profile.prefs.setBool(false, forKey: PrefsKeys.FeatureFlags.TabTrayGroups)
-        }
-
         if launchArguments.contains(LaunchArguments.SkipSponsoredShortcuts) {
-            profile.prefs.setBool(false, forKey: PrefsKeys.FeatureFlags.SponsoredShortcuts)
+            profile.prefs.setBool(false, forKey: PrefsKeys.UserFeatureFlagPrefs.SponsoredShortcuts)
         }
 
         // Don't show the What's New page.
         if launchArguments.contains(LaunchArguments.SkipWhatsNew) {
-            profile.prefs.setInt(1, forKey: PrefsKeys.KeyLastVersionNumber)
+            profile.prefs.setInt(1, forKey: PrefsKeys.AppVersion.Latest)
         }
 
         if launchArguments.contains(LaunchArguments.SkipDefaultBrowserOnboarding) {
@@ -135,7 +137,7 @@ class UITestAppDelegate: AppDelegate, FeatureFlaggable {
 
         // Skip the intro when requested by for example tests or automation
         if launchArguments.contains(LaunchArguments.SkipIntro) {
-            profile.prefs.setInt(1, forKey: PrefsKeys.IntroSeen)
+            IntroScreenManager(prefs: profile.prefs).didSeeIntroScreen()
         }
 
         if launchArguments.contains(LaunchArguments.StageServer) {
@@ -146,12 +148,15 @@ class UITestAppDelegate: AppDelegate, FeatureFlaggable {
             profile.prefs.setInt(1, forKey: PrefsKeys.KeyEnableChinaSyncService)
         }
 
+        if launchArguments.contains(LaunchArguments.DisableAnimations) {
+            UIView.setAnimationsEnabled(false)
+        }
+
         self.profile = profile
         return profile
     }
 
     override func application(_ application: UIApplication, willFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
-
         // If the app is running from a XCUITest reset all settings in the app
         if ProcessInfo.processInfo.arguments.contains(LaunchArguments.ClearProfile) {
             resetApplication()
@@ -162,17 +167,8 @@ class UITestAppDelegate: AppDelegate, FeatureFlaggable {
         return super.application(application, willFinishLaunchingWithOptions: launchOptions)
     }
 
-    /**
-     Use this to reset the application between tests.
-     **/
+    /// Use this to reset the application between tests.
     func resetApplication() {
-        log.debug("Wiping everything for a clean start.")
-
-        // TODO: Remove clear cache for SDWebImage when we are ready to remove library
-        // Clear image cache - SDWebImage
-        SDImageCache.shared.clearDisk()
-        SDImageCache.shared.clearMemory()
-
         // Clear image cache - Kingfisher
         KingfisherManager.shared.cache.clearMemoryCache()
         KingfisherManager.shared.cache.clearDiskCache()
@@ -190,19 +186,26 @@ class UITestAppDelegate: AppDelegate, FeatureFlaggable {
         let rootPath = appRootDir()
         let manager = FileManager.default
         let documents = URL(fileURLWithPath: rootPath)
-        let docContents = try! manager.contentsOfDirectory(atPath: rootPath)
-        for content in docContents {
-            do {
-                try manager.removeItem(at: documents.appendingPathComponent(content))
-            } catch {
-                log.debug("Couldn't delete some document contents.")
+        do {
+            let docContents = try manager.contentsOfDirectory(atPath: rootPath)
+            for content in docContents {
+                do {
+                    try manager.removeItem(at: documents.appendingPathComponent(content))
+                } catch {
+                    // Couldn't delete some document contents.
+                }
             }
+        } catch {
+            fatalError("Could not retrieve documents at \(rootPath): \(error)")
         }
     }
 
     override func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Speed up the animations to 100 times as fast.
         defer { UIWindow.keyWindow?.layer.speed = 100.0 }
+
+        loadExperiment()
+
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
@@ -215,5 +218,25 @@ class UITestAppDelegate: AppDelegate, FeatureFlaggable {
             rootPath = (NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0])
         }
         return rootPath
+    }
+
+    // MARK: - Private
+    private func loadExperiment() {
+        let argument = ProcessInfo.processInfo.arguments.first { string in
+            string.starts(with: LaunchArguments.LoadExperiment)
+        }
+
+        guard let arg = argument else { return }
+
+        let experimentName = arg.replacingOccurrences(of: LaunchArguments.LoadExperiment, with: "")
+        let fileURL = Bundle.main.url(forResource: experimentName, withExtension: "json")
+        if let fileURL = fileURL {
+            do {
+                let fileContent = try String(contentsOf: fileURL)
+                let features = HardcodedNimbusFeatures(with: ["messaging": fileContent])
+                features.connect(with: FxNimbus.shared)
+            } catch {
+            }
+        }
     }
 }

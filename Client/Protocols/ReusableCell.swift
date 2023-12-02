@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import Foundation
+import UIKit
 
 /// A protocol for any object to inherit the `cellIdentifier` string property.
 ///
@@ -32,13 +32,10 @@ extension ReusableCell where Self: UICollectionReusableView {
     static var cellIdentifier: String { return String(describing: self) }
 }
 
-extension UICollectionView: Loggable {
-
+extension UICollectionView {
     func dequeueReusableCell<T: ReusableCell>(cellType: T.Type, for indexPath: IndexPath) -> T? {
-        guard let cell = dequeueReusableCell(withReuseIdentifier: T.cellIdentifier, for: indexPath) as? T else {
-            browserLog.warning("Cannot dequeue cell at index path \(indexPath)")
-            return nil
-        }
+        guard let cell = dequeueReusableCell(withReuseIdentifier: T.cellIdentifier, for: indexPath) as? T
+        else { return nil }
 
         return cell
     }
@@ -51,5 +48,9 @@ extension UICollectionView: Loggable {
 extension UITableView {
     func register<T: ReusableCell>(cellType: T.Type) {
         register(T.self, forCellReuseIdentifier: T.cellIdentifier)
+    }
+
+    func registerHeaderFooter<T: ReusableCell>(cellType: T.Type) {
+        register(T.self, forHeaderFooterViewReuseIdentifier: T.cellIdentifier)
     }
 }

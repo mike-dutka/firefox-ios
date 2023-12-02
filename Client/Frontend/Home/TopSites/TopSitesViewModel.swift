@@ -2,20 +2,21 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
 import Storage
 
 class TopSitesViewModel {
-
     struct UX {
-        static let numberOfItemsPerRowForSizeClassIpad = UXSizeClasses(compact: 3, regular: 4, other: 2)
-        static let cellEstimatedSize: CGSize = CGSize(width: 73, height: 83)
+        static let cellEstimatedSize = CGSize(width: 85, height: 94)
         static let cardSpacing: CGFloat = 16
+        static let minCards: Int = 4
     }
 
     weak var delegate: HomepageDataModelDelegate?
     var isZeroSearch: Bool
+    var theme: Theme
     var tilePressedHandler: ((Site, Bool) -> Void)?
     var tileLongPressedHandler: ((Site, UIView?) -> Void)?
 
@@ -32,9 +33,11 @@ class TopSitesViewModel {
 
     init(profile: Profile,
          isZeroSearch: Bool = false,
+         theme: Theme,
          wallpaperManager: WallpaperManager) {
         self.profile = profile
         self.isZeroSearch = isZeroSearch
+        self.theme = theme
         self.dimensionManager = TopSitesDimensionImplementation()
 
         self.topSiteHistoryManager = TopSiteHistoryManager(profile: profile)
@@ -69,6 +72,15 @@ class TopSitesViewModel {
         let originExtra = TelemetryWrapper.getOriginExtras(isZeroSearch: isZeroSearch)
         let extras = originExtra.merge(with: topSiteExtra)
 
+        // Bookmarks from topSites
+        let isBookmarkedSite = profile.places.isBookmarked(url: homeTopSite.site.url).value.successValue ?? false
+        if isBookmarkedSite {
+            TelemetryWrapper.recordEvent(category: .action,
+                                         method: .open,
+                                         object: .bookmark,
+                                         value: .openBookmarksFromTopSites)
+        }
+
         TelemetryWrapper.recordEvent(category: .action,
                                      method: .tap,
                                      object: .topSiteTile,
@@ -92,35 +104,26 @@ class TopSitesViewModel {
     // MARK: - Context actions
 
     func hideURLFromTopSites(_ site: Site) {
-        guard let host = site.tileURL.normalizedHost else { return }
         topSiteHistoryManager.removeDefaultTopSitesTile(site: site)
-
-        profile.history.removeHostFromTopSites(host).uponQueue(.main) { [weak self] result in
-            guard result.isSuccess, let self = self else { return }
-            self.refreshIfNeeded(refresh: true)
+        // We make sure to remove all history for URL so it doesn't show anymore in the
+        // top sites, this is the approach that Android takes too.
+        self.profile.places.deleteVisitsFor(url: site.url).uponQueue(.main) { _ in
+            NotificationCenter.default.post(name: .TopSitesUpdated, object: self)
         }
     }
 
     func pinTopSite(_ site: Site) {
-        profile.history.addPinnedTopSite(site).uponQueue(.main) { result in
-            guard result.isSuccess else { return }
-            self.refreshIfNeeded(refresh: true)
-        }
+        _ = profile.pinnedSites.addPinnedTopSite(site)
     }
 
     func removePinTopSite(_ site: Site) {
         googleTopSiteManager.removeGoogleTopSite(site: site)
         topSiteHistoryManager.removeTopSite(site: site)
     }
-
-    func refreshIfNeeded(refresh forced: Bool) {
-        topSiteHistoryManager.refreshIfNeeded(forceRefresh: forced)
-    }
 }
 
 // MARK: HomeViewModelProtocol
 extension TopSitesViewModel: HomepageViewModelProtocol, FeatureFlaggable {
-
     var sectionType: HomepageSectionType {
         return .topSites
     }
@@ -129,8 +132,7 @@ extension TopSitesViewModel: HomepageViewModelProtocol, FeatureFlaggable {
         // Only show a header if the firefox browser logo isn't showing
         let shouldShow = !featureFlags.isFeatureEnabled(.wallpapers, checking: .buildOnly)
         var textColor: UIColor?
-        if let wallpaperVersion: WallpaperVersion = featureFlags.getCustomState(for: .wallpaperVersion),
-           wallpaperVersion == .v1 {
+        if wallpaperManager.featureAvailable {
             textColor = wallpaperManager.currentWallpaper.textColor
         }
 
@@ -142,14 +144,14 @@ extension TopSitesViewModel: HomepageViewModelProtocol, FeatureFlaggable {
     }
 
     var isEnabled: Bool {
-        return featureFlags.isFeatureEnabled(.topSites, checking: .buildAndUser)
+        return profile.prefs.boolForKey(PrefsKeys.UserFeatureFlagPrefs.TopSiteSection) ?? true
     }
 
     func numberOfItemsInSection() -> Int {
         return numberOfItems
     }
 
-    func section(for traitCollection: UITraitCollection) -> NSCollectionLayoutSection {
+    func section(for traitCollection: UITraitCollection, size: CGSize) -> NSCollectionLayoutSection {
         let itemSize = NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1),
             heightDimension: .estimated(UX.cellEstimatedSize.height)
@@ -161,7 +163,7 @@ extension TopSitesViewModel: HomepageViewModelProtocol, FeatureFlaggable {
             heightDimension: .estimated(UX.cellEstimatedSize.height)
         )
 
-        let interface = TopSitesUIInterface(trait: traitCollection)
+        let interface = TopSitesUIInterface(trait: traitCollection, availableWidth: size.width)
         let sectionDimension = dimensionManager.getSectionDimension(for: topSites,
                                                                     numberOfRows: topSitesDataAdaptor.numberOfRows,
                                                                     interface: interface)
@@ -186,9 +188,11 @@ extension TopSitesViewModel: HomepageViewModelProtocol, FeatureFlaggable {
     }
 
     func refreshData(for traitCollection: UITraitCollection,
+                     size: CGSize,
                      isPortrait: Bool = UIWindow.isPortrait,
                      device: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom) {
-        let interface = TopSitesUIInterface(trait: traitCollection)
+        let interface = TopSitesUIInterface(trait: traitCollection,
+                                            availableWidth: size.width)
         let sectionDimension = dimensionManager.getSectionDimension(for: topSites,
                                                                     numberOfRows: topSitesDataAdaptor.numberOfRows,
                                                                     interface: interface)
@@ -199,6 +203,10 @@ extension TopSitesViewModel: HomepageViewModelProtocol, FeatureFlaggable {
 
     func screenWasShown() {
         sentImpressionTelemetry = [String: Bool]()
+    }
+
+    func setTheme(theme: Theme) {
+        self.theme = theme
     }
 }
 
@@ -215,22 +223,23 @@ extension TopSitesViewModel: TopSitesManagerDelegate {
 
 // MARK: - FxHomeSectionHandler
 extension TopSitesViewModel: HomepageSectionHandler {
-
     func configure(_ collectionView: UICollectionView,
                    at indexPath: IndexPath) -> UICollectionViewCell {
         if let cell = collectionView.dequeueReusableCell(cellType: TopSiteItemCell.self, for: indexPath),
            let contentItem = topSites[safe: indexPath.row] {
             var textColor: UIColor?
-            if let wallpaperVersion: WallpaperVersion = featureFlags.getCustomState(for: .wallpaperVersion),
-               wallpaperVersion == .v1 {
+            if wallpaperManager.featureAvailable {
                 textColor = wallpaperManager.currentWallpaper.textColor
             }
 
-            cell.configure(contentItem, position: indexPath.row, textColor: textColor)
+            cell.configure(contentItem,
+                           position: indexPath.row,
+                           theme: theme,
+                           textColor: textColor)
             sendImpressionTelemetry(contentItem, position: indexPath.row)
             return cell
-
         } else if let cell = collectionView.dequeueReusableCell(cellType: EmptyTopSiteCell.self, for: indexPath) {
+            cell.applyTheme(theme: theme)
             return cell
         }
 
@@ -246,7 +255,6 @@ extension TopSitesViewModel: HomepageSectionHandler {
     func didSelectItem(at indexPath: IndexPath,
                        homePanelDelegate: HomePanelDelegate?,
                        libraryPanelDelegate: LibraryPanelDelegate?) {
-
         guard let site = topSites[safe: indexPath.row]  else { return }
 
         tilePressed(site: site, position: indexPath.row)

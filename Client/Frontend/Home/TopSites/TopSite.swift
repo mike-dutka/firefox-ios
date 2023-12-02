@@ -8,7 +8,6 @@ import Shared
 
 // Top site UI class, used in the home top site section
 final class TopSite {
-
     var site: Site
     var title: String
 
@@ -40,7 +39,6 @@ final class TopSite {
         return site.url == GoogleTopSiteManager.Constants.usUrl || site.url == GoogleTopSiteManager.Constants.rowUrl
     }
 
-    var imageLoaded: ((UIImage?) -> Void)?
     var identifier = UUID().uuidString
 
     init(site: Site) {

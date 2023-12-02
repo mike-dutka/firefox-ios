@@ -12,7 +12,6 @@ protocol TopSitesWidget {
 }
 
 class TopSitesWidgetManager: TopSitesWidget {
-
     private let topSitesProvider: TopSitesProvider
 
     init(topSitesProvider: TopSitesProvider) {
@@ -21,23 +20,16 @@ class TopSitesWidgetManager: TopSitesWidget {
 
     @available(iOS 14.0, *)
     func writeWidgetKitTopSites() {
-
         topSitesProvider.getTopSites { sites in
             guard let sites = sites else { return }
 
             var widgetkitTopSites = [WidgetKitTopSiteModel]()
             sites.forEach { site in
-                // Favicon icon url
-                let iconUrl = site.icon?.url ?? ""
                 let imageKey = site.tileURL.baseDomain ?? ""
-                if let webUrl = URL(string: site.url) {
+                if let webUrl = URL(string: site.url, invalidCharacters: false) {
                     widgetkitTopSites.append(WidgetKitTopSiteModel(title: site.title,
-                                                                   faviconUrl: iconUrl,
                                                                    url: webUrl,
                                                                    imageKey: imageKey))
-                    // fetch favicons and cache them on disk
-                    FaviconFetcher.downloadFaviconAndCache(imageURL: !iconUrl.isEmpty ? URL(string: iconUrl) : nil,
-                                                           imageKey: imageKey )
                 }
             }
             // save top sites for widgetkit use

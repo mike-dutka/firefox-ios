@@ -1,14 +1,16 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
 
 class URIFixup {
     static func getURL(_ entry: String) -> URL? {
-        if let url = URL(string: entry), InternalURL.isValid(url: url) {
-            return URL(string: entry)
+        if let url = URL(string: entry, invalidCharacters: false),
+            InternalURL.isValid(url: url) {
+            return URL(string: entry, invalidCharacters: false)
         }
 
         let trimmed = entry.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -47,10 +49,10 @@ class URIFixup {
             string = replaceHashMarks(url: string)
         }
 
-        guard let url = URL(string: string) else { return nil }
+        guard let url = URL(string: string, invalidCharacters: false) else { return nil }
 
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        if AppConstants.MOZ_PUNYCODE {
+        if AppConstants.punyCode {
             let host = components?.host?.utf8HostToAscii()
             components?.host = host
         }

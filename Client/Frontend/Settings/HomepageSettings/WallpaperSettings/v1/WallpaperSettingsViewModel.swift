@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
 
@@ -35,9 +36,10 @@ class WallpaperSettingsViewModel {
         }
     }
 
+    private var theme: Theme
     private var wallpaperManager: WallpaperManagerInterface
     private var wallpaperCollections = [WallpaperCollection]()
-    var tabManager: TabManagerProtocol
+    var tabManager: TabManager
     var sectionLayout: WallpaperSettingsLayout = .compact // We use the compact layout as default
     var selectedIndexPath: IndexPath?
 
@@ -45,9 +47,12 @@ class WallpaperSettingsViewModel {
         return wallpaperCollections.count
     }
 
-    init(wallpaperManager: WallpaperManagerInterface = WallpaperManager(), tabManager: TabManagerProtocol) {
+    init(wallpaperManager: WallpaperManagerInterface = WallpaperManager(),
+         tabManager: TabManager,
+         theme: Theme) {
         self.wallpaperManager = wallpaperManager
         self.tabManager = tabManager
+        self.theme = theme
         setupWallpapers()
     }
 
@@ -82,6 +87,7 @@ class WallpaperSettingsViewModel {
         }
 
         return WallpaperSettingsHeaderViewModel(
+            theme: theme,
             title: title,
             titleA11yIdentifier: "\(a11yIds.collectionTitle)_\(sectionIndex)",
             description: description,
@@ -161,7 +167,6 @@ class WallpaperSettingsViewModel {
 }
 
 private extension WallpaperSettingsViewModel {
-
     var initialSelectedIndexPath: IndexPath? {
         for (sectionIndex, collection) in wallpaperCollections.enumerated() {
             if let rowIndex = collection.wallpapers.firstIndex(where: {$0 == wallpaperManager.currentWallpaper}) {

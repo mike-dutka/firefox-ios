@@ -4,24 +4,20 @@
 
 import Foundation
 import Storage
+import Common
 
 /// Used to setup bookmarks and folder cell in Bookmarks panel, getting their viewModel
 protocol BookmarksFolderCell {
-    func getViewModel(forSite site: Site?,
-                      profile: Profile?,
-                      completion: ((OneLineTableViewCellViewModel) -> Void)?) -> OneLineTableViewCellViewModel
+    func getViewModel() -> OneLineTableViewCellViewModel
 
     func didSelect(profile: Profile,
                    libraryPanelDelegate: LibraryPanelDelegate?,
-                   navigationController: UINavigationController?)
+                   navigationController: UINavigationController?,
+                   logger: Logger)
 }
 
 extension BookmarkFolderData: BookmarksFolderCell {
-
-    func getViewModel(forSite site: Site?,
-                      profile: Profile?,
-                      completion: ((OneLineTableViewCellViewModel) -> Void)?)
-    -> OneLineTableViewCellViewModel {
+    func getViewModel() -> OneLineTableViewCellViewModel {
         var title: String
         if isRoot, let localizedString = LocalizedRootBookmarkFolderStrings[guid] {
             title = localizedString
@@ -31,14 +27,14 @@ extension BookmarkFolderData: BookmarksFolderCell {
 
         return OneLineTableViewCellViewModel(title: title,
                                              leftImageView: leftImageView,
-                                             leftImageViewContentView: .center,
-                                             accessoryView: UIImageView(image: chevronImage),
+                                             accessoryView: nil,
                                              accessoryType: .disclosureIndicator)
     }
 
     func didSelect(profile: Profile,
                    libraryPanelDelegate: LibraryPanelDelegate?,
-                   navigationController: UINavigationController?) {
+                   navigationController: UINavigationController?,
+                   logger: Logger) {
         let viewModel = BookmarksPanelViewModel(profile: profile,
                                                 bookmarkFolderGUID: guid)
         let nextController = BookmarksPanel(viewModel: viewModel)
@@ -53,11 +49,7 @@ extension BookmarkFolderData: BookmarksFolderCell {
 }
 
 extension BookmarkItemData: BookmarksFolderCell {
-    func getViewModel(forSite site: Site?,
-                      profile: Profile?,
-                      completion: ((OneLineTableViewCellViewModel) -> Void)?)
-    -> OneLineTableViewCellViewModel {
-
+    func getViewModel() -> OneLineTableViewCellViewModel {
         var title: String
         if self.title.isEmpty {
             title = url
@@ -65,56 +57,50 @@ extension BookmarkItemData: BookmarksFolderCell {
             title = self.title
         }
 
-        var viewModel = OneLineTableViewCellViewModel(title: title,
-                                                      leftImageView: nil,
-                                                      leftImageViewContentView: .center,
-                                                      accessoryView: nil,
-                                                      accessoryType: .disclosureIndicator)
-
-        if let site = site {
-            profile?.favicons.getFaviconImage(forSite: site).uponQueue(.main) { result in
-                // Check that we successfully retrieved an image (should always happen)
-                // and ensure that the cell we were fetching for is still on-screen.
-                guard let image = result.successValue else { return }
-
-                viewModel.leftImageView = image
-                viewModel.leftImageViewContentView = .scaleAspectFill
-
-                completion?(viewModel)
-            }
-        }
-
-        return viewModel
+        return OneLineTableViewCellViewModel(title: title,
+                                             leftImageView: nil,
+                                             accessoryView: nil,
+                                             accessoryType: .disclosureIndicator)
     }
 
     func didSelect(profile: Profile,
                    libraryPanelDelegate: LibraryPanelDelegate?,
-                   navigationController: UINavigationController?) {
-        libraryPanelDelegate?.libraryPanel(didSelectURLString: url, visitType: .bookmark)
+                   navigationController: UINavigationController?,
+                   logger: Logger) {
+        // If we can't get a real URL out of what should be a URL, we let the user's
+        // default search engine give it a shot.
+        // Typically we'll be in this state if the user has tapped a bookmarked search template
+        // (e.g., "http://foo.com/bar/?query=%s"), and this will get them the same behavior as if
+        // they'd copied and pasted into the URL bar.
+        // See BrowserViewController.urlBar:didSubmitText:.
+        guard let url = URIFixup.getURL(url) ?? profile.searchEngines.defaultEngine?.searchURLForQuery(url) else {
+            logger.log("Invalid URL, and couldn't generate a search URL for it.",
+                       level: .warning,
+                       category: .library)
+            return
+        }
+        libraryPanelDelegate?.libraryPanel(didSelectURL: url, visitType: .bookmark)
         TelemetryWrapper.recordEvent(category: .action, method: .open, object: .bookmark, value: .bookmarksPanel)
     }
 }
 
 // MARK: FxBookmarkNode viewModel helper
 extension FxBookmarkNode {
-
     var leftImageView: UIImage? {
         return LegacyThemeManager.instance.currentName == .dark ? bookmarkFolderIconDark : bookmarkFolderIconNormal
     }
 
     var chevronImage: UIImage? {
-        return UIImage(named: ImageIdentifiers.menuChevron)
+        return UIImage(named: StandardImageIdentifiers.Large.chevronRight)?.withRenderingMode(.alwaysTemplate)
     }
 
     private var bookmarkFolderIconNormal: UIImage? {
-        return UIImage(named: ImageIdentifiers.bookmarkFolder)?
-            .createScaled(BookmarksPanel.UX.FolderIconSize)
+        return UIImage(named: StandardImageIdentifiers.Large.folder)?
             .tinted(withColor: UIColor.Photon.Grey90)
     }
 
     private var bookmarkFolderIconDark: UIImage? {
-        return UIImage(named: ImageIdentifiers.bookmarkFolder)?
-            .createScaled(BookmarksPanel.UX.FolderIconSize)
+        return UIImage(named: StandardImageIdentifiers.Large.folder)?
             .tinted(withColor: UIColor.Photon.Grey10)
     }
 }

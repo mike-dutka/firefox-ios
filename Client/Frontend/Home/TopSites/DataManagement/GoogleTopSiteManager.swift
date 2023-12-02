@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Shared
 import UIKit
@@ -8,7 +8,6 @@ import Storage
 
 // Manage the specific Google top site case
 class GoogleTopSiteManager {
-
     struct Constants {
         // A guid is required in the case the site might become a pinned site
         static let googleGUID = "DefaultGoogleGUID"

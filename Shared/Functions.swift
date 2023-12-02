@@ -1,7 +1,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
-import SwiftyJSON
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
+
+import Common
 
 // Pipelining.
 precedencegroup PipelinePrecedence {
@@ -49,18 +50,18 @@ public func curry<A, B, C, D, E>(_ f: @escaping (A, B, C, D) -> E) -> (A, B, C) 
 // Function composition.
 infix operator •
 
-public func •<T, U, V>(f: @escaping (T) -> U, g: @escaping (U) -> V) -> (T) -> V {
+public func • <T, U, V>(f: @escaping (T) -> U, g: @escaping (U) -> V) -> (T) -> V {
     return { t in
         return g(f(t))
     }
 }
-public func •<T, V>(f: @escaping (T) -> Void, g: @escaping () -> V) -> (T) -> V {
+public func • <T, V>(f: @escaping (T) -> Void, g: @escaping () -> V) -> (T) -> V {
     return { t in
         f(t)
         return g()
     }
 }
-public func •<V>(f: @escaping () -> Void, g: @escaping () -> V) -> () -> V {
+public func • <V>(f: @escaping () -> Void, g: @escaping () -> V) -> () -> V {
     return {
         f()
         return g()
@@ -109,7 +110,11 @@ public func chunk<T>(_ arr: [T], by: Int) -> [ArraySlice<T>] {
 }
 
 public func chunkCollection<E, X, T: Collection>(_ items: T, by: Int, f: ([E]) -> [X]) -> [X] where T.Iterator.Element == E {
-    assert(by >= 0)
+    guard by >= 0 else {
+        DefaultLogger.shared.log("Chunking must be done with a non-negative value.", level: .warning, category: .unlabeled)
+        return []
+    }
+
     let max = by > 0 ? by : 1
     var i = 0
     var acc: [E] = []
@@ -202,10 +207,8 @@ public func mapValues<K, T, U>(_ source: [K: T], f: (T) -> U) -> [K: U] {
 }
 
 public func findOneValue<K, V>(_ map: [K: V], f: (V) -> Bool) -> V? {
-    for v in map.values {
-        if f(v) {
-            return v
-        }
+    for v in map.values where f(v) {
+        return v
     }
     return nil
 }
@@ -214,8 +217,8 @@ public func findOneValue<K, V>(_ map: [K: V], f: (V) -> Bool) -> V? {
  * Take a JSON array, returning the String elements as an array.
  * It's usually convenient for this to accept an optional.
  */
-public func jsonsToStrings(_ arr: [JSON]?) -> [String]? {
-    return arr?.compactMap { $0.stringValue }
+public func jsonsToStrings(_ arr: [[String: Any]]?) -> [String]? {
+    return arr?.compactMap { $0.asString }
 }
 
 // Encapsulate a callback in a way that we can use it with NSTimer.

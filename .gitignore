@@ -50,7 +50,7 @@ DerivedData
 /fastlane/templates
 
 # content blocking lists
-content-blocker-lib-ios/Lists/*
+Client/ContentBlocker/Lists/*
 
 #python environment
 python-env/
@@ -83,6 +83,7 @@ MozBuildID.xcconfig
 __pycache__
 .pytest_cache
 *.pyc
+*venv/
 
 # SQLite
 *.db-shm
@@ -94,6 +95,8 @@ Client/Assets/AllFramesAtDocumentStart.js
 Client/Assets/AllFramesAtDocumentEnd.js
 Client/Assets/MainFrameAtDocumentStart.js
 Client/Assets/MainFrameAtDocumentEnd.js
+Client/Assets/AutofillAllFramesAtDocumentStart.js
+Client/Assets/WebcompatAllFramesAtDocumentStart.js
 Client/Assets/*.js.LICENSE.txt
 
 # L10n
@@ -108,3 +111,10 @@ export-strings.log
 nimbus-fml/
 
 *config.py
+
+# tmp files
+/test-fixtures/tmp/*
+
+# Nimbus build artifacts.
+bin/nimbus-fml-configuration.local.sh
+bin/nimbus-fml.sh

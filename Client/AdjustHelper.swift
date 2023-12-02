@@ -2,15 +2,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Adjust
 import Shared
-import Glean
 
-private let log = Logger.browserLogger
-
-final class AdjustHelper: FeatureFlaggable {
-
+final class AdjustHelper: NSObject, FeatureFlaggable {
     private static let adjustAppTokenKey = "AdjustAppToken"
     private let profile: Profile
     private let telemetryHelper: AdjustTelemetryProtocol
@@ -19,7 +16,7 @@ final class AdjustHelper: FeatureFlaggable {
          telemetryHelper: AdjustTelemetryProtocol = AdjustTelemetryHelper()) {
         self.profile = profile
         self.telemetryHelper = telemetryHelper
-        let sendUsageData = profile.prefs.boolForKey(AppConstants.PrefSendUsageData) ?? true
+        let sendUsageData = profile.prefs.boolForKey(AppConstants.prefSendUsageData) ?? true
 
         // This is required for adjust to work properly with ASA and we avoid directly disabling
         // third-party sharing as there is a specific method provided to us by adjust for that.
@@ -58,8 +55,8 @@ final class AdjustHelper: FeatureFlaggable {
 
     private func getConfig() -> ADJConfig? {
         let bundle = AppInfo.applicationBundle
-        guard let appToken = bundle.object(forInfoDictionaryKey: AdjustHelper.adjustAppTokenKey) as? String, !appToken.isEmpty else {
-            log.debug("Adjust - Not enabling Adjust; Not configured in Info.plist")
+        guard let appToken = bundle.object(forInfoDictionaryKey: AdjustHelper.adjustAppTokenKey) as? String,
+                !appToken.isEmpty else {
             return nil
         }
 
@@ -67,6 +64,11 @@ final class AdjustHelper: FeatureFlaggable {
         let environment = isProd ? ADJEnvironmentProduction : ADJEnvironmentSandbox
         let config = ADJConfig(appToken: appToken, environment: environment)
         config?.logLevel = isProd ? ADJLogLevelSuppress : ADJLogLevelDebug
+
+        // Record attribution changes
+        // https://help.adjust.com/en/article/ios-sdk-adjconfig-class#set-up-delegate
+        config?.delegate = (self as AdjustHelper)
+
         return config
     }
 
@@ -78,7 +80,7 @@ final class AdjustHelper: FeatureFlaggable {
 
     /// Return true if retention (session) tracking should be enabled. This follows the Send Anonymous Usage Data setting.
     private var shouldTrackRetention: Bool {
-        return profile.prefs.boolForKey(AppConstants.PrefSendUsageData) ?? true
+        return profile.prefs.boolForKey(AppConstants.prefSendUsageData) ?? true
     }
 
     // MARK: - UserDefaults
@@ -95,7 +97,6 @@ final class AdjustHelper: FeatureFlaggable {
 
 // MARK: - AdjustDelegate
 extension AdjustHelper: AdjustDelegate {
-
     /// This is called when Adjust has figured out the attribution. It will call us with a summary
     /// of all the things it knows. Like the campaign ID. We simply save a boolean that attribution
     /// has changed so we know the single attribution ping to Adjust was done.

@@ -1,13 +1,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import UIKit
 import Storage
 import Shared
-import XCGLogger
-
-private let log = Logger.browserLogger
 
 private let BookmarkDetailFieldCellIdentifier = "BookmarkDetailFieldCellIdentifier"
 private let BookmarkDetailFolderCellIdentifier = "BookmarkDetailFolderCellIdentifier"
@@ -66,6 +64,9 @@ class BookmarkDetailPanel: SiteTableViewController {
     // along with their indentation depth.
     var bookmarkFolders: [(folder: BookmarkFolderData, indent: Int)] = []
 
+    // When `bookmarkItemURL` and `bookmarkItemOrFolderTitle` are valid updatePanelState updates Toolbar appropriaetly.
+    var updatePanelState: ((LibraryPanelSubState) -> Void)?
+
     private var maxIndentationLevel: Int {
         return Int(floor((view.frame.width - BookmarkDetailPanelUX.MinIndentedContentWidth) / BookmarkDetailPanelUX.IndentationWidth))
     }
@@ -79,18 +80,23 @@ class BookmarkDetailPanel: SiteTableViewController {
     }()
 
     fileprivate lazy var topLeftButton: UIBarButtonItem =  {
-        let button = UIBarButtonItem(image: UIImage.templateImageNamed("nav-stop"), style: .done, target: self, action: #selector(topLeftButtonAction))
+        let button = UIBarButtonItem(image: UIImage.templateImageNamed(StandardImageIdentifiers.Large.cross), style: .done, target: self, action: #selector(topLeftButtonAction))
         return button
     }()
 
     // MARK: - Initializers
     convenience init(profile: Profile, bookmarkNode: FxBookmarkNode, parentBookmarkFolder: FxBookmarkNode, presentedFromToast fromToast: Bool = false) {
-        self.init(profile: profile, bookmarkNodeGUID: bookmarkNode.guid, bookmarkNodeType: bookmarkNode.type, parentBookmarkFolder: parentBookmarkFolder)
+        let bookmarkItemData = bookmarkNode as? BookmarkItemData
+        self.init(profile: profile,
+                  bookmarkNodeGUID: bookmarkNode.guid,
+                  bookmarkNodeType: bookmarkNode.type,
+                  parentBookmarkFolder: parentBookmarkFolder,
+                  presentedFromToast: fromToast,
+                  bookmarkItemURL: bookmarkItemData?.url)
 
-        self.isPresentedFromToast = fromToast
         self.bookmarkItemPosition = bookmarkNode.position
 
-        if let bookmarkItem = bookmarkNode as? BookmarkItemData {
+        if let bookmarkItem = bookmarkItemData {
             self.bookmarkItemOrFolderTitle = bookmarkItem.title
             self.bookmarkItemURL = bookmarkItem.url
 
@@ -102,12 +108,11 @@ class BookmarkDetailPanel: SiteTableViewController {
         }
     }
 
-    convenience init(profile: Profile, withNewBookmarkNodeType bookmarkNodeType: BookmarkNodeType, parentBookmarkFolder: FxBookmarkNode) {
+    convenience init(profile: Profile, withNewBookmarkNodeType bookmarkNodeType: BookmarkNodeType, parentBookmarkFolder: FxBookmarkNode, updatePanelState: ((LibraryPanelSubState) -> Void)? = nil) {
         self.init(profile: profile, bookmarkNodeGUID: nil, bookmarkNodeType: bookmarkNodeType, parentBookmarkFolder: parentBookmarkFolder)
 
         if bookmarkNodeType == .bookmark {
             self.bookmarkItemOrFolderTitle = ""
-            self.bookmarkItemURL = ""
 
             self.title = .BookmarksNewBookmark
         } else if bookmarkNodeType == .folder {
@@ -115,12 +120,16 @@ class BookmarkDetailPanel: SiteTableViewController {
 
             self.title = .BookmarksNewFolder
         }
+
+        self.updatePanelState = updatePanelState
     }
 
-    private init(profile: Profile, bookmarkNodeGUID: GUID?, bookmarkNodeType: BookmarkNodeType, parentBookmarkFolder: FxBookmarkNode) {
+    private init(profile: Profile, bookmarkNodeGUID: GUID?, bookmarkNodeType: BookmarkNodeType, parentBookmarkFolder: FxBookmarkNode, presentedFromToast fromToast: Bool = false, bookmarkItemURL: String? = nil) {
         self.bookmarkNodeGUID = bookmarkNodeGUID
         self.bookmarkNodeType = bookmarkNodeType
         self.parentBookmarkFolder = parentBookmarkFolder
+        self.isPresentedFromToast = fromToast
+        self.bookmarkItemURL = bookmarkItemURL
 
         super.init(profile: profile)
 
@@ -169,12 +178,7 @@ class BookmarkDetailPanel: SiteTableViewController {
 
     override func applyTheme() {
         super.applyTheme()
-
-        if let current = navigationController?.visibleViewController as? NotificationThemeable, current !== self {
-            current.applyTheme()
-        }
-
-        tableView.backgroundColor = UIColor.theme.tableView.headerBackground
+        tableView.backgroundColor = themeManager.currentTheme.colors.layer1
     }
 
     override func reloadData() {
@@ -227,8 +231,12 @@ class BookmarkDetailPanel: SiteTableViewController {
     func updateSaveButton() {
         guard bookmarkNodeType == .bookmark else { return }
 
-        let url = URL(string: bookmarkItemURL ?? "")
-        navigationItem.rightBarButtonItem?.isEnabled = url?.schemeIsValid == true && url?.host != nil
+        navigationItem.rightBarButtonItem?.isEnabled = isBookmarkItemURLValid()
+    }
+
+    private func isBookmarkItemURLValid() -> Bool {
+        let url = URL(string: bookmarkItemURL ?? "", invalidCharacters: false)
+        return url?.schemeIsValid == true && url?.host != nil
     }
 
     // MARK: - Button Actions
@@ -263,6 +271,11 @@ class BookmarkDetailPanel: SiteTableViewController {
                 guard let bookmarkItemOrFolderTitle = self.bookmarkItemOrFolderTitle else {
                     return deferMaybe(BookmarkDetailPanelError())
                 }
+
+                TelemetryWrapper.recordEvent(category: .action,
+                                             method: .tap,
+                                             object: .bookmark,
+                                             value: .bookmarkAddFolder)
 
                 return profile.places.createFolder(parentGUID: parentBookmarkFolder.guid,
                                                    title: bookmarkItemOrFolderTitle,
@@ -355,7 +368,7 @@ class BookmarkDetailPanel: SiteTableViewController {
                 cell.isUserInteractionEnabled = true
             }
 
-            cell.leftImageView.image = UIImage(named: "bookmarkFolder")?.createScaled(BookmarkDetailPanelUX.FolderIconSize)
+            cell.leftImageView.manuallySetImage(UIImage(named: StandardImageIdentifiers.Large.folder) ?? UIImage())
             cell.leftImageView.contentMode = .center
             cell.indentationWidth = BookmarkDetailPanelUX.IndentationWidth
 
@@ -388,6 +401,7 @@ class BookmarkDetailPanel: SiteTableViewController {
                 cell.accessoryType = .none
             }
 
+            cell.applyTheme(theme: themeManager.currentTheme)
             return cell
         }
 
@@ -397,6 +411,7 @@ class BookmarkDetailPanel: SiteTableViewController {
         }
 
         cell.delegate = self
+        cell.applyTheme(theme: themeManager.currentTheme)
 
         switch indexPath.row {
         case BookmarkDetailFieldsRow.title.rawValue:
@@ -428,6 +443,14 @@ class BookmarkDetailPanel: SiteTableViewController {
         let header = view as? SiteTableViewHeader
         header?.showBorder(for: .top, section != 0)
     }
+
+    private func toggleSaveButton() {
+        if let title = bookmarkItemOrFolderTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty && isBookmarkItemURLValid() {
+            self.updatePanelState?(.itemEditMode)
+        } else {
+            self.updatePanelState?(.itemEditModeInvalidField)
+        }
+    }
 }
 
 extension BookmarkDetailPanel: TextFieldTableViewCellDelegate {
@@ -441,7 +464,11 @@ extension BookmarkDetailPanel: TextFieldTableViewCellDelegate {
             bookmarkItemURL = text
             updateSaveButton()
         default:
-            log.warning("Received didChangeText: for a cell with an IndexPath that should not exist.")
+            break
+        }
+
+        if !isPresentedFromToast {
+            toggleSaveButton()
         }
     }
 }

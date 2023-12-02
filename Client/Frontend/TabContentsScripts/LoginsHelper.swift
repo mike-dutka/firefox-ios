@@ -1,14 +1,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
 import Storage
-import XCGLogger
 import WebKit
-
-private let log = Logger.browserLogger
 
 class LoginsHelper: TabContentScript {
     fileprivate weak var tab: Tab?
@@ -34,13 +32,12 @@ class LoginsHelper: TabContentScript {
     }
 
     fileprivate func getOrigin(_ uriString: String, allowJS: Bool = false) -> String? {
-        guard let uri = URL(string: uriString),
+        guard let uri = URL(string: uriString, invalidCharacters: false),
               let scheme = uri.scheme, !scheme.isEmpty,
               let host = uri.host
         else {
             // bug 159484 - disallow url types that don't support a hostPort.
             // (although we handle "javascript:..." as a special case above.)
-            log.debug("Couldn't parse origin for \(uriString)")
             return nil
         }
 
@@ -115,9 +112,9 @@ class LoginsHelper: TabContentScript {
         for (index, key) in keys.enumerated() {
             let replace = replacements[index]
             let range = string.range(of: key,
-                options: .literal,
-                range: nil,
-                locale: nil)!
+                                     options: .literal,
+                                     range: nil,
+                                     locale: nil)!
             string.replaceSubrange(range, with: replace)
             let nsRange = NSRange(location: string.distance(from: string.startIndex, to: range.lowerBound),
                                   length: replace.count)
@@ -137,13 +134,11 @@ class LoginsHelper: TabContentScript {
 
     func setCredentials(_ login: LoginEntry) {
         if login.password.isEmpty {
-            log.debug("Empty password")
             return
         }
 
         profile.logins.getLoginsForProtectionSpace(login.protectionSpace, withUsername: login.username).uponQueue(.main) { res in
             if let data = res.successValue {
-                log.debug("Found \(data.count) logins.")
                 for saved in data {
                     if let saved = saved {
                         if saved.decryptedPassword == login.password {
@@ -178,7 +173,7 @@ class LoginsHelper: TabContentScript {
             tab?.removeSnackbar(existingPrompt)
         }
 
-        snackBar = TimerSnackBar(text: promptMessage, img: UIImage(named: ImageIdentifiers.key))
+        snackBar = TimerSnackBar(text: promptMessage, img: UIImage(named: StandardImageIdentifiers.Large.login))
         let dontSave = SnackButton(title: .LoginsHelperDontSaveButtonTitle, accessibilityIdentifier: "SaveLoginPrompt.dontSaveButton", bold: false) { bar in
             self.tab?.removeSnackbar(bar)
             self.snackBar = nil
@@ -187,6 +182,7 @@ class LoginsHelper: TabContentScript {
         let save = SnackButton(title: .LoginsHelperSaveLoginButtonTitle, accessibilityIdentifier: "SaveLoginPrompt.saveLoginButton", bold: true) { bar in
             self.tab?.removeSnackbar(bar)
             self.snackBar = nil
+            self.sendLoginsSavedTelemetry()
             _ = self.profile.logins.addLogin(login: login)
         }
         snackBar?.addButton(dontSave)
@@ -209,7 +205,7 @@ class LoginsHelper: TabContentScript {
             tab?.removeSnackbar(existingPrompt)
         }
 
-        snackBar = TimerSnackBar(text: formatted, img: UIImage(named: ImageIdentifiers.key))
+        snackBar = TimerSnackBar(text: formatted, img: UIImage(named: StandardImageIdentifiers.Large.login))
         let dontSave = SnackButton(title: .LoginsHelperDontUpdateButtonTitle, accessibilityIdentifier: "UpdateLoginPrompt.donttUpdateButton", bold: false) { bar in
             self.tab?.removeSnackbar(bar)
             self.snackBar = nil
@@ -217,6 +213,7 @@ class LoginsHelper: TabContentScript {
         let update = SnackButton(title: .LoginsHelperUpdateButtonTitle, accessibilityIdentifier: "UpdateLoginPrompt.updateButton", bold: true) { bar in
             self.tab?.removeSnackbar(bar)
             self.snackBar = nil
+            self.sendLoginsModifiedTelemetry()
             _ = self.profile.logins.updateLogin(id: old.id, login: new)
         }
         snackBar?.addButton(dontSave)
@@ -229,8 +226,8 @@ class LoginsHelper: TabContentScript {
             // Even though we don't currently use these two fields,
             // verify that they were received as additional confirmation
             // that this is a valid request from LoginsHelper.js.
-            let _ = request["formOrigin"] as? String,
-            let _ = request["actionOrigin"] as? String,
+            request["formOrigin"] as? String != nil,
+            request["actionOrigin"] as? String != nil,
 
             // We pass in the webview's URL and derive the origin here
             // to workaround Bug 1194567.
@@ -247,8 +244,6 @@ class LoginsHelper: TabContentScript {
                 return login?.httpRealm == nil ? login?.toJSONDict() : nil
             }
 
-            log.debug("Found \(logins.count) logins.")
-
             let dict: [String: Any] = [
                 "requestId": requestId,
                 "name": "RemoteLogins:loginsFound",
@@ -257,6 +252,25 @@ class LoginsHelper: TabContentScript {
             guard let injected = dict.asString else { return }
             let injectJavaScript = "window.__firefox__.logins.inject(\(injected))"
             self.tab?.webView?.evaluateJavascriptInDefaultContentWorld(injectJavaScript)
+            self.sendLoginsAutofilledTelemetry()
         }
+    }
+
+    private func sendLoginsModifiedTelemetry() {
+        TelemetryWrapper.recordEvent(category: .action,
+                                     method: .change,
+                                     object: .loginsModified)
+    }
+
+    private func sendLoginsSavedTelemetry() {
+        TelemetryWrapper.recordEvent(category: .action,
+                                     method: .add,
+                                     object: .loginsSaved)
+    }
+
+    private func sendLoginsAutofilledTelemetry() {
+        TelemetryWrapper.recordEvent(category: .action,
+                                     method: .tap,
+                                     object: .loginsAutofilled)
     }
 }

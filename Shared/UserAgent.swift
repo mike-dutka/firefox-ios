@@ -1,7 +1,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import WebKit
 import UIKit
 
@@ -49,7 +50,7 @@ open class UserAgent {
     }
 
     public static func desktopUserAgent() -> String {
-        return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.1 Safari/605.1.15"
+        return "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Safari/605.1.15"
     }
 
     public static func mobileUserAgent() -> String {
@@ -97,10 +98,21 @@ public enum UserAgentPlatform {
 public struct CustomUserAgentConstant {
     private static let defaultMobileUA = UserAgentBuilder.defaultMobileUserAgent().userAgent()
     private static let customDesktopUA = UserAgentBuilder.defaultDesktopUserAgent().clone(extensions: "Version/\(AppInfo.appVersion) \(UserAgent.uaBitSafari)")
+    private static let mobileAdsUA = UserAgentBuilder.defaultMobileUserAgent().clone(extensions: "\(UserAgent.uaBitMobile) \(UserAgent.uaBitSafari)")
 
+    // when clicking the videos on nba.com they make requests to
+    // demdex.net ,doubleclick.net, amazon-adsystem.com, rfihub.com as well
+    // and if the User Agent is different in any of those, the video on nba.com won't work either.
+    // Rokuchannel didn't have these restrictions
     public static let customUAFor = [
         "paypal.com": defaultMobileUA,
         "yahoo.com": defaultMobileUA,
+        "demdex.net": mobileAdsUA,
+        "doubleclick.net": mobileAdsUA,
+        "rfihub.com": mobileAdsUA,
+        "amazon-adsystem.com": mobileAdsUA,
+        "nba.com": mobileAdsUA,
+        "roku.com": mobileAdsUA,
         "disneyplus.com": customDesktopUA]
 }
 

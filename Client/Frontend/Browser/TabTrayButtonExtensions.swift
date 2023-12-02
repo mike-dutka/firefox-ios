@@ -1,13 +1,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import UIKit
+import Shared
 
 class PrivateModeButton: ToggleButton, PrivateModeUI {
-    var offTint = UIColor.black
-    var onTint = UIColor.black
-
     override init(frame: CGRect) {
         super.init(frame: frame)
         accessibilityLabel = .TabTrayToggleAccessibilityLabel
@@ -20,37 +19,17 @@ class PrivateModeButton: ToggleButton, PrivateModeUI {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func applyUIMode(isPrivate: Bool) {
+    func applyUIMode(isPrivate: Bool, theme: Theme) {
         isSelected = isPrivate
 
-        tintColor = isPrivate ? onTint : offTint
+        tintColor = isPrivate ? theme.colors.iconOnColor : theme.colors.iconPrimary
         imageView?.tintColor = tintColor
 
         accessibilityValue = isSelected ? .TabTrayToggleAccessibilityValueOn : .TabTrayToggleAccessibilityValueOff
     }
 
     func applyTheme(theme: Theme) {
-        onTint = theme.colors.iconOnColor
-        offTint = theme.colors.iconPrimary
-        tintColor = isSelected ? onTint : offTint
+        tintColor = isSelected ? theme.colors.iconOnColor : theme.colors.iconPrimary
         imageView?.tintColor = tintColor
-    }
-}
-
-extension UIButton {
-    static func newTabButton() -> UIButton {
-        let newTab = UIButton()
-        newTab.setImage(UIImage.templateImageNamed(ImageIdentifiers.newTab), for: .normal)
-        newTab.accessibilityLabel = .TabTrayButtonNewTabAccessibilityLabel
-        return newTab
-    }
-}
-
-extension TabsButton {
-    static func tabTrayButton() -> TabsButton {
-        let tabsButton = TabsButton()
-        tabsButton.countLabel.text = "0"
-        tabsButton.accessibilityLabel = .TabTrayButtonShowTabsAccessibilityLabel
-        return tabsButton
     }
 }

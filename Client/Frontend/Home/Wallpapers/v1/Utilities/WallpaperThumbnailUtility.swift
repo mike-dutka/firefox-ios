@@ -2,11 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
 
-class WallpaperThumbnailUtility: Loggable {
-
+class WallpaperThumbnailUtility {
     // MARK: - Properties
 
     /// The mininmum number of thumbnails we require to show the onboarding or
@@ -20,14 +20,17 @@ class WallpaperThumbnailUtility: Loggable {
     private var userDefaults: UserDefaultsInterface
     private var networkingModule: WallpaperNetworking
     private let prefsKey = PrefsKeys.Wallpapers.ThumbnailsAvailable
+    private var logger: Logger
 
     // MARK: - Initializers
     init(
         with networkingModule: WallpaperNetworking,
-        and userDefaults: UserDefaultsInterface = UserDefaults.standard
+        and userDefaults: UserDefaultsInterface = UserDefaults.standard,
+        logger: Logger = DefaultLogger.shared
     ) {
         self.networkingModule = networkingModule
         self.userDefaults = userDefaults
+        self.logger = logger
     }
 
     // MARK: - Public interface
@@ -51,7 +54,9 @@ class WallpaperThumbnailUtility: Loggable {
             try await fetchMissingThumbnails(from: collections)
             verifyThumbnailsFor(collections)
         } catch {
-            browserLog.error("Wallpaper thumbnail update error: \(error.localizedDescription)")
+            logger.log("Wallpaper thumbnail update error: \(error.localizedDescription)",
+                       level: .warning,
+                       category: .homepage)
         }
     }
 

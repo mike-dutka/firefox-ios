@@ -4,6 +4,7 @@
 
 import Foundation
 import Storage
+import Common
 
 protocol RecentlySavedDataAdaptor {
     func getRecentlySavedData() -> [RecentlySavedItem]
@@ -14,7 +15,6 @@ protocol RecentlySavedDelegate: AnyObject {
 }
 
 class RecentlySavedDataAdaptorImplementation: RecentlySavedDataAdaptor, Notifiable {
-
     var notificationCenter: NotificationProtocol
     private let bookmarkItemsLimit: UInt = 5
     private let readingListItemsLimit: Int = 5

@@ -2,9 +2,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
+import ComponentLibrary
 import Foundation
+import Shared
 
 struct WallpaperSettingsHeaderViewModel {
+    var theme: Theme
     var title: String
     var titleA11yIdentifier: String
 
@@ -17,14 +21,12 @@ struct WallpaperSettingsHeaderViewModel {
 }
 
 class WallpaperSettingsHeaderView: UICollectionReusableView, ReusableCell {
-
     private struct UX {
         static let stackViewSpacing: CGFloat = 4.0
         static let topBottomSpacing: CGFloat = 16.0
     }
 
     private var viewModel: WallpaperSettingsHeaderViewModel?
-    var notificationCenter: NotificationProtocol = NotificationCenter.default
 
     // Views
     private lazy var contentStackView: UIStackView = .build { stackView in
@@ -33,19 +35,19 @@ class WallpaperSettingsHeaderView: UICollectionReusableView, ReusableCell {
     }
 
     private lazy var titleLabel: UILabel = .build { label in
-        label.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .headline, size: 12.0, weight: .medium)
+        label.font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .headline, size: 12.0, weight: .medium)
         label.adjustsFontForContentSizeCategory = true
         label.numberOfLines = 0
     }
 
     private lazy var descriptionLabel: UILabel = .build { label in
-        label.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .body, size: 12.0)
+        label.font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .body, size: 12.0)
         label.adjustsFontForContentSizeCategory = true
         label.numberOfLines = 0
     }
 
     private lazy var learnMoreButton: ResizableButton = .build { button in
-        button.titleLabel?.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .body, size: 12.0)
+        button.titleLabel?.font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .body, size: 12.0)
         button.contentHorizontalAlignment = .leading
         button.buttonEdgeSpacing = 0
     }
@@ -54,17 +56,10 @@ class WallpaperSettingsHeaderView: UICollectionReusableView, ReusableCell {
     override init(frame: CGRect) {
         super.init(frame: frame)
         setupView()
-        applyTheme()
-        setupNotifications(forObserver: self,
-                           observing: [.DisplayThemeChanged])
     }
 
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-
-    deinit {
-        notificationCenter.removeObserver(self)
     }
 
     // MARK: - Helper functions
@@ -92,10 +87,10 @@ class WallpaperSettingsHeaderView: UICollectionReusableView, ReusableCell {
             contentStackView.addArrangedSubview(descriptionLabel)
         }
 
-        if let _ = viewModel.buttonTitle,
+        if viewModel.buttonTitle != nil,
            let buttonA11y = viewModel.buttonA11yIdentifier,
-           let _ = viewModel.buttonAction {
-            setButtonStyle()
+           viewModel.buttonAction != nil {
+            setButtonStyle(theme: viewModel.theme)
             learnMoreButton.addTarget(
                 self,
                 action: #selector((buttonTapped(_:))),
@@ -108,16 +103,18 @@ class WallpaperSettingsHeaderView: UICollectionReusableView, ReusableCell {
             setNeedsLayout()
             layoutIfNeeded()
         }
+
+        applyTheme(theme: viewModel.theme)
     }
 
-    @objc func buttonTapped(_ sender: Any) {
+    @objc
+    func buttonTapped(_ sender: Any) {
         viewModel?.buttonAction?()
     }
 }
 
 // MARK: - Private
 private extension WallpaperSettingsHeaderView {
-
     func setupView() {
         contentStackView.addArrangedSubview(titleLabel)
         addSubview(contentStackView)
@@ -131,43 +128,23 @@ private extension WallpaperSettingsHeaderView {
     }
 }
 
-// MARK: - Themable & Notifiable
-extension WallpaperSettingsHeaderView: NotificationThemeable, Notifiable {
-
-    func handleNotifications(_ notification: Notification) {
-        switch notification.name {
-        case .DisplayThemeChanged:
-            applyTheme()
-        default: break
-        }
+// MARK: - Themable
+extension WallpaperSettingsHeaderView: ThemeApplicable {
+    func applyTheme(theme: Theme) {
+        contentStackView.backgroundColor = theme.colors.layer5
+        titleLabel.textColor = theme.colors.textPrimary
+        descriptionLabel.textColor = theme.colors.textPrimary
+        setButtonStyle(theme: theme)
     }
 
-    func applyTheme() {
-        let theme = BuiltinThemeName(rawValue: LegacyThemeManager.instance.current.name) ?? .normal
-
-        if theme == .dark {
-            contentStackView.backgroundColor = UIColor.Photon.DarkGrey40
-            titleLabel.textColor = UIColor.Photon.Grey10
-            descriptionLabel.textColor = UIColor.Photon.Grey10
-        } else {
-            contentStackView.backgroundColor = UIColor.Photon.LightGrey10
-            titleLabel.textColor = UIColor.Photon.Grey75A60
-            descriptionLabel.textColor = UIColor.Photon.Grey75A60
-        }
-        setButtonStyle()
-    }
-
-    func setButtonStyle() {
-        let theme = BuiltinThemeName(rawValue: LegacyThemeManager.instance.current.name) ?? .normal
-
-        let color = theme == .dark ? UIColor.Photon.Grey10 : UIColor.Photon.Grey75A60
-
+    private func setButtonStyle(theme: Theme) {
+        let color = theme.colors.textPrimary
         learnMoreButton.setTitleColor(color, for: .normal)
 
         // in iOS 13 the title color set is not used for the attributed text color so we have to set it via attributes
         guard let buttonTitle = viewModel?.buttonTitle else { return }
         let labelAttributes: [NSAttributedString.Key: Any] = [
-            .font: DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .body, size: 12.0),
+            .font: DefaultDynamicFontHelper.preferredFont(withTextStyle: .body, size: 12.0),
             .foregroundColor: color,
             .underlineStyle: NSUnderlineStyle.single.rawValue
         ]

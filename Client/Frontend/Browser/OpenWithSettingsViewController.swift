@@ -1,12 +1,17 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
 
 class OpenWithSettingsViewController: ThemedTableViewController {
-    typealias MailtoProviderEntry = (name: String, scheme: String, enabled: Bool)
+    struct MailtoProviderEntry {
+        let name: String
+        let scheme: String
+        let enabled: Bool
+    }
+
     var mailProviderSource = [MailtoProviderEntry]()
 
     fileprivate let prefs: Prefs
@@ -45,18 +50,19 @@ class OpenWithSettingsViewController: ThemedTableViewController {
         self.prefs.setString(currentChoice, forKey: PrefsKeys.KeyMailToOption)
     }
 
-    @objc func appDidBecomeActive() {
+    @objc
+    func appDidBecomeActive() {
         reloadMailProviderSource()
         updateCurrentChoice()
         tableView.reloadData()
     }
 
     func updateCurrentChoice() {
-        var previousChoiceAvailable: Bool = false
+        var previousChoiceAvailable = false
         if let prefMailtoScheme = self.prefs.stringForKey(PrefsKeys.KeyMailToOption) {
-            mailProviderSource.forEach({ (name, scheme, enabled) in
-                if scheme == prefMailtoScheme {
-                    previousChoiceAvailable = enabled
+            mailProviderSource.forEach({ item in
+                if item.scheme == prefMailtoScheme {
+                    previousChoiceAvailable = item.enabled
                 }
             })
         }
@@ -71,26 +77,33 @@ class OpenWithSettingsViewController: ThemedTableViewController {
     }
 
     func reloadMailProviderSource() {
-        if let path = Bundle.main.path(forResource: "MailSchemes", ofType: "plist"), let dictRoot = NSArray(contentsOfFile: path) {
-            mailProviderSource = dictRoot.map {  dict in
-                let nsDict = dict as! NSDictionary
-                return (name: nsDict["name"] as! String, scheme: nsDict["scheme"] as! String,
-                        enabled: canOpenMailScheme(nsDict["scheme"] as! String))
+        if let path = Bundle.main.path(forResource: "MailSchemes", ofType: "plist"),
+           let dictRoot = NSArray(contentsOfFile: path) {
+            mailProviderSource = dictRoot.compactMap { dict in
+                guard let nsDict = dict as? NSDictionary,
+                      let name = nsDict["name"] as? String,
+                      let scheme = nsDict["scheme"] as? String
+                else { return nil }
+
+                return (MailtoProviderEntry(name: name,
+                                            scheme: scheme,
+                                            enabled: canOpenMailScheme(scheme)))
             }
         }
     }
 
     func canOpenMailScheme(_ scheme: String) -> Bool {
-        if let url = URL(string: scheme) {
+        if let url = URL(string: scheme, invalidCharacters: false) {
             return UIApplication.shared.canOpenURL(url)
         }
         return false
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = ThemedTableViewCell()
+        let cell = dequeueCellFor(indexPath: indexPath)
         let option = mailProviderSource[indexPath.row]
 
+        cell.applyTheme(theme: themeManager.currentTheme)
         cell.textLabel?.attributedText = NSAttributedString.tableRowTitle(option.name, enabled: option.enabled)
         cell.accessoryType = (currentChoice == option.scheme && option.enabled) ? .checkmark : .none
         cell.isUserInteractionEnabled = option.enabled
@@ -108,7 +121,7 @@ class OpenWithSettingsViewController: ThemedTableViewController {
     }
 
     override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-        guard let headerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: ThemedTableSectionHeaderFooterView.cellIdentifier) as? ThemedTableSectionHeaderFooterView else { return nil }
+        guard let headerView = super.tableView(tableView, viewForHeaderInSection: section) as? ThemedTableSectionHeaderFooterView else { return nil }
 
         headerView.titleLabel.text = .SettingsOpenWithPageTitle.uppercased()
         return headerView
@@ -116,11 +129,6 @@ class OpenWithSettingsViewController: ThemedTableViewController {
 
     override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
         return UITableView.automaticDimension
-    }
-
-    override func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
-        guard let footerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: ThemedTableSectionHeaderFooterView.cellIdentifier) as? ThemedTableSectionHeaderFooterView else { return nil }
-        return footerView
     }
 
     override func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {

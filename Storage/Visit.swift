@@ -1,47 +1,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
-
-// These are taken from the Places docs
-// http://mxr.mozilla.org/mozilla-central/source/toolkit/components/places/nsINavHistoryService.idl#1187
-@objc public enum VisitType: Int, CaseIterable {
-    case unknown
-
-    /**
-     * This transition type means the user followed a link and got a new toplevel
-     * window.
-     */
-    case link
-
-    /**
-     * This transition type means that the user typed the page's URL in the
-     * URL bar or selected it from URL bar autocomplete results, clicked on
-     * it from a history query (from the History sidebar, History menu,
-     * or history query in the personal toolbar or Places organizer).
-     */
-    case typed
-
-    case bookmark
-    case embed
-    case permanentRedirect
-    case temporaryRedirect
-    case download
-    case framedLink
-    case recentlyClosed
-}
-
-// WKWebView has these:
-/*
-WKNavigationTypeLinkActivated,
-WKNavigationTypeFormSubmitted,
-WKNavigationTypeBackForward,
-WKNavigationTypeReload,
-WKNavigationTypeFormResubmitted,
-WKNavigationTypeOther = -1,
-*/
 
 /**
  * SiteVisit is a sop to the existing API, which expects to be able to go
@@ -65,24 +27,9 @@ open class Visit: Hashable {
         hasher.combine(type)
     }
 
-    public init(date: MicrosecondTimestamp, type: VisitType = .unknown) {
+    public init(date: MicrosecondTimestamp, type: VisitType = .link) {
         self.date = date
         self.type = type
-    }
-
-    open class func fromJSON(_ json: [String: Any]) -> Visit? {
-        if let type = json["type"] as? Int,
-            let typeEnum = VisitType(rawValue: type),
-            let date = json["date"] as? Int64, date >= 0 {
-                return Visit(date: MicrosecondTimestamp(date), type: typeEnum)
-        }
-        return nil
-    }
-
-    open func toJSON() -> [String: Any] {
-        let d = NSNumber(value: self.date)
-        let o: [String: Any] = ["type": self.type.rawValue, "date": d]
-        return o
     }
 }
 
@@ -95,14 +42,14 @@ open class SiteVisit: Visit {
     var id: Int?
     public let site: Site
 
-    public override func hash(into hasher: inout Hasher) {
+    override public func hash(into hasher: inout Hasher) {
         hasher.combine(date)
         hasher.combine(type)
         hasher.combine(id)
         hasher.combine(site.id)
     }
 
-    public init(site: Site, date: MicrosecondTimestamp, type: VisitType = .unknown) {
+    public init(site: Site, date: MicrosecondTimestamp, type: VisitType = .link) {
         self.site = site
         super.init(date: date, type: type)
     }

@@ -2,7 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import MozillaAppServices
+import Shared
 
 protocol HomepageViewModelDelegate: AnyObject {
     func reloadView()
@@ -13,15 +15,26 @@ protocol HomepageDataModelDelegate: AnyObject {
 }
 
 class HomepageViewModel: FeatureFlaggable {
-
     struct UX {
-        static let spacingBetweenSections: CGFloat = 32
+        static let spacingBetweenSections: CGFloat = 62
         static let standardInset: CGFloat = 18
         static let iPadInset: CGFloat = 50
         static let iPadTopSiteInset: CGFloat = 25
 
-        static func leadingInset(traitCollection: UITraitCollection) -> CGFloat {
-            guard UIDevice.current.userInterfaceIdiom != .phone else { return standardInset }
+        // Shadow
+        static let shadowRadius: CGFloat = 4
+        static let shadowOffset = CGSize(width: 0, height: 2)
+        static let shadowOpacity: Float = 1 // shadow opacity set to 0.16 through shadowDefault themed color
+
+        // General
+        static let generalCornerRadius: CGFloat = 8
+        static let generalBorderWidth: CGFloat = 0.5
+        static let generalIconCornerRadius: CGFloat = 4
+        static let fallbackFaviconSize = CGSize(width: 36, height: 36)
+
+        static func leadingInset(traitCollection: UITraitCollection,
+                                 interfaceIdiom: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom) -> CGFloat {
+            guard interfaceIdiom != .phone else { return standardInset }
 
             // Handles multitasking on iPad
             return traitCollection.horizontalSizeClass == .regular ? iPadInset : standardInset
@@ -58,12 +71,19 @@ class HomepageViewModel: FeatureFlaggable {
         }
     }
 
+    var theme: Theme {
+        didSet {
+            childViewModels.forEach { $0.setTheme(theme: theme) }
+        }
+    }
+
     /// Record view appeared is sent multiple times, this avoids recording telemetry multiple times for one appearance
-    private var viewAppeared: Bool = false
+    var viewAppeared = false
 
     var shownSections = [HomepageSectionType]()
     weak var delegate: HomepageViewModelDelegate?
     private var wallpaperManager: WallpaperManager
+    private var logger: Logger
 
     // Child View models
     private var childViewModels: [HomepageViewModelProtocol]
@@ -83,32 +103,39 @@ class HomepageViewModel: FeatureFlaggable {
     // MARK: - Initializers
     init(profile: Profile,
          isPrivate: Bool,
-         tabManager: TabManagerProtocol,
-         urlBar: URLBarViewProtocol,
+         tabManager: TabManager,
          nimbus: FxNimbus = FxNimbus.shared,
          isZeroSearch: Bool = false,
-         wallpaperManager: WallpaperManager = WallpaperManager()) {
+         theme: Theme,
+         wallpaperManager: WallpaperManager = WallpaperManager(),
+         logger: Logger = DefaultLogger.shared) {
         self.profile = profile
         self.isZeroSearch = isZeroSearch
+        self.theme = theme
+        self.logger = logger
 
-        self.headerViewModel = HomeLogoHeaderViewModel(profile: profile)
+        self.headerViewModel = HomeLogoHeaderViewModel(profile: profile, theme: theme)
         let messageCardAdaptor = MessageCardDataAdaptorImplementation()
-        self.messageCardViewModel = HomepageMessageCardViewModel(dataAdaptor: messageCardAdaptor)
+        self.messageCardViewModel = HomepageMessageCardViewModel(dataAdaptor: messageCardAdaptor, theme: theme)
         messageCardAdaptor.delegate = messageCardViewModel
-        self.topSiteViewModel = TopSitesViewModel(profile: profile, wallpaperManager: wallpaperManager)
+        self.topSiteViewModel = TopSitesViewModel(profile: profile,
+                                                  theme: theme,
+                                                  wallpaperManager: wallpaperManager)
         self.wallpaperManager = wallpaperManager
 
-        let adaptor = JumpBackInDataAdaptorImplementation(profile: profile,
-                                                          tabManager: tabManager)
+        let jumpBackInAdaptor = JumpBackInDataAdaptorImplementation(profile: profile,
+                                                                    tabManager: tabManager)
         self.jumpBackInViewModel = JumpBackInViewModel(
             profile: profile,
             isPrivate: isPrivate,
+            theme: theme,
             tabManager: tabManager,
-            adaptor: adaptor,
+            adaptor: jumpBackInAdaptor,
             wallpaperManager: wallpaperManager)
-        adaptor.delegate = jumpBackInViewModel
 
-        self.recentlySavedViewModel = RecentlySavedViewModel(profile: profile, wallpaperManager: wallpaperManager)
+        self.recentlySavedViewModel = RecentlySavedViewModel(profile: profile,
+                                                             theme: theme,
+                                                             wallpaperManager: wallpaperManager)
         let deletionUtility = HistoryDeletionUtility(with: profile)
         let historyDataAdaptor = HistoryHighlightsDataAdaptorImplementation(
             profile: profile,
@@ -117,18 +144,18 @@ class HomepageViewModel: FeatureFlaggable {
         self.historyHighlightsViewModel = HistoryHighlightsViewModel(
             with: profile,
             isPrivate: isPrivate,
-            urlBar: urlBar,
+            theme: theme,
             historyHighlightsDataAdaptor: historyDataAdaptor,
             wallpaperManager: wallpaperManager)
 
-        let pocketDataAdaptor = PocketDataAdaptorImplementation(
-            pocketAPI: PocketProvider(),
-            pocketSponsoredAPI: MockPocketSponsoredStoriesProvider())
+        let pocketDataAdaptor = PocketDataAdaptorImplementation(pocketAPI: PocketProvider(prefs: profile.prefs))
         self.pocketViewModel = PocketViewModel(pocketDataAdaptor: pocketDataAdaptor,
+                                               theme: theme,
+                                               prefs: profile.prefs,
                                                wallpaperManager: wallpaperManager)
         pocketDataAdaptor.delegate = pocketViewModel
 
-        self.customizeButtonViewModel = CustomizeHomepageSectionViewModel()
+        self.customizeButtonViewModel = CustomizeHomepageSectionViewModel(theme: theme)
         self.childViewModels = [headerViewModel,
                                 messageCardViewModel,
                                 topSiteViewModel,
@@ -146,6 +173,10 @@ class HomepageViewModel: FeatureFlaggable {
         pocketViewModel.delegate = self
         jumpBackInViewModel.delegate = self
         messageCardViewModel.delegate = self
+
+        Task {
+            await jumpBackInAdaptor.setDelegate(delegate: jumpBackInViewModel)
+        }
 
         updateEnabledSections()
     }
@@ -186,12 +217,18 @@ class HomepageViewModel: FeatureFlaggable {
         childViewModels.forEach {
             if $0.shouldShow { shownSections.append($0.sectionType) }
         }
+        logger.log("Homepage amount of sections shown \(shownSections.count)",
+                   level: .debug,
+                   category: .homepage)
     }
 
-    func refreshData(for traitCollection: UITraitCollection) {
+    func refreshData(for traitCollection: UITraitCollection, size: CGSize) {
         updateEnabledSections()
         childViewModels.forEach {
-            $0.refreshData(for: traitCollection)
+            $0.refreshData(for: traitCollection,
+                           size: size,
+                           isPortrait: UIWindow.isPortrait,
+                           device: UIDevice.current.userInterfaceIdiom)
         }
     }
 

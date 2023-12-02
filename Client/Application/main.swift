@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Shared
 
@@ -13,7 +13,7 @@ private var appDelegate: String?
 if AppConstants.isRunningUITests || AppConstants.isRunningPerfTests {
     appDelegate = NSStringFromClass(UITestAppDelegate.self)
 } else if AppConstants.isRunningTest {
-    appDelegate = nil
+    appDelegate = NSStringFromClass(UnitTestAppDelegate.self)
 } else {
     appDelegate = NSStringFromClass(AppDelegate.self)
 }

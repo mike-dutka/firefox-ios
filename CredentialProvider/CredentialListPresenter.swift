@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import AuthenticationServices
@@ -13,7 +13,6 @@ enum CredentialState {
 }
 
 class CredentialListPresenter {
-
     weak var view: CredentialListViewProtocol?
     var loginsData = [(ASPasswordCredentialIdentity, ASPasswordCredential)]()
     private var filteredCredentials = [(ASPasswordCredentialIdentity, ASPasswordCredential)]()
@@ -77,5 +76,4 @@ class CredentialListPresenter {
     func cancelRequest() {
         view?.credentialExtensionContext?.cancelRequest(withError: NSError(domain: ASExtensionErrorDomain, code: ASExtensionError.userCanceled.rawValue))
     }
-
 }

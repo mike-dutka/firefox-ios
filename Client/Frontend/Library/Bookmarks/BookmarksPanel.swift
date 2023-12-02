@@ -1,11 +1,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import UIKit
 import Storage
 import Shared
-import XCGLogger
+import SiteImageView
 
 let LocalizedRootBookmarkFolderStrings = [
     BookmarkRoots.MenuFolderGUID: String.BookmarksFolderTitleMenu,
@@ -15,18 +16,21 @@ let LocalizedRootBookmarkFolderStrings = [
     LocalDesktopFolder.localDesktopFolderGuid: String.Bookmarks.Menu.DesktopBookmarks
 ]
 
-class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActionBookmark, Loggable {
-
+class BookmarksPanel: SiteTableViewController,
+                      LibraryPanel,
+                      CanRemoveQuickActionBookmark {
     struct UX {
         static let FolderIconSize = CGSize(width: 24, height: 24)
         static let RowFlashDelay: TimeInterval = 0.4
     }
 
     // MARK: - Properties
-    var libraryPanelDelegate: LibraryPanelDelegate?
-    var notificationCenter: NotificationProtocol
+    var bookmarksHandler: BookmarksHandler
+    weak var libraryPanelDelegate: LibraryPanelDelegate?
+    weak var bookmarkCoordinatorDelegate: BookmarksCoordinatorDelegate?
     var state: LibraryPanelMainState
     let viewModel: BookmarksPanelViewModel
+    private var logger: Logger
 
     // MARK: - Toolbar items
     var bottomToolbarItems: [UIBarButtonItem] {
@@ -48,6 +52,11 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
             return [bottomLeftButton, flexibleSpace, bottomRightButton]
         case .bookmarks(state: .itemEditMode):
             bottomRightButton.title = String.AppSettingsDone
+            bottomRightButton.isEnabled = true
+            return [flexibleSpace, bottomRightButton]
+        case .bookmarks(state: .itemEditModeInvalidField):
+            bottomRightButton.title = String.AppSettingsDone
+            bottomRightButton.isEnabled = false
             return [flexibleSpace, bottomRightButton]
         default:
             return [UIBarButtonItem]()
@@ -55,7 +64,7 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
     }
 
     private lazy var bottomLeftButton: UIBarButtonItem = {
-        let button = UIBarButtonItem(image: UIImage.templateImageNamed(ImageIdentifiers.navAdd),
+        let button = UIBarButtonItem(image: UIImage.templateImageNamed(StandardImageIdentifiers.Large.plus),
                                      style: .plain,
                                      target: self,
                                      action: #selector(bottomLeftButtonAction))
@@ -72,11 +81,11 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
     // MARK: - Init
 
     init(viewModel: BookmarksPanelViewModel,
-         notificationCenter: NotificationProtocol = NotificationCenter.default) {
-
+         logger: Logger = DefaultLogger.shared) {
         self.viewModel = viewModel
-        self.notificationCenter = notificationCenter
+        self.logger = logger
         self.state = viewModel.bookmarkFolderGUID == BookmarkRoots.MobileFolderGUID ? .bookmarks(state: .mainView) : .bookmarks(state: .inFolder)
+        self.bookmarksHandler = viewModel.profile.places
         super.init(profile: viewModel.profile)
 
         setupNotifications(forObserver: self, observing: [.FirefoxAccountChanged])
@@ -103,7 +112,7 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
         tableView.addGestureRecognizer(tableViewLongPressRecognizer)
         tableView.accessibilityIdentifier = AccessibilityIdentifiers.LibraryPanels.BookmarksPanel.tableView
         tableView.allowsSelectionDuringEditing = true
-        tableView.backgroundColor = UIColor.theme.homePanel.panelBackground
+        tableView.dragInteractionEnabled = false
     }
 
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -111,14 +120,6 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
 
         if self.state == .bookmarks(state: .inFolderEditMode) {
             self.tableView.setEditing(true, animated: true)
-        }
-    }
-
-    override func applyTheme() {
-        super.applyTheme()
-
-        if let current = navigationController?.visibleViewController as? NotificationThemeable, current !== self {
-            current.applyTheme()
         }
     }
 
@@ -148,35 +149,35 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
 
     private func getNewBookmarkAction() -> PhotonRowActions {
         return SingleActionViewModel(title: .BookmarksNewBookmark,
-                                     iconString: ImageIdentifiers.actionAddBookmark,
+                                     iconString: StandardImageIdentifiers.Large.bookmark,
                                      tapHandler: { _ in
             guard let bookmarkFolder = self.viewModel.bookmarkFolder else { return }
 
-            self.updatePanelState(newState: .bookmarks(state: .itemEditMode))
-            let detailController = BookmarkDetailPanel(profile: self.profile,
-                                                       withNewBookmarkNodeType: .bookmark,
-                                                       parentBookmarkFolder: bookmarkFolder)
-            self.navigationController?.pushViewController(detailController, animated: true)
+            self.updatePanelState(newState: .bookmarks(state: .itemEditModeInvalidField))
+            self.bookmarkCoordinatorDelegate?.showBookmarkDetail(
+                bookmarkType: .bookmark,
+                parentBookmarkFolder: bookmarkFolder,
+                updatePanelState: { state in
+                    self.updatePanelState(newState: .bookmarks(state: state))
+                    self.sendPanelChangeNotification()
+                })
         }).items
     }
 
     private func getNewFolderAction() -> PhotonRowActions {
         return SingleActionViewModel(title: .BookmarksNewFolder,
-                                     iconString: ImageIdentifiers.bookmarkFolder,
+                                     iconString: StandardImageIdentifiers.Large.folder,
                                      tapHandler: { _ in
             guard let bookmarkFolder = self.viewModel.bookmarkFolder else { return }
 
             self.updatePanelState(newState: .bookmarks(state: .itemEditMode))
-            let detailController = BookmarkDetailPanel(profile: self.profile,
-                                                       withNewBookmarkNodeType: .folder,
-                                                       parentBookmarkFolder: bookmarkFolder)
-            self.navigationController?.pushViewController(detailController, animated: true)
+            self.bookmarkCoordinatorDelegate?.showBookmarkDetail(bookmarkType: .folder, parentBookmarkFolder: bookmarkFolder)
         }).items
     }
 
     private func getNewSeparatorAction() -> PhotonRowActions {
         return SingleActionViewModel(title: .BookmarksNewSeparator,
-                                     iconString: ImageIdentifiers.navMenu,
+                                     iconString: StandardImageIdentifiers.Large.appMenu,
                                      tapHandler: { _ in
             let centerVisibleRow = self.centerVisibleRow()
 
@@ -241,13 +242,14 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
     /// Performs the delete asynchronously even though we update the
     /// table view data source immediately for responsiveness.
     private func deleteBookmarkNode(_ indexPath: IndexPath, bookmarkNode: FxBookmarkNode) {
-        _ = profile.places.deleteBookmarkNode(guid: bookmarkNode.guid)
+        profile.places.deleteBookmarkNode(guid: bookmarkNode.guid).uponQueue(.main) { _ in
+            self.removeBookmarkShortcut()
+        }
 
         tableView.beginUpdates()
         viewModel.bookmarkNodes.remove(at: indexPath.row)
         tableView.deleteRows(at: [indexPath], with: .left)
         tableView.endUpdates()
-        removeBookmarkShortcut()
     }
 
     // MARK: Button Actions helpers
@@ -255,6 +257,7 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
     func enableEditMode() {
         updatePanelState(newState: .bookmarks(state: .inFolderEditMode))
         self.tableView.setEditing(true, animated: true)
+        self.tableView.dragInteractionEnabled = true
         sendPanelChangeNotification()
     }
 
@@ -262,6 +265,7 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
         let substate: LibraryPanelSubState = viewModel.isRootNode ? .mainView : .inFolder
         updatePanelState(newState: .bookmarks(state: substate))
         self.tableView.setEditing(false, animated: true)
+        self.tableView.dragInteractionEnabled = false
         sendPanelChangeNotification()
     }
 
@@ -275,6 +279,7 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
     private func indexPathIsValid(_ indexPath: IndexPath) -> Bool {
         return indexPath.section < numberOfSections(in: tableView)
         && indexPath.row < tableView(tableView, numberOfRowsInSection: indexPath.section)
+        && indexPath.row >= 0
         && viewModel.bookmarkFolderGUID != BookmarkRoots.MobileFolderGUID
     }
 
@@ -296,6 +301,9 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
 
     private func flashRow(at indexPath: IndexPath) {
         guard indexPathIsValid(indexPath) else {
+            logger.log("Flash row indexPath invalid: \(indexPath)",
+                       level: .debug,
+                       category: .library)
             return
         }
 
@@ -310,7 +318,8 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
 
     // MARK: - Long press
 
-    @objc private func didLongPressTableView(_ longPressGestureRecognizer: UILongPressGestureRecognizer) {
+    @objc
+    private func didLongPressTableView(_ longPressGestureRecognizer: UILongPressGestureRecognizer) {
         let touchPoint = longPressGestureRecognizer.location(in: tableView)
         guard longPressGestureRecognizer.state == .began,
               let indexPath = tableView.indexPathForRow(at: touchPoint) else {
@@ -318,12 +327,6 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
         }
 
         presentContextMenu(for: indexPath)
-    }
-
-    @objc private func didLongPressBackButtonView(_ longPressGestureRecognizer: UILongPressGestureRecognizer) {
-        let generator = UIImpactFeedbackGenerator(style: .heavy)
-        generator.impactOccurred()
-        navigationController?.popToRootViewController(animated: true)
     }
 
     private func backButtonView() -> UIView? {
@@ -350,15 +353,20 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
                 !(node is BookmarkSeparatorData),
                 isCurrentFolderEditable(at: indexPath) {
                 // Only show detail controller for editable nodes
-                showBookmarkDetailController(for: node, folder: bookmarkFolder)
+                bookmarkCoordinatorDelegate?.showBookmarkDetail(for: node, folder: bookmarkFolder)
+                updatePanelState(newState: .bookmarks(state: .itemEditMode))
             }
             return
         }
 
         updatePanelState(newState: .bookmarks(state: .inFolder))
-        bookmarkCell.didSelect(profile: profile,
-                               libraryPanelDelegate: libraryPanelDelegate,
-                               navigationController: navigationController)
+        if let itemData = bookmarkCell as? BookmarkItemData,
+           let url = URL(string: itemData.url, invalidCharacters: false) {
+            libraryPanelDelegate?.libraryPanel(didSelectURL: url, visitType: .bookmark)
+        } else {
+            guard let folder = bookmarkCell as? FxBookmarkNode else { return }
+            bookmarkCoordinatorDelegate?.start(from: folder)
+        }
     }
 
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -375,9 +383,9 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
         }
 
         if let bookmarkCell = node as? BookmarksFolderCell,
-            let cell = tableView.dequeueReusableCell(withIdentifier: OneLineTableViewCell.cellIdentifier,
-                                                    for: indexPath) as? OneLineTableViewCell {
-
+            let cell = tableView.dequeueReusableCell(
+                withIdentifier: OneLineTableViewCell.cellIdentifier,
+                for: indexPath) as? OneLineTableViewCell {
             // Site is needed on BookmarkItemData to setup cell image
             var site: Site?
             if let node = node as? BookmarkItemData {
@@ -388,21 +396,24 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
             }
             cell.tag = indexPath.item
 
-            let viewModel = bookmarkCell.getViewModel(forSite: site,
-                                                      profile: profile) { viewModel in
-                guard cell.tag == indexPath.item else { return }
+            let viewModel = bookmarkCell.getViewModel()
 
-                // Configure again once image is loaded for BookmarkItemData
-                cell.configure(viewModel: viewModel)
-                cell.setNeedsLayout()
+            if let site = site,
+               viewModel.leftImageView == nil {
+                cell.leftImageView.setFavicon(FaviconImageViewModel(siteURLString: site.url))
             }
 
             cell.configure(viewModel: viewModel)
+            cell.applyTheme(theme: themeManager.currentTheme)
             return cell
-
         } else {
-            return tableView.dequeueReusableCell(withIdentifier: SeparatorTableViewCell.cellIdentifier,
-                                                 for: indexPath)
+            if let cell = tableView.dequeueReusableCell(withIdentifier: SeparatorTableViewCell.cellIdentifier,
+                                                        for: indexPath) as? SeparatorTableViewCell {
+                cell.applyTheme(theme: themeManager.currentTheme)
+                return cell
+            } else {
+                return UITableViewCell()
+            }
         }
     }
 
@@ -412,15 +423,6 @@ class BookmarksPanel: SiteTableViewController, LibraryPanel, CanRemoveQuickActio
 
     func tableView(_ tableView: UITableView, canMoveRowAt indexPath: IndexPath) -> Bool {
         return isCurrentFolderEditable(at: indexPath)
-    }
-
-    private func showBookmarkDetailController(for node: FxBookmarkNode, folder: FxBookmarkNode) {
-        TelemetryWrapper.recordEvent(category: .action, method: .change, object: .bookmark, value: .bookmarksPanel)
-        let detailController = BookmarkDetailPanel(profile: profile,
-                                                   bookmarkNode: node,
-                                                   parentBookmarkFolder: folder)
-        updatePanelState(newState: .bookmarks(state: .itemEditMode))
-        navigationController?.pushViewController(detailController, animated: true)
     }
 
     /// Root folders and local desktop folder cannot be moved or edited
@@ -480,6 +482,9 @@ extension BookmarksPanel: LibraryPanelContextMenu {
         guard let bookmarkNode = viewModel.bookmarkNodes[safe: indexPath.row],
               let bookmarkItem = bookmarkNode as? BookmarkItemData
         else {
+            logger.log("Could not get site details for indexPath \(indexPath)",
+                       level: .debug,
+                       category: .library)
             return nil
         }
 
@@ -492,19 +497,24 @@ extension BookmarksPanel: LibraryPanelContextMenu {
         }
 
         let pinTopSite = SingleActionViewModel(title: .AddToShortcutsActionTitle,
-                                               iconString: ImageIdentifiers.addShortcut,
+                                               iconString: StandardImageIdentifiers.Large.pin,
                                                tapHandler: { _ in
-            self.profile.history.addPinnedTopSite(site).uponQueue(.main) { result in
+            self.profile.pinnedSites.addPinnedTopSite(site).uponQueue(.main) { result in
                 if result.isSuccess {
                     SimpleToast().showAlertWithText(.AppMenu.AddPinToShortcutsConfirmMessage,
-                                                    bottomContainer: self.view)
+                                                    bottomContainer: self.view,
+                                                    theme: self.themeManager.currentTheme)
+                } else {
+                    self.logger.log("Could not add pinned top site",
+                                    level: .debug,
+                                    category: .library)
                 }
             }
         }).items
         actions.append(pinTopSite)
 
         let removeAction = SingleActionViewModel(title: .RemoveBookmarkContextMenuTitle,
-                                                 iconString: ImageIdentifiers.actionRemoveBookmark,
+                                                 iconString: StandardImageIdentifiers.Large.bookmarkSlash,
                                                  tapHandler: { _ in
             self.deleteBookmarkNodeAtIndexPath(indexPath)
             TelemetryWrapper.recordEvent(category: .action,
@@ -521,13 +531,11 @@ extension BookmarksPanel: LibraryPanelContextMenu {
 
 // MARK: - Notifiable
 extension BookmarksPanel: Notifiable {
-
     func handleNotifications(_ notification: Notification) {
         switch notification.name {
         case .FirefoxAccountChanged:
             reloadData()
         default:
-            browserLog.warning("Received unexpected notification \(notification.name)")
             break
         }
     }
@@ -553,6 +561,9 @@ extension BookmarksPanel {
             presentInFolderActions()
 
         case .itemEditMode:
+            updatePanelState(newState: .bookmarks(state: .inFolderEditMode))
+
+        case .itemEditModeInvalidField:
             updatePanelState(newState: .bookmarks(state: .inFolderEditMode))
 
         default:

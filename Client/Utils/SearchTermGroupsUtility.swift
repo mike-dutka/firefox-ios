@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
@@ -8,7 +8,6 @@ import Storage
 import MozillaAppServices
 
 class SearchTermGroupsUtility {
-
     public static func getHighlightGroups(
         with profile: Profile,
         from highlights: [HistoryHighlight],
@@ -61,7 +60,7 @@ class SearchTermGroupsUtility {
         guard items is [Tab] || items is [Site] || items is [HistoryHighlight] else { return completion(nil, [T]()) }
 
         let lastTwoWeek = Int64(Date().lastTwoWeek.timeIntervalSince1970)
-        profile.places.getHistoryMetadataSince(since: lastTwoWeek).uponQueue(.global(qos: .userInitiated)) { result in
+        profile.places.getHistoryMetadataSince(since: lastTwoWeek).uponQueue(.global()) { result in
             guard let historyMetadata = result.successValue else { return completion(nil, [T]()) }
 
             let searchTermMetaDataGroup = buildMetadataGroups(from: historyMetadata)
@@ -78,7 +77,6 @@ class SearchTermGroupsUtility {
     /// - Parameter ASMetadata: An array of `HistoryMetadata` used for splitting groups
     /// - Returns: A dictionary whose keys are search terms used for grouping
     private static func buildMetadataGroups(from ASMetadata: [HistoryMetadata]) -> [String: [HistoryMetadata]] {
-
         let searchTerms = Set(ASMetadata.map({ return $0.searchTerm }))
         var searchTermMetaDataGroup: [String: [HistoryMetadata]] = [:]
 
@@ -100,7 +98,6 @@ class SearchTermGroupsUtility {
     ///   - searchTermMetadata: Application Services provided metadata
     /// - Returns: A tuple with a filtered dictionary of groups and a tracking array
     private static func createGroupDictionaryAndSoloItems<T: Equatable>(from items: [T], and searchTermMetadata: [String: [HistoryMetadata]]) -> (itemGroupData: [String: [T]], itemsInGroups: [T]) {
-
         let (groupedItems, itemsInGroups) = buildItemGroups(from: items, and: searchTermMetadata)
         let (filteredGroupData, filtereditems) = filter(items: itemsInGroups, from: groupedItems, and: items)
 
@@ -119,30 +116,29 @@ class SearchTermGroupsUtility {
         var itemsInGroups: [T] = [T]()
 
         outeritemLoop: for item in items {
-            innerMetadataLoop: for (searchTerm, historyMetaList) in searchTermMetadata {
-                if historyMetaList.contains(where: { metadata in
-                    var stringURL: String = ""
+            innerMetadataLoop: for (searchTerm, historyMetaList) in searchTermMetadata where  historyMetaList.contains(where: { metadata in
+                var stringURL: String = ""
 
-                    if let item = item as? Site {
-                        stringURL = item.url
-                    } else if let item = item as? Tab, let url = item.lastKnownUrl?.absoluteString {
-                        stringURL = url
-                    } else if let item = item as? HistoryHighlight {
-                        stringURL = item.url
-                    }
-
-                    return metadata.url == stringURL || metadata.referrerUrl == stringURL
-                }) {
-                    itemsInGroups.append(item)
-                    if itemGroupData[searchTerm] == nil {
-                        itemGroupData[searchTerm] = [item]
-                    } else {
-                        itemGroupData[searchTerm]?.append(item)
-                    }
-                    break innerMetadataLoop
+                if let item = item as? Site {
+                    stringURL = item.url
+                } else if let item = item as? Tab, let url = item.lastKnownUrl?.absoluteString {
+                    stringURL = url
+                } else if let item = item as? HistoryHighlight {
+                    stringURL = item.url
                 }
+
+                return metadata.url == stringURL || metadata.referrerUrl == stringURL
+            }) {
+                itemsInGroups.append(item)
+                if itemGroupData[searchTerm] == nil {
+                    itemGroupData[searchTerm] = [item]
+                } else {
+                    itemGroupData[searchTerm]?.append(item)
+                }
+                break innerMetadataLoop
             }
         }
+
         return (itemGroupData, itemsInGroups)
     }
 
@@ -178,7 +174,7 @@ class SearchTermGroupsUtility {
                 return true
             } else {
                 if let onlyItem = temp.first,
-                    let index = itemsInGroups.firstIndex(of: onlyItem) {
+                   let index = itemsInGroups.firstIndex(of: onlyItem) {
                     itemsInGroups.remove(at: index)
                 }
                 return false
@@ -198,7 +194,6 @@ class SearchTermGroupsUtility {
     private static func filterDuplicate<T: Equatable>(itemsInGroups: [T], from items: [T]) -> [T] {
         // 4. Filter the tabs so it doesn't include same tabs as tab groups
         return items.filter { item in !itemsInGroups.contains(item) }
-
     }
 
     /// Takes a dictionary and creates ASGroups from it.
@@ -210,18 +205,18 @@ class SearchTermGroupsUtility {
     /// - Returns: An array of `ASGroup<T>`
     private static func createGroups<T: Equatable>(from groupDictionary: [String: [T]]) -> [ASGroup<T>] {
         return groupDictionary.map {
-                let orderedItems = orderItemsIn(group: $0.value)
-                var timestamp: Timestamp = 0
-                if let firstItem = orderedItems.first, let tab = firstItem as? Tab {
-                    timestamp = tab.firstCreatedTime ?? 0
-                }
+            let orderedItems = orderItemsIn(group: $0.value)
+            var timestamp: Timestamp = 0
+            if let firstItem = orderedItems.first, let tab = firstItem as? Tab {
+                timestamp = tab.firstCreatedTime ?? 0
+            }
 
-                // Base timestamp on score to order historyHighlight properly
-                if let firstItem = orderedItems.first, let highlight = firstItem as? HistoryHighlight {
-                    timestamp = Date.now() - Timestamp(highlight.score)
-                }
+            // Base timestamp on score to order historyHighlight properly
+            if let firstItem = orderedItems.first, let highlight = firstItem as? HistoryHighlight {
+                timestamp = Date.now() - Timestamp(highlight.score)
+            }
 
-                return ASGroup<T>(searchTerm: $0.key.capitalized, groupedItems: orderedItems, timestamp: timestamp)
+            return ASGroup<T>(searchTerm: $0.key.capitalized, groupedItems: orderedItems, timestamp: timestamp)
         }
     }
 
@@ -235,12 +230,10 @@ class SearchTermGroupsUtility {
                 let firstTabTimestamp = firstTab.firstCreatedTime ?? 0
                 let secondTabTimestamp = secondTab.firstCreatedTime ?? 0
                 return firstTabTimestamp < secondTabTimestamp
-
             } else if let firstSite = $0 as? Site, let secondSite = $1 as? Site {
                 let firstSiteATimestamp = TimeInterval.fromMicrosecondTimestamp(firstSite.latestVisit?.date ?? 0)
                 let secondSiteTimestamp = TimeInterval.fromMicrosecondTimestamp(secondSite.latestVisit?.date ?? 0)
                 return firstSiteATimestamp < secondSiteTimestamp
-
             } else if let firstHighlight = $0 as? HistoryHighlight, let secondHighlight = $1 as? HistoryHighlight {
                 return firstHighlight.score > secondHighlight.score
             } else {
@@ -259,7 +252,8 @@ class SearchTermGroupsUtility {
     ///   with no changes.
     /// - Returns: The passed in group, sorted according to its `ASGroup<T>.timestamp` property
     private static func order<T: Equatable>(groups: [ASGroup<T>], using order: ComparisonResult) -> [ASGroup<T>] {
-        switch order { case .orderedAscending:
+        switch order {
+        case .orderedAscending:
             return groups.sorted { $0.timestamp < $1.timestamp }
         case .orderedDescending:
             return groups.sorted { $0.timestamp > $1.timestamp }
@@ -279,7 +273,8 @@ class StopWatchTimer {
         timer = Timer.scheduledTimer(timeInterval: 1, target: self, selector: #selector(incrementValue), userInfo: nil, repeats: true)
     }
 
-    @objc func incrementValue() {
+    @objc
+    func incrementValue() {
         elapsedTime += 1
     }
 

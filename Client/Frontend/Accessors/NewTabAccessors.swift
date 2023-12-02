@@ -1,10 +1,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
-import XCGLogger
 
 /// Accessors to find what a new tab should do when created without a URL.
 struct NewTabAccessors {
@@ -35,7 +34,6 @@ struct NewTabAccessors {
         }
         return option
     }
-
 }
 
 /// Enum to encode what should happen when the user opens a new tab without a URL.
@@ -49,7 +47,7 @@ enum NewTabPage: String {
         case .blankPage:
             return .SettingsNewTabBlankPage
         case .homePage:
-            return .SettingsNewTabHomePage
+            return .SettingsNewTabCustom
         case .topSites:
             return .SettingsNewTabTopSites
         }

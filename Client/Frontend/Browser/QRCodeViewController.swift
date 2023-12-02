@@ -1,10 +1,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import AVFoundation
 import Shared
+import Common
 
 protocol QRCodeViewControllerDelegate: AnyObject {
     func didScanQRCodeWithURL(_ url: URL)
@@ -12,19 +13,18 @@ protocol QRCodeViewControllerDelegate: AnyObject {
 }
 
 class QRCodeViewController: UIViewController {
-
     private struct UX {
         static let navigationBarBackgroundColor = UIColor.black
-        static let navigationBarTitleColor = UIColor.Photon.White100
-        static let maskViewBackgroundColor = UIColor(red: 0, green: 0, blue: 0, alpha: 0.5)
+        static let navigationBarTitleColor = UIColor.white
+        static let maskViewBackgroundColor = UIColor.black.withAlphaComponent(0.5)
         static let isLightingNavigationItemColor = UIColor(red: 0.45, green: 0.67, blue: 0.84, alpha: 1)
         static let viewBackgroundDeniedColor = UIColor.black
         static let scanLineHeight: CGFloat = 6
     }
 
-    var qrCodeDelegate: QRCodeViewControllerDelegate?
+    weak var qrCodeDelegate: QRCodeViewControllerDelegate?
 
-    fileprivate lazy var captureSession: AVCaptureSession = {
+    private lazy var captureSession: AVCaptureSession = {
         let session = AVCaptureSession()
         session.sessionPreset = AVCaptureSession.Preset.high
         return session
@@ -46,7 +46,7 @@ class QRCodeViewController: UIViewController {
 
     private lazy var instructionsLabel: UILabel = .build { label in
         label.text = .ScanQRCodeInstructionsLabel
-        label.textColor = UIColor.Photon.White100
+        label.textColor = .white
         label.textAlignment = .center
         label.numberOfLines = 0
     }
@@ -54,8 +54,8 @@ class QRCodeViewController: UIViewController {
     private var maskView: UIView = .build { view in
         view.backgroundColor = UX.maskViewBackgroundColor
     }
-    private var isAnimationing: Bool = false
-    private var isLightOn: Bool = false
+    private var isAnimationing = false
+    private var isLightOn = false
     private var shapeLayer = CAShapeLayer()
 
     private var scanLineTopConstraint: NSLayoutConstraint!
@@ -71,54 +71,54 @@ class QRCodeViewController: UIViewController {
         return scanBorderSize
     }
 
+    private let logger: Logger
+
+    init(logger: Logger = DefaultLogger.shared) {
+        self.logger = logger
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        guard let captureDevice = self.captureDevice else {
+        guard let captureDevice = captureDevice else {
             dismiss(animated: false)
             return
         }
 
-        self.navigationItem.title = .ScanQRCodeViewTitle
+        navigationItem.title = .ScanQRCodeViewTitle
 
         // Setup the NavigationBar
-        self.navigationController?.navigationBar.barTintColor = UX.navigationBarBackgroundColor
-        self.navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UX.navigationBarTitleColor]
+        navigationController?.navigationBar.barTintColor = UX.navigationBarBackgroundColor
+        navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UX.navigationBarTitleColor]
 
         // Setup the NavigationItem
-        self.navigationItem.leftBarButtonItem = UIBarButtonItem(
-            image: UIImage(named: ImageIdentifiers.qrCodeGoBack)?.imageFlippedForRightToLeftLayoutDirection(),
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            image: UIImage(named: StandardImageIdentifiers.Large.chevronLeft)?.imageFlippedForRightToLeftLayoutDirection(),
             style: .plain,
             target: self,
             action: #selector(goBack))
-        self.navigationItem.leftBarButtonItem?.tintColor = UIColor.Photon.White100
+        navigationItem.leftBarButtonItem?.tintColor = UIColor.white
 
-        self.navigationItem.rightBarButtonItem = UIBarButtonItem(
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
             image: UIImage(named: ImageIdentifiers.qrCodeLight),
             style: .plain,
             target: self,
             action: #selector(openLight))
-        if captureDevice.hasTorch {
-            self.navigationItem.rightBarButtonItem?.tintColor = UIColor.Photon.White100
-        } else {
-            self.navigationItem.rightBarButtonItem?.tintColor = UIColor.Photon.Grey50
-            self.navigationItem.rightBarButtonItem?.isEnabled = false
-        }
+        navigationItem.rightBarButtonItem?.tintColor = .white
+        if !captureDevice.hasTorch { navigationItem.rightBarButtonItem?.isEnabled = false }
 
         let getAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: AVMediaType.video)
         if getAuthorizationStatus != .denied {
             setupCamera()
         } else {
             view.backgroundColor = UX.viewBackgroundDeniedColor
-            self.navigationItem.rightBarButtonItem?.isEnabled = false
-
-            let alert = UIAlertController(title: "", message: .ScanQRCodePermissionErrorMessage, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: .ScanQRCodeErrorOKButton,
-                                          style: .default,
-                                          handler: { (action) -> Void in
-                self.dismiss(animated: true)
-            }))
-            self.present(alert, animated: true, completion: nil)
+            navigationItem.rightBarButtonItem?.isEnabled = false
+            presentAlert()
         }
 
         setupVideoPreviewLayer()
@@ -143,6 +143,16 @@ class QRCodeViewController: UIViewController {
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
         applyShapeLayer()
+    }
+
+    private func presentAlert() {
+        let alert = UIAlertController(title: "", message: .ScanQRCodePermissionErrorMessage, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: .ScanQRCodeErrorOKButton,
+                                      style: .default,
+                                      handler: { _ in
+            self.dismiss(animated: true)
+        }))
+        present(alert, animated: true)
     }
 
     private func applyShapeLayer() {
@@ -207,7 +217,8 @@ class QRCodeViewController: UIViewController {
         }
     }
 
-    @objc func startScanLineAnimation() {
+    @objc
+    func startScanLineAnimation() {
         if !isAnimationing {
             return
         }
@@ -229,11 +240,13 @@ class QRCodeViewController: UIViewController {
         isAnimationing = false
     }
 
-    @objc func goBack() {
-        self.dismiss(animated: true, completion: nil)
+    @objc
+    func goBack() {
+        dismiss(animated: true, completion: nil)
     }
 
-    @objc func openLight() {
+    @objc
+    func openLight() {
         guard let captureDevice = self.captureDevice else { return }
 
         if isLightOn {
@@ -242,10 +255,8 @@ class QRCodeViewController: UIViewController {
                 captureDevice.torchMode = AVCaptureDevice.TorchMode.off
                 captureDevice.unlockForConfiguration()
                 navigationItem.rightBarButtonItem?.image = UIImage(named: ImageIdentifiers.qrCodeLight)
-                navigationItem.rightBarButtonItem?.tintColor = UIColor.Photon.White100
-            } catch {
-                print(error)
-            }
+                navigationItem.rightBarButtonItem?.tintColor = .white
+            } catch {}
         } else {
             do {
                 try captureDevice.lockForConfiguration()
@@ -253,15 +264,13 @@ class QRCodeViewController: UIViewController {
                 captureDevice.unlockForConfiguration()
                 navigationItem.rightBarButtonItem?.image = UIImage(named: ImageIdentifiers.qrCodeLightTurnedOn)
                 navigationItem.rightBarButtonItem?.tintColor = UX.isLightingNavigationItemColor
-            } catch {
-                print(error)
-            }
+            } catch {}
         }
         isLightOn = !isLightOn
     }
 
     func setupCamera() {
-        guard let captureDevice = self.captureDevice else {
+        guard let captureDevice = captureDevice else {
             dismiss(animated: false)
             return
         }
@@ -269,9 +278,7 @@ class QRCodeViewController: UIViewController {
         do {
             let input = try AVCaptureDeviceInput(device: captureDevice)
             captureSession.addInput(input)
-        } catch {
-            print(error)
-        }
+        } catch {}
         let output = AVCaptureMetadataOutput()
         if captureSession.canAddOutput(output) {
             captureSession.addOutput(output)
@@ -283,8 +290,9 @@ class QRCodeViewController: UIViewController {
         videoPreviewLayer.frame = UIScreen.main.bounds
         view.layer.addSublayer(videoPreviewLayer)
         self.videoPreviewLayer = videoPreviewLayer
-        captureSession.startRunning()
-
+        DispatchQueue.global().async {
+            self.captureSession.startRunning()
+        }
     }
 
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -301,7 +309,7 @@ extension QRCodeViewController: AVCaptureMetadataOutputObjectsDelegate {
                         didOutput metadataObjects: [AVMetadataObject],
                         from connection: AVCaptureConnection) {
         if metadataObjects.isEmpty {
-            self.captureSession.stopRunning()
+            captureSession.stopRunning()
             let alert = AlertController(title: "", message: .ScanQRCodeInvalidDataErrorMessage, preferredStyle: .alert)
             alert.addAction(
                 UIAlertAction(title: .ScanQRCodeErrorOKButton,
@@ -310,19 +318,19 @@ extension QRCodeViewController: AVCaptureMetadataOutputObjectsDelegate {
                 self.captureSession.startRunning()
             }),
                 accessibilityIdentifier: AccessibilityIdentifiers.Settings.FirefoxAccount.qrScanFailedAlertOkButton)
-            self.present(alert, animated: true, completion: nil)
+            present(alert, animated: true, completion: nil)
         } else {
-            self.captureSession.stopRunning()
+            captureSession.stopRunning()
             stopScanLineAnimation()
-            self.dismiss(animated: true, completion: {
+            dismiss(animated: true, completion: {
                 guard let metaData = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
                       let qrCodeDelegate = self.qrCodeDelegate,
-                        let text = metaData.stringValue
+                      let text = metaData.stringValue
                 else {
-                        SentryIntegration.shared.sendWithStacktrace(
-                            message: "Unable to scan QR code",
-                            tag: .general)
-                        return
+                    self.logger.log("Unable to scan QR code",
+                                    level: .debug,
+                                    category: .unlabeled)
+                    return
                 }
 
                 if let url = URIFixup.getURL(text) {

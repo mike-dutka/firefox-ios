@@ -1,18 +1,20 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
+import Common
 import Shared
 import WebKit
 
-private let log = Logger.browserLogger
-
 class FocusHelper: TabContentScript {
-    fileprivate weak var tab: Tab?
+    private var logger: Logger
+    private weak var tab: Tab?
 
-    init(tab: Tab) {
+    init(tab: Tab,
+         logger: Logger = DefaultLogger.shared) {
         self.tab = tab
+        self.logger = logger
     }
 
     static func name() -> String {
@@ -23,14 +25,23 @@ class FocusHelper: TabContentScript {
         return "focusHelper"
     }
 
-    func userContentController(_ userContentController: WKUserContentController, didReceiveScriptMessage message: WKScriptMessage) {
+    func userContentController(_ userContentController: WKUserContentController,
+                               didReceiveScriptMessage message: WKScriptMessage) {
         guard let data = message.body as? [String: String] else {
-            return log.error("FocusHelper.js sent wrong type of message")
+            logger.log("FocusHelper.js sent wrong type of message",
+                       level: .warning,
+                       category: .webview)
+            return
         }
 
-        guard let _ = data["elementType"],
+        guard data["elementType"] != nil,
               let eventType = data["eventType"]
-        else { return log.error("FocusHelper.js sent wrong keys for message") }
+        else {
+            logger.log("FocusHelper.js sent wrong keys for message",
+                       level: .warning,
+                       category: .webview)
+            return
+        }
 
         switch eventType {
         case "focus":
@@ -38,7 +49,10 @@ class FocusHelper: TabContentScript {
         case "blur":
             tab?.isEditing = false
         default:
-            return log.error("FocusHelper.js sent unhandled eventType")
+            logger.log("FocusHelper.js sent unhandled eventType",
+                       level: .warning,
+                       category: .webview)
+            return
         }
     }
 }

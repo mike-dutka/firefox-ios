@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 
@@ -78,6 +78,11 @@ extension Date {
         return Date(timeIntervalSince1970: Double(microsecondTimestamp) / 1000000)
     }
 
+    public static func getCurrentPeriod() -> Int {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        return Int((currentYear / 1000) * 1000)
+    }
+
     public func toRelativeTimeString(dateStyle: DateFormatter.Style = .short, timeStyle: DateFormatter.Style = .short) -> String {
         let now = Date()
 
@@ -136,6 +141,22 @@ extension Date {
                               second: second)
     }
 
+    /// Checks if a specified amount of time in hours has passed since a given timestamp.
+    ///
+    /// - Parameters:
+    ///   - hours: The number of hours to check for elapsed time.
+    ///   - lastTimestamp: The timestamp to compare against.
+    ///
+    /// - Returns: `true` if the specified time in hours has passed since the lastTimestamp; `false` otherwise.
+    public static func hasTimePassedBy(hours: Timestamp,
+                                       lastTimestamp: Timestamp) -> Bool {
+        guard Date.now() > lastTimestamp else { return false }
+
+        let millisecondsInAnHour: Timestamp = 3_600_000 // Convert 1 hour to milliseconds
+        let timeDifference = Date.now() - lastTimestamp
+        return timeDifference >= hours * millisecondsInAnHour
+    }
+
     static func - (lhs: Date, rhs: Date) -> TimeInterval {
         return lhs.timeIntervalSinceReferenceDate - rhs.timeIntervalSinceReferenceDate
     }
@@ -149,6 +170,9 @@ extension Date {
     }
     public var lastWeek: Date {
         return Calendar.current.date(byAdding: .day, value: -8, to: noon) ?? Date()
+    }
+    public var lastMonth: Date {
+        return Calendar.current.date(byAdding: .day, value: -31, to: noon) ?? Date()
     }
     public var older: Date {
         return Calendar.current.date(byAdding: .day, value: -20, to: noon) ?? Date()

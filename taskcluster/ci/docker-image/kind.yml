@@ -10,5 +10,6 @@ transforms:
     - taskgraph.transforms.cached_tasks:transforms
     - taskgraph.transforms.task:transforms
 
-jobs:
-    screenshots: {}
+tasks:
+    screenshots:
+        symbol: I(screenshots)

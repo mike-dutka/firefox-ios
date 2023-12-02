@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import Shared
@@ -65,19 +65,20 @@ class AdvancedAccountSettingViewController: SettingsTableViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
-        RustFirefoxAccounts.reconfig(prefs: profile.prefs)
+        RustFirefoxAccounts.reconfig(prefs: profile.prefs) { _ in }
     }
 
     override func generateSettings() -> [SettingSection] {
         let prefs = profile.prefs
 
+        let attributes = [NSAttributedString.Key.foregroundColor: themeManager.currentTheme.colors.textPrimary]
         let useStage = BoolSetting(
             prefs: prefs,
             prefKey: PrefsKeys.UseStageServer,
             defaultValue: false,
             attributedTitleText: NSAttributedString(
                 string: .AdvancedAccountUseStageServer,
-                attributes: [NSAttributedString.Key.foregroundColor: UIColor.theme.tableView.rowText])) { isOn in
+                attributes: attributes)) { isOn in
             self.settings = self.generateSettings()
             self.tableView.reloadData()
         }
@@ -87,10 +88,11 @@ class AdvancedAccountSettingViewController: SettingsTableViewController {
                                          placeholder: .SettingsAdvancedAccountCustomFxAContentServerURI,
                                          accessibilityIdentifier: "CustomFxAContentServer")
 
-        let customSyncTokenServerURISetting = CustomURLSetting(prefs: prefs,
-                                        prefKey: PrefsKeys.KeyCustomSyncTokenServerOverride,
-                                        placeholder: .SettingsAdvancedAccountCustomSyncTokenServerURI,
-                                        accessibilityIdentifier: "CustomSyncTokenServerURISetting")
+        let customSyncTokenServerURISetting = CustomURLSetting(
+            prefs: prefs,
+            prefKey: PrefsKeys.KeyCustomSyncTokenServerOverride,
+            placeholder: .SettingsAdvancedAccountCustomSyncTokenServerURI,
+            accessibilityIdentifier: "CustomSyncTokenServerURISetting")
 
         let autoconfigSettings = [
             CustomFxAContentServerEnableSetting(prefs: prefs) { isOn in

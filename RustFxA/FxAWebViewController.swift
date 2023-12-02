@@ -1,9 +1,10 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import WebKit
 import Account
+import Common
 import Shared
 
 enum DismissType {
@@ -22,6 +23,7 @@ class FxAWebViewController: UIViewController {
     /// Used to show a second WKWebView to browse help links.
     fileprivate var helpBrowser: WKWebView?
     fileprivate let viewModel: FxAWebViewModel
+    private let logger: Logger
     /// Closure for dismissing higher up FxA Sign in view controller
     var shouldDismissFxASignInViewController: (() -> Void)?
 
@@ -33,8 +35,16 @@ class FxAWebViewController: UIViewController {
      - parameter dismissalStyle: depending on how this was presented, it uses modal dismissal, or if part of a UINavigationController stack it will pop to the root.
      - parameter deepLinkParams: URL args passed in from deep link that propagate to FxA web view
      */
-    init(pageType: FxAPageType, profile: Profile, dismissalStyle: DismissType, deepLinkParams: FxALaunchParams?) {
-        self.viewModel = FxAWebViewModel(pageType: pageType, profile: profile, deepLinkParams: deepLinkParams)
+    init(pageType: FxAPageType,
+         profile: Profile,
+         dismissalStyle: DismissType,
+         deepLinkParams: FxALaunchParams,
+         shouldAskForNotificationPermission: Bool = true,
+         logger: Logger = DefaultLogger.shared) {
+        self.viewModel = FxAWebViewModel(pageType: pageType,
+                                         profile: profile,
+                                         deepLinkParams: deepLinkParams,
+                                         shouldAskForNotificationPermission: shouldAskForNotificationPermission)
 
         self.dismissType = dismissalStyle
 
@@ -48,6 +58,8 @@ class FxAWebViewController: UIViewController {
         webView.accessibilityLabel = .FxAWebContentAccessibilityLabel
         webView.scrollView.bounces = false  // Don't allow overscrolling.
         webView.customUserAgent = FxAWebViewModel.mobileUserAgent
+
+        self.logger = logger
 
         super.init(nibName: nil, bundle: nil)
         let scriptMessageHandler = WKScriptMessageHandleDelegate(self)
@@ -70,10 +82,6 @@ class FxAWebViewController: UIViewController {
         view = webView
         webView.addObserver(self, forKeyPath: KVOConstants.URL.rawValue, options: .new, context: nil)
         viewModel.setupFirstPage { [weak self] (request, telemetryEventMethod) in
-            if let method = telemetryEventMethod {
-                TelemetryWrapper.recordEvent(category: .firefoxAccount, method: method, object: .accountConnected)
-            }
-
             self?.loadRequest(request, isPairing: telemetryEventMethod == .qrPairing)
         }
 
@@ -92,6 +100,7 @@ class FxAWebViewController: UIViewController {
         } else if dismissType == .popToTabTray {
             shouldDismissFxASignInViewController?()
         } else {
+            // Pop to settings view controller
             navigationController?.popToRootViewController(animated: true)
             completion?()
         }
@@ -132,7 +141,6 @@ class FxAWebViewController: UIViewController {
 
 // MARK: - WKNavigationDelegate
 extension FxAWebViewController: WKNavigationDelegate {
-
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         let decision = viewModel.shouldAllowRedirectAfterLogIn(basedOn: navigationAction.request.url)
         decisionHandler(decision)
@@ -161,7 +169,6 @@ extension FxAWebViewController: WKScriptMessageHandler {
 
 // MARK: - WKUIDelegate
 extension FxAWebViewController: WKUIDelegate {
-
     /// Blank target links (support links) will create a 2nd webview (the `helpBrowser`) to browse. This webview will have a close button in the navigation bar to go back to the main fxa webview.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard helpBrowser == nil else { return nil }
@@ -177,7 +184,8 @@ extension FxAWebViewController: WKUIDelegate {
         return helpBrowser
     }
 
-    @objc func closeHelpBrowser() {
+    @objc
+    func closeHelpBrowser() {
         UIView.animate(
             withDuration: 0.2,
             animations: {
@@ -214,14 +222,13 @@ private class WKScriptMessageHandleDelegate: NSObject, WKScriptMessageHandler {
 
 // MARK: - Observe value
 extension FxAWebViewController {
-
     override func observeValue(forKeyPath keyPath: String?, of object: Any?,
                                change: [NSKeyValueChangeKey: Any]?,
                                context: UnsafeMutableRawPointer?) {
         guard let kp = keyPath,
               let path = KVOConstants(rawValue: kp)
         else {
-            sendSentryObserveValueError(forKeyPath: keyPath)
+            sendObserveValueError(forKeyPath: keyPath)
             return
         }
 
@@ -231,14 +238,14 @@ extension FxAWebViewController {
                 viewModel.fxAWebViewTelemetry.recordTelemetry(for: FxAFlow.startedFlow(type: flow))
             }
         default:
-            sendSentryObserveValueError(forKeyPath: keyPath)
+            sendObserveValueError(forKeyPath: keyPath)
         }
     }
 
-    private func sendSentryObserveValueError(forKeyPath keyPath: String?) {
-        SentryIntegration.shared.send(message: "FxA webpage unhandled KVO",
-                                      tag: .rustLog,
-                                      severity: .error,
-                                      description: "Unhandled KVO key: \(keyPath ?? "nil")")
+    private func sendObserveValueError(forKeyPath keyPath: String?) {
+        logger.log("FxA webpage unhandled KVO",
+                   level: .info,
+                   category: .sync,
+                   description: "Unhandled KVO key: \(keyPath ?? "nil")")
     }
 }

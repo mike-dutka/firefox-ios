@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 
@@ -17,21 +17,16 @@ public extension Array where Element: Comparable {
 }
 
 public extension Array {
-
     func find(_ f: (Iterator.Element) -> Bool) -> Iterator.Element? {
-        for x in self {
-            if f(x) {
-                return x
-            }
+        for x in self where f(x) {
+            return x
         }
         return nil
     }
 
     func contains(_ x: Element, f: (Element, Element) -> Bool) -> Bool {
-        for y in self {
-            if f(x, y) {
-                return true
-            }
+        for y in self where f(x, y) {
+            return true
         }
         return false
     }
@@ -64,29 +59,36 @@ public extension Array {
 }
 
 public extension Sequence where Iterator.Element: Hashable {
-
-    /// Return a  de-duplicated sequence with the order preserved. `o(N)` complexity.
+    /// Return a de-duplicated sequence with the order preserved. `o(N)` complexity.
     func uniqued() -> [Iterator.Element] {
         var seen: Set<Iterator.Element> = []
         return filter { seen.insert($0).inserted }
     }
-
 }
 
 public extension Sequence {
     func every(_ f: (Self.Iterator.Element) -> Bool) -> Bool {
-        for x in self {
-            if !f(x) {
-                return false
-            }
+        for x in self where !f(x) {
+            return false
         }
         return true
     }
 }
 
 public extension Collection {
-    /// Returns the element at the specified index iff it is within bounds, otherwise nil.
+    /// Returns the element at the specified index if it is within bounds, otherwise nil.
     subscript (safe index: Index) -> Element? {
         return indices.contains(index) ? self[index] : nil
+    }
+}
+
+public extension Array where Element: NSAttributedString {
+    /// If the array is made up of `NSAttributedStrings`, this allows the reduction
+    /// of the array into a single `NSAttributedString`.
+    func joined() -> NSAttributedString {
+        return self.reduce(NSMutableAttributedString()) { result, element in
+            result.append(element)
+            return result
+        }
     }
 }

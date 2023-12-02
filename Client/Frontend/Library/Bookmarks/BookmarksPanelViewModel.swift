@@ -3,11 +3,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
+import Common
 import Storage
 import Shared
 
 class BookmarksPanelViewModel {
-
     enum BookmarksSection: Int, CaseIterable {
         case bookmarks
     }
@@ -21,12 +21,15 @@ class BookmarksPanelViewModel {
     var bookmarkFolder: FxBookmarkNode?
     var bookmarkNodes = [FxBookmarkNode]()
     private var flashLastRowOnNextReload = false
+    private var logger: Logger
 
     /// By default our root folder is the mobile folder. Desktop folders are shown in the local desktop folders.
     init(profile: Profile,
-         bookmarkFolderGUID: GUID = BookmarkRoots.MobileFolderGUID) {
+         bookmarkFolderGUID: GUID = BookmarkRoots.MobileFolderGUID,
+         logger: Logger = DefaultLogger.shared) {
         self.profile = profile
         self.bookmarkFolderGUID = bookmarkFolderGUID
+        self.logger = logger
     }
 
     var shouldFlashRow: Bool {
@@ -45,10 +48,8 @@ class BookmarksPanelViewModel {
 
         if bookmarkFolderGUID == BookmarkRoots.MobileFolderGUID {
             setupMobileFolderData(completion: completion)
-
         } else if bookmarkFolderGUID == LocalDesktopFolder.localDesktopFolderGuid {
             setupLocalDesktopFolderData(completion: completion)
-
         } else {
             setupSubfolderData(completion: completion)
         }
@@ -60,6 +61,9 @@ class BookmarksPanelViewModel {
 
     func moveRow(at sourceIndexPath: IndexPath, to destinationIndexPath: IndexPath) {
         guard let bookmarkNode = bookmarkNodes[safe: sourceIndexPath.row] else {
+            logger.log("Could not move row from \(sourceIndexPath) to \(destinationIndexPath)",
+                       level: .debug,
+                       category: .library)
             return
         }
 
@@ -88,6 +92,9 @@ class BookmarksPanelViewModel {
             .getBookmarksTree(rootGUID: BookmarkRoots.MobileFolderGUID, recursive: false)
             .uponQueue(.main) { result in
                 guard let mobileFolder = result.successValue as? BookmarkFolderData else {
+                    self.logger.log("Mobile folder data setup failed \(String(describing: result.failureValue))",
+                                    level: .debug,
+                                    category: .library)
                     self.setErrorCase()
                     completion()
                     return
@@ -95,6 +102,25 @@ class BookmarksPanelViewModel {
 
                 self.bookmarkFolder = mobileFolder
                 self.bookmarkNodes = mobileFolder.fxChildren ?? []
+
+                if let mobileBookmarks = mobileFolder.fxChildren, !mobileBookmarks.isEmpty {
+                    TelemetryWrapper.recordEvent(category: .information,
+                                                 method: .view,
+                                                 object: .mobileBookmarks,
+                                                 value: .doesHaveMobileBookmarks)
+
+                    let mobileBookmarksExtra = [TelemetryWrapper.EventExtraKey.mobileBookmarksQuantity.rawValue: Int64(mobileBookmarks.count)]
+                    TelemetryWrapper.recordEvent(category: .information,
+                                                 method: .view,
+                                                 object: .mobileBookmarks,
+                                                 value: .mobileBookmarksCount,
+                                                 extras: mobileBookmarksExtra)
+                } else {
+                    TelemetryWrapper.recordEvent(category: .information,
+                                                 method: .view,
+                                                 object: .mobileBookmarks,
+                                                 value: .doesNotHaveMobileBookmarks)
+                }
 
                 let desktopFolder = LocalDesktopFolder()
                 self.bookmarkNodes.insert(desktopFolder, at: 0)
@@ -120,6 +146,9 @@ class BookmarksPanelViewModel {
         profile.places.getBookmarksTree(rootGUID: bookmarkFolderGUID,
                                         recursive: false).uponQueue(.main) { result in
             guard let folder = result.successValue as? BookmarkFolderData else {
+                self.logger.log("Sublfolder data setup failed \(String(describing: result.failureValue))",
+                                level: .debug,
+                                category: .library)
                 self.setErrorCase()
                 completion()
                 return

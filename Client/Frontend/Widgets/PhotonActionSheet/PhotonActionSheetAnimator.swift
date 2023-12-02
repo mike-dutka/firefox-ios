@@ -1,12 +1,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 
 class PhotonActionSheetAnimator: NSObject, UIViewControllerAnimatedTransitioning {
-
-    var presenting: Bool = false
+    var presenting = false
     let animationDuration = 0.4
 
     lazy var shadow: UIView = {
@@ -66,7 +65,6 @@ extension PhotonActionSheetAnimator {
                 }, completion: { (completed) -> Void in
                     transitionContext.completeTransition(completed)
                 })
-
         } else {
             UIView.animate(
                 withDuration: transitionDuration(using: transitionContext),

@@ -4,6 +4,8 @@
 
 import UIKit
 import Shared
+import SiteImageView
+import Common
 
 struct SyncedTabCellViewModel {
     let profile: Profile
@@ -11,8 +13,6 @@ struct SyncedTabCellViewModel {
     let descriptionText: String
     let url: URL
     var syncedDeviceImage: UIImage?
-    var heroImage: UIImage?
-    var fallbackFaviconImage: UIImage?
     var accessibilityLabel: String {
         return "\(cardTitleText): \(titleText), \(descriptionText)"
     }
@@ -28,17 +28,15 @@ struct SyncedTabCellViewModel {
 }
 
 /// A cell used in FxHomeScreen's Jump Back In section
-class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
-
+class SyncedTabCell: UICollectionViewCell, ReusableCell {
     struct UX {
-        static let generalCornerRadius: CGFloat = 12
-        static let stackViewShadowRadius: CGFloat = 4
-        static let stackViewShadowOffset: CGFloat = 2
         static let heroImageSize = CGSize(width: 108, height: 80)
-        static let fallbackFaviconSize = CGSize(width: 56, height: 56)
         static let syncedDeviceImageSize = CGSize(width: 24, height: 24)
         static let tabStackTopAnchorConstant: CGFloat = 72
         static let tabStackTopAnchorCompactPhoneConstant: CGFloat = 24
+        static let cardTitleFontSize: CGFloat = 17
+        static let itemTitleFontSize: CGFloat = 15
+        static let deviceSourceFontSize: CGFloat = 12
     }
 
     private var syncedDeviceIconFirstBaselineConstraint: NSLayoutConstraint?
@@ -48,14 +46,18 @@ class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
     private var openSyncedTabAction: (() -> Void)?
 
     // MARK: - UI Elements
+    private var tabHeroImage: HeroImageView = .build { _ in }
+
     private let cardTitle: UILabel = .build { label in
         label.adjustsFontForContentSizeCategory = true
-        label.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .headline, size: 16)
+        label.font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .headline,
+                                                            size: UX.cardTitleFontSize)
         label.accessibilityIdentifier = AccessibilityIdentifiers.FirefoxHomepage.SyncedTab.cardTitle
     }
 
     private let syncedTabsButton: UIButton = .build { button in
-        button.titleLabel?.font = DynamicFontHelper().preferredFont(withTextStyle: .subheadline, size: 12)
+        button.titleLabel?.font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .subheadline,
+                                                                         size: UX.deviceSourceFontSize)
         button.titleLabel?.adjustsFontForContentSizeCategory = true
         button.accessibilityIdentifier = AccessibilityIdentifiers.FirefoxHomepage.SyncedTab.showAllButton
     }
@@ -68,33 +70,9 @@ class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
         stackView.alignment = .leading
     }
 
-    // Contains the tabHeroImage and tabFallbackFaviconImage
+    // Contains the tabHeroImage
     private var tabImageContainer: UIView = .build { view in
         view.backgroundColor = .clear
-    }
-
-    let tabHeroImage: UIImageView = .build { imageView in
-        imageView.contentMode = .scaleAspectFill
-        imageView.clipsToBounds = true
-        imageView.layer.masksToBounds = true
-        imageView.layer.cornerRadius = UX.generalCornerRadius
-        imageView.backgroundColor = .clear
-        imageView.accessibilityIdentifier = AccessibilityIdentifiers.FirefoxHomepage.SyncedTab.heroImage
-    }
-
-    // Used as a fallback if hero image isn't set
-    let tabFallbackFaviconImage: UIImageView = .build { imageView in
-        imageView.contentMode = .scaleAspectFit
-        imageView.clipsToBounds = true
-        imageView.backgroundColor = UIColor.clear
-        imageView.layer.cornerRadius = TopSiteItemCell.UX.iconCornerRadius
-        imageView.layer.masksToBounds = true
-        imageView.accessibilityIdentifier = AccessibilityIdentifiers.FirefoxHomepage.SyncedTab.fallbackFavIconImage
-    }
-
-    private var tabFallbackFaviconBackground: UIView = .build { view in
-        view.layer.cornerRadius = TopSiteItemCell.UX.cellCornerRadius
-        view.layer.borderWidth = TopSiteItemCell.UX.borderWidth
     }
 
     // contains tabItemTitle and syncedDeviceContainer
@@ -104,7 +82,8 @@ class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
 
     private let tabItemTitle: UILabel = .build { label in
         label.adjustsFontForContentSizeCategory = true
-        label.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .subheadline)
+        label.font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .subheadline,
+                                                            size: UX.itemTitleFontSize)
         label.numberOfLines = 2
         label.accessibilityIdentifier = AccessibilityIdentifiers.FirefoxHomepage.SyncedTab.itemTitle
     }
@@ -123,7 +102,8 @@ class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
     private let syncedDeviceLabel: UILabel = .build { label in
         label.adjustsFontForContentSizeCategory = true
         label.numberOfLines = 2
-        label.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .caption1)
+        label.font = DefaultDynamicFontHelper.preferredBoldFont(withTextStyle: .caption1,
+                                                                size: UX.deviceSourceFontSize)
         label.textColor = .label
         label.accessibilityIdentifier = AccessibilityIdentifiers.FirefoxHomepage.SyncedTab.descriptionLabel
     }
@@ -144,11 +124,8 @@ class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
         accessibilityIdentifier = AccessibilityIdentifiers.FirefoxHomepage.SyncedTab.itemCell
 
         setupNotifications(forObserver: self,
-                           observing: [.DisplayThemeChanged,
-                                       .DynamicFontChanged,
-                                       .WallpaperDidChange])
+                           observing: [.DynamicFontChanged])
         setupLayout()
-        applyTheme()
     }
 
     required init?(coder: NSCoder) {
@@ -162,13 +139,19 @@ class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
     // MARK: - Helpers
 
     func configure(viewModel: SyncedTabCellViewModel,
+                   theme: Theme,
                    onTapShowAllAction: (() -> Void)?,
                    onOpenSyncedTabAction: ((URL) -> Void)?) {
         tabItemTitle.text = viewModel.titleText
         syncedDeviceLabel.text = viewModel.descriptionText
         accessibilityLabel = viewModel.accessibilityLabel
         cardTitle.text = viewModel.cardTitleText
-        configureImages(viewModel: viewModel)
+
+        syncedDeviceImage.image = viewModel.syncedDeviceImage
+
+        let heroViewModel = HomepageHeroImageViewModel(urlStringRequest: viewModel.url.absoluteString,
+                                                       heroImageSize: UX.heroImageSize)
+        tabHeroImage.setHeroImage(heroViewModel)
 
         let textAttributes: [NSAttributedString.Key: Any] = [ .underlineStyle: NSUnderlineStyle.single.rawValue ]
         let attributeString = NSMutableAttributedString(
@@ -183,8 +166,8 @@ class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
 
         let tapRecognizer = UITapGestureRecognizer(target: self, action: #selector(didTapSyncedTab(_:)))
         syncedTabTapTargetView.addGestureRecognizer(tapRecognizer)
-        applyTheme()
         adjustLayout()
+        applyTheme(theme: theme)
 
         let showAllSyncedTabsA11yAction = UIAccessibilityCustomAction(name: viewModel.syncedTabsButtonText,
                                                                       target: self,
@@ -199,52 +182,24 @@ class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
         return cardTitle
     }
 
-    @objc func showAllSyncedTabs(_ sender: Any) {
+    @objc
+    func showAllSyncedTabs(_ sender: Any) {
         showAllSyncedTabsAction?()
     }
 
-    @objc func didTapSyncedTab(_ sender: Any) {
+    @objc
+    func didTapSyncedTab(_ sender: Any) {
         openSyncedTabAction?()
-    }
-
-    private func configureImages(viewModel: SyncedTabCellViewModel) {
-        if viewModel.heroImage == nil {
-            // Sets a small favicon in place of the hero image in case there's no hero image
-            tabFallbackFaviconImage.image = viewModel.fallbackFaviconImage
-
-        } else if viewModel.heroImage?.size.width == viewModel.heroImage?.size.height {
-            // If hero image is a square use it as a favicon
-            tabFallbackFaviconImage.image = viewModel.heroImage
-
-        } else {
-            setFallBackFaviconVisibility(isHidden: true)
-            tabHeroImage.image = viewModel.heroImage
-        }
-
-        syncedDeviceImage.image = viewModel.syncedDeviceImage
-    }
-
-    private func setFallBackFaviconVisibility(isHidden: Bool) {
-        tabFallbackFaviconBackground.isHidden = isHidden
-        tabFallbackFaviconImage.isHidden = isHidden
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
-        tabHeroImage.image = nil
-        syncedDeviceImage.image = nil
-        tabFallbackFaviconImage.image = nil
         syncedDeviceLabel.text = nil
         tabItemTitle.text = nil
-        setFallBackFaviconVisibility(isHidden: false)
-        applyTheme()
     }
 
     private func setupLayout() {
-        setupShadow()
-
-        tabFallbackFaviconBackground.addSubviews(tabFallbackFaviconImage)
-        tabImageContainer.addSubviews(tabHeroImage, tabFallbackFaviconBackground)
+        tabImageContainer.addSubviews(tabHeroImage)
         syncedDeviceContainer.addSubviews(syncedDeviceImage, syncedDeviceLabel)
         tabContentContainer.addSubviews(tabItemTitle, syncedDeviceContainer)
         tabStack.addArrangedSubview(tabImageContainer)
@@ -288,16 +243,6 @@ class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
             tabHeroImage.trailingAnchor.constraint(equalTo: tabImageContainer.trailingAnchor),
             tabHeroImage.bottomAnchor.constraint(equalTo: tabImageContainer.bottomAnchor),
 
-            tabFallbackFaviconBackground.centerXAnchor.constraint(equalTo: tabImageContainer.centerXAnchor),
-            tabFallbackFaviconBackground.centerYAnchor.constraint(equalTo: tabImageContainer.centerYAnchor),
-            tabFallbackFaviconBackground.heightAnchor.constraint(equalToConstant: UX.heroImageSize.height),
-            tabFallbackFaviconBackground.widthAnchor.constraint(equalToConstant: UX.heroImageSize.width),
-
-            tabFallbackFaviconImage.heightAnchor.constraint(equalToConstant: UX.fallbackFaviconSize.height),
-            tabFallbackFaviconImage.widthAnchor.constraint(equalToConstant: UX.fallbackFaviconSize.width),
-            tabFallbackFaviconImage.centerXAnchor.constraint(equalTo: tabFallbackFaviconBackground.centerXAnchor),
-            tabFallbackFaviconImage.centerYAnchor.constraint(equalTo: tabFallbackFaviconBackground.centerYAnchor),
-
             syncedDeviceImage.topAnchor.constraint(equalTo: syncedDeviceContainer.topAnchor),
             syncedDeviceImage.leadingAnchor.constraint(equalTo: syncedDeviceContainer.leadingAnchor),
             syncedDeviceImage.bottomAnchor.constraint(lessThanOrEqualTo: syncedDeviceContainer.bottomAnchor),
@@ -319,7 +264,9 @@ class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
             syncedTabTapTargetView.topAnchor.constraint(equalTo: tabStack.topAnchor),
             syncedTabTapTargetView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             syncedTabTapTargetView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            syncedTabTapTargetView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor)
+            syncedTabTapTargetView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+
+            tabContentContainer.heightAnchor.constraint(greaterThanOrEqualTo: tabImageContainer.heightAnchor)
         ])
 
         syncedDeviceIconCenterConstraint = syncedDeviceLabel.centerYAnchor.constraint(equalTo: syncedDeviceImage.centerYAnchor).priority(UILayoutPriority(999))
@@ -351,54 +298,51 @@ class SyncedTabCell: BlurrableCollectionViewCell, ReusableCell {
         let isPhoneInLandscape = UIDevice.current.userInterfaceIdiom == .phone && UIWindow.isLandscape
         if traitCollection.horizontalSizeClass == .compact, !isPhoneInLandscape {
             tabStackTopAnchorConstant = UX.tabStackTopAnchorCompactPhoneConstant
-
         }
         tabStackTopConstraint.constant = tabStackTopAnchorConstant
-
-        // Add blur
-        if shouldApplyWallpaperBlur {
-            contentView.addBlurEffectWithClearBackgroundAndClipping(using: .systemThickMaterial)
-        } else {
-            contentView.removeVisualEffectView()
-            contentView.backgroundColor = LegacyThemeManager.instance.currentName == .dark ?
-            UIColor.Photon.DarkGrey40 : .white
-            setupShadow()
-        }
     }
 
-    private func setupShadow() {
-        contentView.layer.cornerRadius = UX.generalCornerRadius
+    private func setupShadow(theme: Theme) {
+        contentView.layer.cornerRadius = HomepageViewModel.UX.generalCornerRadius
         contentView.layer.shadowPath = UIBezierPath(roundedRect: contentView.bounds,
-                                                    cornerRadius: UX.generalCornerRadius).cgPath
-        contentView.layer.shadowRadius = UX.stackViewShadowRadius
-        contentView.layer.shadowOffset = CGSize(width: 0, height: UX.stackViewShadowOffset)
-        contentView.layer.shadowColor = UIColor.theme.homePanel.shortcutShadowColor
-        contentView.layer.shadowOpacity = 0.12
+                                                    cornerRadius: HomepageViewModel.UX.generalCornerRadius).cgPath
+        contentView.layer.shadowRadius = HomepageViewModel.UX.shadowRadius
+        contentView.layer.shadowOffset = HomepageViewModel.UX.shadowOffset
+        contentView.layer.shadowColor = theme.colors.shadowDefault.cgColor
+        contentView.layer.shadowOpacity = HomepageViewModel.UX.shadowOpacity
     }
 }
 
-// MARK: - Theme
-extension SyncedTabCell: NotificationThemeable {
-    func applyTheme() {
-        if LegacyThemeManager.instance.currentName == .dark {
-            cardTitle.textColor  = UIColor.Photon.LightGrey10
-            tabItemTitle.textColor = UIColor.Photon.LightGrey05
-            syncedDeviceLabel.textColor = UIColor.Photon.LightGrey40
-            tabFallbackFaviconImage.tintColor = UIColor.Photon.LightGrey40
-            tabFallbackFaviconBackground.backgroundColor = UIColor.Photon.DarkGrey60
-            syncedTabsButton.tintColor = UIColor.Photon.LightGrey40
-            syncedDeviceImage.image = syncedDeviceImage.image?.tinted(withColor: UIColor.Photon.LightGrey40)
-        } else {
-            cardTitle.textColor = .black
-            tabItemTitle.textColor = UIColor.Photon.DarkGrey90
-            syncedDeviceLabel.textColor = UIColor.Photon.DarkGrey05
-            tabFallbackFaviconImage.tintColor = .black
-            tabFallbackFaviconBackground.backgroundColor = UIColor.Photon.LightGrey10
-            syncedTabsButton.tintColor = .black
-            syncedDeviceImage.image = syncedDeviceImage.image?.tinted(withColor: .black)
-        }
+// MARK: - ThemeApplicable
+extension SyncedTabCell: ThemeApplicable {
+    func applyTheme(theme: Theme) {
+        cardTitle.textColor  = theme.colors.textPrimary
+        tabItemTitle.textColor = theme.colors.textPrimary
+        syncedDeviceLabel.textColor = theme.colors.textSecondary
+        syncedTabsButton.tintColor = theme.colors.iconPrimary
+        syncedDeviceImage.image = syncedDeviceImage.image?.tinted(withColor: theme.colors.iconSecondary)
 
-        tabFallbackFaviconBackground.layer.borderColor = UIColor.theme.homePanel.topSitesBackground.cgColor
+        let heroImageColors = HeroImageViewColor(faviconTintColor: theme.colors.iconPrimary,
+                                                 faviconBackgroundColor: theme.colors.layer1,
+                                                 faviconBorderColor: theme.colors.layer1)
+        tabHeroImage.updateHeroImageTheme(with: heroImageColors)
+
+        adjustBlur(theme: theme)
+    }
+}
+
+// MARK: - Blurrable
+extension SyncedTabCell: Blurrable {
+    func adjustBlur(theme: Theme) {
+        // Add blur
+        if shouldApplyWallpaperBlur {
+            contentView.addBlurEffectWithClearBackgroundAndClipping(using: .systemThickMaterial)
+            contentView.layer.cornerRadius = HomepageViewModel.UX.generalCornerRadius
+        } else {
+            contentView.removeVisualEffectView()
+            contentView.backgroundColor = theme.colors.layer5
+            setupShadow(theme: theme)
+        }
     }
 }
 
@@ -407,10 +351,6 @@ extension SyncedTabCell: Notifiable {
     func handleNotifications(_ notification: Notification) {
         ensureMainThread { [weak self] in
             switch notification.name {
-            case .DisplayThemeChanged:
-                self?.applyTheme()
-            case .WallpaperDidChange:
-                self?.adjustLayout()
             case .DynamicFontChanged:
                 self?.adjustLayout()
             default: break

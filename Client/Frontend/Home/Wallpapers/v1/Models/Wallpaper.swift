@@ -18,7 +18,7 @@ struct WallpaperFilenameIdentifiers {
 }
 
 /// A single wallpaper instance.
-struct Wallpaper: Equatable, Loggable {
+struct Wallpaper: Equatable {
     typealias fileId = WallpaperFilenameIdentifiers
 
     static func == (lhs: Wallpaper, rhs: Wallpaper) -> Bool {
@@ -90,7 +90,6 @@ struct Wallpaper: Equatable, Loggable {
             case .landscape:
                 return try storageUtility.fetchImageNamed(landscapeID)
             }
-
         } catch {
             return nil
         }
@@ -152,7 +151,7 @@ extension Wallpaper: Encodable {
 
     private func dropOctothorpeIfAvailable(from string: String) -> String {
         if string.hasPrefix("#") {
-            return string.remove("#")
+            return string.removingOccurrences(of: "#")
         }
 
         return string

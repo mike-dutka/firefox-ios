@@ -1,10 +1,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Network
-import SwiftyJSON
 
 public func makeURLSession(userAgent: String, configuration: URLSessionConfiguration, timeout: TimeInterval? = nil) -> URLSession {
     configuration.httpAdditionalHeaders = ["User-Agent": userAgent]
@@ -48,18 +47,13 @@ public enum JSONSerializeError: Error {
     case parseError
 }
 
-public func jsonResponse(fromData data: Data?) throws -> JSON {
+public func jsonResponse(fromData data: Data?) throws -> [String: Any]? {
     guard let data = data, !data.isEmpty else {
         throw JSONSerializeError.noData
     }
 
-    do {
-        let json = try JSON(data: data)
-        if json.isError() {
-            throw JSONSerializeError.parseError
-        }
-        return json
-    } catch {
-        throw(JSONSerializeError.parseError)
+    guard let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] else {
+        throw JSONSerializeError.parseError
     }
+    return json
 }

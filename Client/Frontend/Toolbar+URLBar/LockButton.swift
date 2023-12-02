@@ -2,10 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
+import Shared
 
 class LockButton: UIButton {
-
     // MARK: - Variables
 
     var selectedTintColor: UIColor!
@@ -34,10 +35,9 @@ class LockButton: UIButton {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        applyTheme()
 
         clipsToBounds = false
-        setImage(UIImage.templateImageNamed("lock_verified"), for: .normal)
+        setImage(UIImage.templateImageNamed(StandardImageIdentifiers.Large.lock), for: .normal)
         imageView?.contentMode = .scaleAspectFill
         adjustsImageWhenHighlighted = false
     }
@@ -48,13 +48,11 @@ class LockButton: UIButton {
 }
 
 // MARK: - Theme protocols
-
-extension LockButton: NotificationThemeable {
-    func applyTheme() {
-        selectedTintColor = UIColor.theme.toolbarButton.selectedTint
-        disabledTintColor = UIColor.Photon.Grey50
-        unselectedTintColor = UIColor.theme.browser.tint
+extension LockButton: ThemeApplicable {
+    func applyTheme(theme: Theme) {
+        selectedTintColor = theme.colors.actionPrimary
+        disabledTintColor = theme.colors.actionSecondary
+        unselectedTintColor = theme.colors.textPrimary
         tintColor = isEnabled ? unselectedTintColor : disabledTintColor
-        imageView?.tintColor = tintColor
     }
 }

@@ -1,12 +1,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
 import Storage
-
-private let log = Logger.browserLogger
+import Common
 
 class Authenticator {
     fileprivate static let MaxAuthenticationAttempts = 3
@@ -39,6 +38,7 @@ class Authenticator {
         if let loginsHelper = loginsHelper {
             return findMatchingCredentialsForChallenge(challenge, fromLoginsProvider: loginsHelper.logins).bindQueue(.main) { result in
                 guard let credentials = result.successValue else {
+                    sendLoginsAutofillFailedTelemetry()
                     return deferMaybe(result.failureValue ?? LoginRecordError(description: "Unknown error when finding credentials"))
                 }
                 return self.promptForUsernamePassword(viewController, credentials: credentials, protectionSpace: challenge.protectionSpace, loginsHelper: loginsHelper)
@@ -49,7 +49,9 @@ class Authenticator {
         return self.promptForUsernamePassword(viewController, credentials: nil, protectionSpace: challenge.protectionSpace, loginsHelper: nil)
     }
 
-    static func findMatchingCredentialsForChallenge(_ challenge: URLAuthenticationChallenge, fromLoginsProvider loginsProvider: RustLogins) -> Deferred<Maybe<URLCredential?>> {
+    static func findMatchingCredentialsForChallenge(_ challenge: URLAuthenticationChallenge,
+                                                    fromLoginsProvider loginsProvider: RustLogins,
+                                                    logger: Logger = DefaultLogger.shared) -> Deferred<Maybe<URLCredential?>> {
         return loginsProvider.getLoginsForProtectionSpace(challenge.protectionSpace) >>== { cursor in
             guard cursor.count >= 1 else { return deferMaybe(nil) }
 
@@ -72,7 +74,7 @@ class Authenticator {
                     }
                     return nil
                 }
-                loginsProvider.deleteLogins(ids: malformedGUIDs).upon { _ in log.debug("Removed malformed logins.") }
+                loginsProvider.deleteLogins(ids: malformedGUIDs).upon { _ in }
             }
 
             // Found a single entry but the schemes don't match. This is a result of a schemeless entry that we
@@ -90,7 +92,9 @@ class Authenticator {
             else if logins.count == 1 {
                 credentials = logins[0].credentials
             } else {
-                SentryIntegration.shared.send(message: "No logins found for Authenticator", severity: .warning)
+                logger.log("No logins found for Authenticator",
+                           level: .info,
+                           category: .webview)
             }
 
             return deferMaybe(credentials)
@@ -101,10 +105,11 @@ class Authenticator {
         _ viewController: UIViewController,
         credentials: URLCredential?,
         protectionSpace: URLProtectionSpace,
-        loginsHelper: LoginsHelper?
+        loginsHelper: LoginsHelper?,
+        logger: Logger = DefaultLogger.shared
     ) -> Deferred<Maybe<LoginEntry>> {
         if protectionSpace.host.isEmpty {
-            print("Unable to show a password prompt without a hostname")
+            logger.log("Unable to show a password prompt without a hostname", level: .warning, category: .sync)
             return deferMaybe(LoginRecordError(description: "Unable to show a password prompt without a hostname"))
         }
 
@@ -122,8 +127,10 @@ class Authenticator {
         }
 
         // Add a button to log in.
-        let action = UIAlertAction(title: .AuthenticatorLogin,
-            style: .default) { (action) -> Void in
+        let action = UIAlertAction(
+            title: .AuthenticatorLogin,
+            style: .default
+        ) { (action) -> Void in
             guard let user = alert.textFields?[0].text,
                   let pass = alert.textFields?[1].text
             else {
@@ -132,6 +139,7 @@ class Authenticator {
             }
 
                 let login = LoginEntry(credentials: URLCredential(user: user, password: pass, persistence: .forSession), protectionSpace: protectionSpace)
+                self.sendLoginsAutofilledTelemetry()
                 deferred.fill(Maybe(success: login))
                 loginsHelper?.setCredentials(login)
         }
@@ -160,4 +168,16 @@ class Authenticator {
         return deferred
     }
 
+    // MARK: Telemetry
+    private static func sendLoginsAutofilledTelemetry() {
+        TelemetryWrapper.recordEvent(category: .action,
+                                     method: .tap,
+                                     object: .loginsAutofilled)
+    }
+
+    private static func sendLoginsAutofillFailedTelemetry() {
+        TelemetryWrapper.recordEvent(category: .action,
+                                     method: .tap,
+                                     object: .loginsAutofillFailed)
+    }
 }

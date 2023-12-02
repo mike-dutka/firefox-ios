@@ -1,18 +1,33 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
+import Common
+import Shared
 
-class ThemedNavigationController: DismissableNavigationViewController {
-    var presentingModalViewControllerDelegate: PresentingModalViewControllerDelegate?
+class ThemedNavigationController: DismissableNavigationViewController, Themeable {
+    var themeManager: ThemeManager
+    var themeObserver: NSObjectProtocol?
+    var notificationCenter: NotificationProtocol
 
-    @objc func done() {
-        if let delegate = presentingModalViewControllerDelegate {
-            delegate.dismissPresentedModalViewController(self, animated: true)
-        } else {
-            self.dismiss(animated: true, completion: nil)
-        }
+    init(themeManager: ThemeManager = AppContainer.shared.resolve(),
+         notificationCenter: NotificationProtocol = NotificationCenter.default) {
+        self.themeManager = themeManager
+        self.notificationCenter = notificationCenter
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    init(rootViewController: UIViewController,
+         themeManager: ThemeManager = AppContainer.shared.resolve(),
+         notificationCenter: NotificationProtocol = NotificationCenter.default) {
+        self.themeManager = themeManager
+        self.notificationCenter = notificationCenter
+        super.init(rootViewController: rootViewController)
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle {
@@ -24,15 +39,14 @@ class ThemedNavigationController: DismissableNavigationViewController {
         modalPresentationStyle = .overFullScreen
         modalPresentationCapturesStatusBarAppearance = true
         applyTheme()
+        listenForThemeChange(view)
     }
-}
 
-extension ThemedNavigationController: NotificationThemeable {
-    private func setupNavigationBarAppearance() {
+    private func setupNavigationBarAppearance(theme: Theme) {
         let standardAppearance = UINavigationBarAppearance()
         standardAppearance.configureWithDefaultBackground()
-        standardAppearance.backgroundColor = UIColor.theme.tableView.headerBackground
-        standardAppearance.titleTextAttributes = [.foregroundColor: UIColor.theme.tableView.headerTextDark]
+        standardAppearance.backgroundColor = theme.colors.layer1
+        standardAppearance.titleTextAttributes = [.foregroundColor: theme.colors.textPrimary]
 
         navigationBar.standardAppearance = standardAppearance
         navigationBar.compactAppearance = standardAppearance
@@ -40,19 +54,13 @@ extension ThemedNavigationController: NotificationThemeable {
         if #available(iOS 15.0, *) {
             navigationBar.compactScrollEdgeAppearance = standardAppearance
         }
-        navigationBar.tintColor = UIColor.theme.general.controlTint
+        navigationBar.tintColor = theme.colors.actionPrimary
     }
-    func applyTheme() {
-        setupNavigationBarAppearance()
-        setNeedsStatusBarAppearanceUpdate()
-        viewControllers.forEach {
-            ($0 as? NotificationThemeable)?.applyTheme()
-        }
-    }
-}
 
-protocol PresentingModalViewControllerDelegate: AnyObject {
-    func dismissPresentedModalViewController(_ modalViewController: UIViewController, animated: Bool)
+    func applyTheme() {
+        setupNavigationBarAppearance(theme: themeManager.currentTheme)
+        setNeedsStatusBarAppearanceUpdate()
+    }
 }
 
 class ModalSettingsNavigationController: UINavigationController {

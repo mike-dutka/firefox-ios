@@ -2,15 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
 
-struct WallpaperMigrationUtility: Loggable {
-
+struct WallpaperMigrationUtility {
     private let metadataMigration = PrefsKeys.Wallpapers.v1MigrationCheck
-    private let legacyAssetMigration = PrefsKeys.Wallpapers.legacyAssetMigrationCheck
     private let userDefaults: UserDefaultsInterface
     private let oldPromotionID = "trPromotion"
+    private var logger: Logger
 
     // For ease of legibility, we're performing an inverse check here. If a migration
     // has already been performed, then we should not perform it again.
@@ -18,58 +18,10 @@ struct WallpaperMigrationUtility: Loggable {
         return !userDefaults.bool(forKey: metadataMigration)
     }
 
-    // For ease of legibility, we're performing an inverse check here. If a migration
-    // has already been performed, then we should not perform it again.
-    private var shouldPerformLegacyAssetMigration: Bool {
-        return !userDefaults.bool(forKey: legacyAssetMigration)
-    }
-
-    init(with userDefaults: UserDefaultsInterface = UserDefaults.standard) {
+    init(with userDefaults: UserDefaultsInterface = UserDefaults.standard,
+         logger: Logger = DefaultLogger.shared) {
         self.userDefaults = userDefaults
-    }
-
-    /// Performs a migration of existing assets without having to download
-    /// any metadata.
-    ///
-    /// To perform proper migration, we require metadata. However, to preserve
-    /// user experience, having shifted to the JSON based metadata, we must have
-    /// some form of migration that doesn't depend on metadata, which we won't
-    /// have available at startup. To do this, we shift any existing wallpapers
-    /// using the identifier and assets to a place that the wallpaper system
-    /// will be able to find/use, and then migrate the correct identifiers
-    /// once the metadata has been downloaded.
-    func migrateExistingAssetWithoutMetadata() {
-        guard shouldPerformLegacyAssetMigration else { return }
-        let legacyStorageUtility = LegacyWallpaperStorageUtility()
-        let storageUtility = WallpaperStorageUtility()
-
-        // If no legacy wallpaper exists, then don't worry about migration
-        guard let legacyWallpaperObject = legacyStorageUtility.getCurrentWallpaperObject(),
-              let legacyImagePortrait = legacyStorageUtility.getPortraitImage(),
-              let legacyImageLandscape = legacyStorageUtility.getLandscapeImage()
-        else {
-            markLegacyAssetMigrationComplete()
-            markMetadataMigrationComplete()
-            return
-        }
-
-        // Create a temporary dummy wallpaper
-        let wallpaper = Wallpaper(id: legacyWallpaperObject.name,
-                                  textColor: nil,
-                                  cardColor: nil,
-                                  logoTextColor: nil)
-
-        do {
-            try store(portait: legacyImagePortrait,
-                      landscape: legacyImageLandscape,
-                      for: wallpaper,
-                      with: storageUtility)
-
-            markLegacyAssetMigrationComplete()
-
-        } catch {
-            browserLog.error("Migration error: \(error.localizedDescription)")
-        }
+        self.logger = logger
     }
 
     func attemptMetadataMigration() {
@@ -94,9 +46,10 @@ struct WallpaperMigrationUtility: Loggable {
                       with: storageUtility)
 
             markMetadataMigrationComplete()
-
         } catch {
-            browserLog.error("Migration error: \(error.localizedDescription)")
+            logger.log("Metadata migration error: \(error.localizedDescription)",
+                       level: .warning,
+                       category: .homepage)
         }
     }
 
@@ -132,7 +85,6 @@ struct WallpaperMigrationUtility: Loggable {
         _ matchingID: String,
         from storageUtility: WallpaperStorageUtility
     ) throws -> Wallpaper? {
-
         if matchingID == oldPromotionID {
             // The new metadata doesn't include the old promotional wallpapers.
             // Thus, we must create a new wallpaper to continue storing
@@ -140,7 +92,6 @@ struct WallpaperMigrationUtility: Loggable {
                              textColor: UIColor(colorString: "FBFBFE"),
                              cardColor: nil,
                              logoTextColor: UIColor(colorString: "FBFBFE"))
-
         } else {
             guard let metadata = try storageUtility.fetchMetadata(),
                   let matchingWallpaper = metadata.collections
@@ -150,7 +101,6 @@ struct WallpaperMigrationUtility: Loggable {
 
             return matchingWallpaper
         }
-
     }
 
     private func markMetadataMigrationComplete() {

@@ -1,6 +1,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
+
 import UIKit
 
 enum LegacyThemeManagerPrefs: String {
@@ -17,7 +18,6 @@ class LegacyThemeManager {
         didSet {
             ensureMainThread {
                 UserDefaults.standard.set(self.current.name, forKey: LegacyThemeManagerPrefs.themeName.rawValue)
-                NotificationCenter.default.post(name: .DisplayThemeChanged, object: nil)
             }
         }
     }
@@ -50,7 +50,14 @@ class LegacyThemeManager {
         UserDefaults.standard.register(defaults: [LegacyThemeManagerPrefs.systemThemeIsOn.rawValue: true])
         systemThemeIsOn = UserDefaults.standard.bool(forKey: LegacyThemeManagerPrefs.systemThemeIsOn.rawValue)
 
-        NotificationCenter.default.addObserver(self, selector: #selector(brightnessChanged), name: UIScreen.brightnessDidChangeNotification, object: nil)
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(brightnessChanged),
+                                               name: UIScreen.brightnessDidChangeNotification,
+                                               object: nil)
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(applicationDidBecomeActive),
+                                               name: UIApplication.didBecomeActiveNotification,
+                                               object: nil)
     }
 
     // UIViewControllers / UINavigationControllers need to have `preferredStatusBarStyle` and call this.
@@ -79,9 +86,19 @@ class LegacyThemeManager {
         }
     }
 
-    @objc private func brightnessChanged() {
+    @objc
+    private func brightnessChanged() {
         guard automaticBrightnessIsOn else { return }
         updateCurrentThemeBasedOnScreenBrightness()
+    }
+
+    @objc
+    private func applicationDidBecomeActive() {
+        let nightMode = UserDefaults.standard.bool(forKey: "profile.NightModeStatus")
+        if !nightMode && LegacyThemeManager.instance.systemThemeIsOn {
+            let userInterfaceStyle = UIScreen.main.traitCollection.userInterfaceStyle
+            LegacyThemeManager.instance.current = userInterfaceStyle == .dark ? LegacyDarkTheme() : LegacyNormalTheme()
+        }
     }
 }
 

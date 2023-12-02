@@ -1,11 +1,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
+import Shared
+import Common
 
 class ThemedDefaultNavigationController: DismissableNavigationViewController, Themeable {
-
     var themeManager: ThemeManager
     var notificationCenter: NotificationProtocol
     var themeObserver: NSObjectProtocol?
@@ -13,7 +14,6 @@ class ThemedDefaultNavigationController: DismissableNavigationViewController, Th
     init(rootViewController: UIViewController,
          themeManager: ThemeManager = AppContainer.shared.resolve(),
          notificationCenter: NotificationProtocol = NotificationCenter.default) {
-
         self.themeManager = themeManager
         self.notificationCenter = notificationCenter
         super.init(rootViewController: rootViewController)
@@ -25,7 +25,7 @@ class ThemedDefaultNavigationController: DismissableNavigationViewController, Th
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        listenForThemeChange()
+        listenForThemeChange(view)
         applyTheme()
     }
 
@@ -35,6 +35,8 @@ class ThemedDefaultNavigationController: DismissableNavigationViewController, Th
         standardAppearance.backgroundColor = themeManager.currentTheme.colors.layer1
         standardAppearance.shadowColor = nil
         standardAppearance.shadowImage = UIImage()
+        standardAppearance.titleTextAttributes = [.foregroundColor: themeManager.currentTheme.colors.textPrimary]
+        standardAppearance.largeTitleTextAttributes = [.foregroundColor: themeManager.currentTheme.colors.textPrimary]
 
         navigationBar.standardAppearance = standardAppearance
         navigationBar.compactAppearance = standardAppearance
@@ -68,8 +70,5 @@ class ThemedDefaultNavigationController: DismissableNavigationViewController, Th
         setupToolBarAppearance()
 
         setNeedsStatusBarAppearanceUpdate()
-
-        // TODO: Remove with legacy theme clean up FXIOS-3960
-        viewControllers.forEach { ($0 as? NotificationThemeable)?.applyTheme() }
     }
 }

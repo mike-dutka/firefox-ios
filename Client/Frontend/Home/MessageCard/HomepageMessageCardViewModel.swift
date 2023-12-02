@@ -2,7 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
+import Shared
 
 protocol MessageSurfaceProtocol {
     func getMessage(for surface: MessageSurfaceId) -> GleanPlumbMessage?
@@ -12,18 +14,20 @@ protocol MessageSurfaceProtocol {
 }
 
 class HomepageMessageCardViewModel: MessageSurfaceProtocol {
-
     private let dataAdaptor: MessageCardDataAdaptor
-    private let messagingManager: GleanPlumbMessageManagerProtocol
+    private var messagingManager: GleanPlumbMessageManagerProtocol
 
     weak var delegate: HomepageDataModelDelegate?
     var message: GleanPlumbMessage?
     var dismissClosure: (() -> Void)?
+    var theme: Theme
 
     init(dataAdaptor: MessageCardDataAdaptor,
+         theme: Theme,
          messagingManager: GleanPlumbMessageManagerProtocol = GleanPlumbMessageManager.shared
     ) {
         self.dataAdaptor = dataAdaptor
+        self.theme = theme
         self.messagingManager = messagingManager
     }
 
@@ -58,7 +62,7 @@ extension HomepageMessageCardViewModel: HomepageViewModelProtocol {
         return .messageCard
     }
 
-    func section(for traitCollection: UITraitCollection) -> NSCollectionLayoutSection {
+    func section(for traitCollection: UITraitCollection, size: CGSize) -> NSCollectionLayoutSection {
         let itemSize = NSCollectionLayoutSize(widthDimension: .fractionalWidth(1),
                                               heightDimension: .estimated(180))
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
@@ -72,7 +76,7 @@ extension HomepageMessageCardViewModel: HomepageViewModelProtocol {
         let horizontalInset = HomepageViewModel.UX.leadingInset(traitCollection: traitCollection)
         section.contentInsets = NSDirectionalEdgeInsets(top: 0,
                                                         leading: horizontalInset,
-                                                        bottom: 16,
+                                                        bottom: HomepageViewModel.UX.spacingBetweenSections,
                                                         trailing: horizontalInset)
 
         return section
@@ -94,20 +98,19 @@ extension HomepageMessageCardViewModel: HomepageViewModelProtocol {
         return shouldDisplayMessageCard
     }
 
-    func refreshData(for traitCollection: UITraitCollection,
-                     isPortrait: Bool = UIWindow.isPortrait,
-                     device: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom) {}
+    func setTheme(theme: Theme) {
+        self.theme = theme
+    }
 }
 
 // MARK: - HomepageSectionHandler
 extension HomepageMessageCardViewModel: HomepageSectionHandler {
-
     func configure(_ cell: UICollectionViewCell, at indexPath: IndexPath) -> UICollectionViewCell {
         guard let messageCell = cell as? HomepageMessageCardCell else {
             return UICollectionViewCell()
         }
 
-        messageCell.configure(viewModel: self)
+        messageCell.configure(viewModel: self, theme: theme)
         return messageCell
     }
 }

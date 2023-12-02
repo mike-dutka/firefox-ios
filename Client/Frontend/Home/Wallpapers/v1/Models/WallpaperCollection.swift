@@ -40,7 +40,7 @@ struct WallpaperCollection: Codable, Equatable {
 
     var learnMoreUrl: URL? {
         guard let urlString = learnMoreURLString else { return nil }
-        return URL(string: urlString)
+        return URL(string: urlString, invalidCharacters: false)
     }
 
     /// Wallpaper collections availability:
@@ -53,7 +53,7 @@ struct WallpaperCollection: Codable, Equatable {
     /// 2. Locale is restricted to locales specified in the array, if not empty
     var isAvailable: Bool {
         let isDateAvailable = availability?.isAvailable ?? true
-        var isLocaleAvailable: Bool = false
+        var isLocaleAvailable = false
 
         if let availableLocales = availableLocales {
             isLocaleAvailable = availableLocales.isEmpty || availableLocales.contains(Locale.current.identifier)

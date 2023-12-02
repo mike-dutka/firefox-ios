@@ -2,7 +2,12 @@ name: Create a PR to build the app using newest a-s version available
 on:
   schedule:
     - cron: '0 15 * * *'
-
+  workflow_dispatch:
+    inputs:
+      branchName:
+        description: 'Branch used as target for automation'
+        required: true
+        default: 'main'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -52,7 +57,6 @@ jobs:
         commit-message: Auto update SPM with latest rust-component release ${{ env.version }}
         author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
         committer: GitHub <noreply@github.com>
-        title: Auto update SPM with latest rust-component ${{ env.version }}
+        title: Refactor [vXXX] Auto update SPM with latest rust-component ${{ env.version }}
         branch: update-spm-new-rust-component-tag-${{ env.version }}
-        labels: Do Not Merge ⛔️
         token: ${{ secrets.GITHUB_TOKEN }}

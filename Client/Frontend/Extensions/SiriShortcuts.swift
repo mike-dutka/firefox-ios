@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Intents
@@ -9,7 +9,7 @@ import Shared
 
 class SiriShortcuts {
     enum activityType: String {
-        case openURL = "org.mozilla.ios.Firefox.newTab"
+        case openURL = "mdutka.ios.Firefox.newTab"
     }
 
     func getActivity(for type: activityType) -> NSUserActivity? {
@@ -48,9 +48,10 @@ class SiriShortcuts {
         INVoiceShortcutCenter.shared.getAllVoiceShortcuts { (voiceShortcuts, error) in
             DispatchQueue.main.async {
                 guard let voiceShortcuts = voiceShortcuts else { return }
-                let foundShortcut = voiceShortcuts.filter { (attempt) in
+                let foundShortcut = voiceShortcuts.first(where: { (attempt) in
                     attempt.shortcut.userActivity?.activityType == activityType.rawValue
-                    }.first
+                })
+
                 if let foundShortcut = foundShortcut {
                     self.displayEditSiri(for: foundShortcut, in: viewController)
                 } else {

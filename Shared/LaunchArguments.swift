@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 
@@ -19,7 +19,8 @@ public struct LaunchArguments {
     public static let ServerPort = "GCDWEBSERVER_PORT:"
     public static let SkipAddingGoogleTopSite = "SKIP_ADDING_GOOGLE_TOP_SITE"
     public static let SkipDefaultBrowserOnboarding = "SKIP_DEFAULT_BROWSER_ONBOARDING"
-    public static let TurnOffTabGroupsInUserPreferences = "TURN_OFF_TAB_GROUPS_IN_USER_PREFERENCES"
+    public static let LoadExperiment = "LOAD_EXPERIMENT"
+    public static let DisableAnimations = "DISABLE_ANIMATIONS"
 
     // After the colon, put the name of the file to load from test bundle
     public static let LoadDatabasePrefix = "FIREFOX_LOAD_DB_NAMED:"

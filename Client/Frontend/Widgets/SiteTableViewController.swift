@@ -1,9 +1,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import Storage
+import Common
+import Shared
 
 struct SiteTableViewControllerUX {
     static let RowHeight: CGFloat = 44
@@ -13,7 +15,13 @@ struct SiteTableViewControllerUX {
  * Provides base shared functionality for site rows and headers.
  */
 @objcMembers
-class SiteTableViewController: UIViewController, UITableViewDelegate, UITableViewDataSource, NotificationThemeable {
+class SiteTableViewController: UIViewController,
+                               UITableViewDelegate,
+                               UITableViewDataSource,
+                               Themeable {
+    var themeManager: ThemeManager
+    var themeObserver: NSObjectProtocol?
+    var notificationCenter: NotificationProtocol
     let profile: Profile
 
     var data: Cursor<Site> = Cursor<Site>(status: .success, msg: "No data set")
@@ -31,7 +39,7 @@ class SiteTableViewController: UIViewController, UITableViewDelegate, UITableVie
         table.estimatedRowHeight = SiteTableViewControllerUX.RowHeight
         table.setEditing(false, animated: false)
 
-        if let _ = self as? LibraryPanelContextMenu {
+        if self as? LibraryPanelContextMenu != nil {
             table.dragDelegate = self
         }
 
@@ -43,13 +51,18 @@ class SiteTableViewController: UIViewController, UITableViewDelegate, UITableVie
         }
     }
 
-    private override init(nibName: String?, bundle: Bundle?) {
+    override private init(nibName: String?, bundle: Bundle?) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    init(profile: Profile) {
+    init(profile: Profile,
+         notificationCenter: NotificationProtocol = NotificationCenter.default,
+         themeManager: ThemeManager = AppContainer.shared.resolve()) {
         self.profile = profile
+        self.notificationCenter = notificationCenter
+        self.themeManager = themeManager
         super.init(nibName: nil, bundle: nil)
+        listenForThemeChange(view)
         applyTheme()
     }
 
@@ -80,7 +93,7 @@ class SiteTableViewController: UIViewController, UITableViewDelegate, UITableVie
         super.viewWillTransition(to: size, with: coordinator)
         tableView.setEditing(false, animated: false)
         // The AS context menu does not behave correctly. Dismiss it when rotating.
-        if let _ = self.presentedViewController as? PhotonActionSheet {
+        if self.presentedViewController as? PhotonActionSheet != nil {
             self.presentedViewController?.dismiss(animated: true, completion: nil)
         }
     }
@@ -97,9 +110,7 @@ class SiteTableViewController: UIViewController, UITableViewDelegate, UITableVie
     }
 
     func reloadData() {
-        if data.status != .success {
-            print("Err: \(data.statusMessage)", terminator: "\n")
-        } else {
+        if data.status == .success {
             self.tableView.reloadData()
         }
     }
@@ -113,7 +124,7 @@ class SiteTableViewController: UIViewController, UITableViewDelegate, UITableVie
         if self.tableView(tableView, hasFullWidthSeparatorForRowAtIndexPath: indexPath) {
             cell.separatorInset = .zero
         }
-        cell.textLabel?.textColor = UIColor.theme.tableView.rowText
+        cell.textLabel?.textColor = themeManager.currentTheme.colors.textPrimary
         return cell
     }
 
@@ -123,8 +134,8 @@ class SiteTableViewController: UIViewController, UITableViewDelegate, UITableVie
 
     func tableView(_ tableView: UITableView, willDisplayHeaderView view: UIView, forSection section: Int) {
         if let header = view as? UITableViewHeaderFooterView {
-            header.textLabel?.textColor = UIColor.theme.tableView.headerTextDark
-            header.contentView.backgroundColor = UIColor.theme.tableView.headerBackground
+            header.textLabel?.textColor = themeManager.currentTheme.colors.textPrimary
+            header.contentView.backgroundColor = themeManager.currentTheme.colors.layer1
         }
     }
 
@@ -141,26 +152,22 @@ class SiteTableViewController: UIViewController, UITableViewDelegate, UITableVie
     }
 
     func applyTheme() {
-        navigationController?.navigationBar.barTintColor = UIColor.theme.tableView.headerBackground
-        navigationController?.navigationBar.tintColor = UIColor.theme.general.controlTint
-        navigationController?.navigationBar.titleTextAttributes = [NSAttributedString.Key.foregroundColor: UIColor.theme.tableView.headerTextDark]
+        navigationController?.navigationBar.barTintColor = themeManager.currentTheme.colors.layer1
+        navigationController?.navigationBar.tintColor = themeManager.currentTheme.colors.iconAction
+        navigationController?.navigationBar.titleTextAttributes = [.foregroundColor: themeManager.currentTheme.colors.textPrimary]
         setNeedsStatusBarAppearanceUpdate()
 
-        tableView.backgroundColor = UIColor.theme.homePanel.panelBackground
-        tableView.separatorColor = UIColor.theme.tableView.separator
-        if let rows = tableView.indexPathsForVisibleRows {
-            tableView.reloadRows(at: rows, with: .none)
-            tableView.reloadSections(IndexSet(rows.map { $0.section }), with: .none)
-        }
+        tableView.backgroundColor = themeManager.currentTheme.colors.layer1
+        tableView.separatorColor = themeManager.currentTheme.colors.borderPrimary
+        tableView.reloadData()
     }
 }
 
 extension SiteTableViewController: UITableViewDragDelegate {
-
     func tableView(_ tableView: UITableView, itemsForBeginning session: UIDragSession, at indexPath: IndexPath) -> [UIDragItem] {
         guard let panelVC = self as? LibraryPanelContextMenu,
               let site = panelVC.getSiteDetails(for: indexPath),
-              let url = URL(string: site.url), let itemProvider = NSItemProvider(contentsOf: url)
+              let url = URL(string: site.url, invalidCharacters: false), let itemProvider = NSItemProvider(contentsOf: url)
         else { return [] }
 
         // Telemetry is being sent to legacy, need to add it to metrics.yml

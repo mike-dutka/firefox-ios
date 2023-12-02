@@ -1,12 +1,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
 
 class NewTabContentSettingsViewController: SettingsTableViewController {
-
     /* variables for checkmark settings */
     let prefs: Prefs
     var currentChoice: NewTabPage!
@@ -39,7 +38,9 @@ class NewTabContentSettingsViewController: SettingsTableViewController {
             onChecked: {
                 self.currentChoice = NewTabPage.topSites
                 onFinished()
-        })
+            }
+        )
+
         let showBlankPage = CheckmarkSetting(
             title: NSAttributedString(string: .SettingsNewTabBlankPage),
             subtitle: nil,
@@ -48,10 +49,12 @@ class NewTabContentSettingsViewController: SettingsTableViewController {
             onChecked: {
                 self.currentChoice = NewTabPage.blankPage
                 onFinished()
-        })
+            }
+        )
+
         let showWebPage = WebPageSetting(
             prefs: prefs,
-            prefKey: HomePageConstants.NewTabCustomUrlPrefKey,
+            prefKey: PrefsKeys.NewTabCustomUrlPrefKey,
             defaultValue: nil,
             placeholder: .CustomNewPageURL,
             accessibilityIdentifier: "NewTabAsCustomURL",
@@ -60,7 +63,9 @@ class NewTabContentSettingsViewController: SettingsTableViewController {
                 self.currentChoice = NewTabPage.homePage
                 self.prefs.setString(self.currentChoice.rawValue, forKey: NewTabAccessors.NewTabPrefKey)
                 self.tableView.reloadData()
-        })
+            }
+        )
+
         showWebPage.textField.textAlignment = .natural
 
         let section = SettingSection(

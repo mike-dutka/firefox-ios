@@ -1,10 +1,12 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
-* License, v. 2.0. If a copy of the MPL was not distributed with this
-* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
 import Account
+import Common
+import ComponentLibrary
 
 /// Reflects parent page that launched FirefoxAccountSignInViewController
 enum FxASignInParentType {
@@ -16,10 +18,10 @@ enum FxASignInParentType {
 }
 
 /// ViewController handling Sign In through QR Code or Email address
-class FirefoxAccountSignInViewController: UIViewController {
-
+class FirefoxAccountSignInViewController: UIViewController, Themeable {
     struct UX {
         static let horizontalPadding: CGFloat = 16
+        static let buttonCornerRadius: CGFloat = 8
         static let buttonVerticalInset: CGFloat = 12
         static let buttonHorizontalInset: CGFloat = 16
         static let buttonFontSize: CGFloat = 16
@@ -31,8 +33,11 @@ class FirefoxAccountSignInViewController: UIViewController {
     var shouldReload: (() -> Void)?
 
     private let profile: Profile
-    private var deepLinkParams: FxALaunchParams?
-    var notificationCenter: NotificationProtocol = NotificationCenter.default
+    private let deepLinkParams: FxALaunchParams
+    var notificationCenter: NotificationProtocol
+    var themeManager: ThemeManager
+    var themeObserver: NSObjectProtocol?
+    weak var qrCodeNavigationHandler: QRCodeNavigationHandler?
 
     /// This variable is used to track parent page that launched this sign in VC.
     /// telemetryObject deduced from parentType initializer is sent with telemetry events on button click
@@ -41,48 +46,49 @@ class FirefoxAccountSignInViewController: UIViewController {
     /// Dismissal style for FxAWebViewController
     /// Changes based on whether or not this VC is launched from the app menu or settings
     private let fxaDismissStyle: DismissType
+    private let logger: Logger
 
     // UI
     private lazy var scrollView: UIScrollView = .build { view in
         view.backgroundColor = .clear
     }
 
-    lazy var containerView: UIView = .build { view in
+    private lazy var containerView: UIView = .build { view in
         view.backgroundColor = .clear
     }
 
-    let qrSignInLabel: UILabel = .build { label in
+    private lazy var signinSyncQRImage = UIImage(named: ImageIdentifiers.signinSyncQRButton)
+
+    private let qrSignInLabel: UILabel = .build { label in
         label.textAlignment = .center
         label.numberOfLines = 0
         label.lineBreakMode = .byWordWrapping
         label.text = .FxASignin_Subtitle
-        label.font = DynamicFontHelper.defaultHelper.preferredBoldFont(withTextStyle: .headline,
-                                                                       size: UX.signInLabelFontSize)
+        label.font = DefaultDynamicFontHelper.preferredBoldFont(withTextStyle: .headline,
+                                                                size: UX.signInLabelFontSize)
         label.adjustsFontForContentSizeCategory = true
-        label.textColor = .label
     }
 
-    let pairImageView: UIImageView = .build { imageView in
+    private let pairImageView: UIImageView = .build { imageView in
         imageView.image = UIImage(named: ImageIdentifiers.signinSync)
         imageView.contentMode = .scaleAspectFit
     }
 
-    let instructionsLabel: UILabel = .build { label in
+    private let instructionsLabel: UILabel = .build { label in
         label.textAlignment = .center
         label.numberOfLines = 0
         label.lineBreakMode = .byWordWrapping
-        label.textColor = .label
-        label.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .headline,
-                                                                       size: UX.signInLabelFontSize)
+        label.font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .headline,
+                                                            size: UX.signInLabelFontSize)
         label.adjustsFontForContentSizeCategory = true
 
         let placeholder = "firefox.com/pair"
-        RustFirefoxAccounts.shared.accountManager.uponQueue(.main) { manager in
+        if let manager = RustFirefoxAccounts.shared.accountManager {
             manager.getPairingAuthorityURL { result in
                 guard let url = try? result.get(), let host = url.host else { return }
 
-                let font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .headline,
-                                                                         size: UX.signInLabelFontSize)
+                let font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .headline,
+                                                                  size: UX.signInLabelFontSize)
                 let shortUrl = host + url.path // "firefox.com" + "/pair"
                 let msg: String = .FxASignin_QRInstructions.replaceFirstOccurrence(of: placeholder, with: shortUrl)
                 label.attributedText = msg.attributedText(boldString: shortUrl, font: font)
@@ -90,44 +96,24 @@ class FirefoxAccountSignInViewController: UIViewController {
         }
     }
 
-    lazy var scanButton: ResizableButton = .build { button in
-        button.backgroundColor = UIColor.Photon.Blue50
-        button.layer.cornerRadius = 8
-        button.setImage(UIImage(named: ImageIdentifiers.signinSyncQRButton)?
-            .tinted(withColor: .white), for: .normal)
-        button.setImage(UIImage(named: ImageIdentifiers.signinSyncQRButton)?
-            .tinted(withColor: .white), for: .highlighted)
-        button.setTitle(.FxASignin_QRScanSignin, for: .normal)
-        button.accessibilityIdentifier = AccessibilityIdentifiers.Settings.FirefoxAccount.qrButton
-        button.titleLabel?.font = DynamicFontHelper.defaultHelper.preferredBoldFont(
-            withTextStyle: .callout,
-            size: UX.buttonFontSize)
-
-        let contentPadding = UIEdgeInsets(top: UX.buttonVerticalInset,
-                                          left: UX.buttonHorizontalInset,
-                                          bottom: UX.buttonVerticalInset,
-                                          right: UX.buttonHorizontalInset)
-        button.setInsets(forContentPadding: contentPadding, imageTitlePadding: UX.buttonHorizontalInset)
+    private lazy var scanButton: PrimaryRoundedButton = .build { button in
+        let viewModel = PrimaryRoundedButtonViewModel(
+            title: .FxASignin_QRScanSignin,
+            a11yIdentifier: AccessibilityIdentifiers.Settings.FirefoxAccount.qrButton,
+            imageTitlePadding: UX.buttonHorizontalInset
+        )
+        button.configure(viewModel: viewModel)
+        button.setImage(self.signinSyncQRImage?.tinted(withColor: .white), for: .highlighted)
         button.addTarget(self, action: #selector(self.scanbuttonTapped), for: .touchUpInside)
     }
 
-    lazy var emailButton: ResizableButton = .build { button in
-        button.backgroundColor = UIColor.Photon.LightGrey30
-        button.setTitleColor(UIColor.Photon.DarkGrey90, for: .normal)
-        button.layer.borderColor = UIColor.Photon.Grey30.cgColor
-        button.layer.borderWidth = 1
-        button.layer.cornerRadius = 8
-        button.setTitle(.FxASignin_EmailSignin, for: .normal)
-        button.accessibilityIdentifier = AccessibilityIdentifiers.Settings.FirefoxAccount.fxaSignInButton
+    private lazy var emailButton: SecondaryRoundedButton = .build { button in
+        let viewModel = SecondaryRoundedButtonViewModel(
+            title: .FxASignin_EmailSignin,
+            a11yIdentifier: AccessibilityIdentifiers.Settings.FirefoxAccount.fxaSignInButton
+        )
+        button.configure(viewModel: viewModel)
         button.addTarget(self, action: #selector(self.emailLoginTapped), for: .touchUpInside)
-        button.titleLabel?.adjustsFontForContentSizeCategory = true
-        button.titleLabel?.font = DynamicFontHelper.defaultHelper.preferredBoldFont(
-            withTextStyle: .callout,
-            size: UX.buttonFontSize)
-        button.contentEdgeInsets = UIEdgeInsets(top: UX.buttonVerticalInset,
-                                                left: UX.buttonHorizontalInset,
-                                                bottom: UX.buttonVerticalInset,
-                                                right: UX.buttonHorizontalInset)
     }
 
     // MARK: - Inits
@@ -136,7 +122,12 @@ class FirefoxAccountSignInViewController: UIViewController {
     ///   - profile: User Profile info
     ///   - parentType: FxASignInParentType is an enum parent page that presented this VC. Parameter used in telemetry button events.
     ///   - deepLinkParams: URL args passed in from deep link that propagate to FxA web view
-    init(profile: Profile, parentType: FxASignInParentType, deepLinkParams: FxALaunchParams?) {
+    init(profile: Profile,
+         parentType: FxASignInParentType,
+         deepLinkParams: FxALaunchParams,
+         logger: Logger = DefaultLogger.shared,
+         notificationCenter: NotificationProtocol = NotificationCenter.default,
+         themeManager: ThemeManager = AppContainer.shared.resolve()) {
         self.deepLinkParams = deepLinkParams
         self.profile = profile
         switch parentType {
@@ -155,8 +146,10 @@ class FirefoxAccountSignInViewController: UIViewController {
         case .tabTray:
             self.telemetryObject = .tabTray
             self.fxaDismissStyle = .popToTabTray
-
         }
+        self.logger = logger
+        self.notificationCenter = notificationCenter
+        self.themeManager = themeManager
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -168,14 +161,15 @@ class FirefoxAccountSignInViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
-        view.backgroundColor = .systemBackground
+        listenForThemeChange(view)
         title = .Settings.Sync.SignInView.Title
         accessibilityLabel = "FxASingin.navBar"
 
-        setupNotifications(forObserver: self,
-                                   observing: [.DisplayThemeChanged])
         setupLayout()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
         applyTheme()
     }
 
@@ -218,79 +212,95 @@ class FirefoxAccountSignInViewController: UIViewController {
 
             scanButton.topAnchor.constraint(equalTo: instructionsLabel.bottomAnchor, constant: 24),
             scanButton.leadingAnchor.constraint(equalTo: containerView.leadingAnchor,
-                                                       constant: UX.horizontalPadding),
+                                                constant: UX.horizontalPadding),
             scanButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor,
-                                                        constant: -UX.horizontalPadding),
+                                                 constant: -UX.horizontalPadding),
 
             emailButton.topAnchor.constraint(equalTo: scanButton.bottomAnchor, constant: 8),
             emailButton.leadingAnchor.constraint(equalTo: containerView.leadingAnchor,
-                                                       constant: UX.horizontalPadding),
+                                                 constant: UX.horizontalPadding),
             emailButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor,
-                                                        constant: -UX.horizontalPadding),
+                                                  constant: -UX.horizontalPadding),
             emailButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -8),
         ])
     }
 
     func applyTheme() {
-        let theme = BuiltinThemeName(rawValue: LegacyThemeManager.instance.current.name) ?? .normal
+        let colors = themeManager.currentTheme.colors
+        view.backgroundColor = colors.layer1
+        qrSignInLabel.textColor = colors.textPrimary
+        instructionsLabel.textColor = colors.textPrimary
 
-        if theme == .dark {
-            scanButton.setImage(UIImage(named: ImageIdentifiers.signinSyncQRButton)?
-                .tinted(withColor: .black), for: .normal)
-            scanButton.setTitleColor(.black, for: .normal)
-            scanButton.backgroundColor = UIColor.theme.homePanel.activityStreamHeaderButton
-        } else {
-            scanButton.setImage(UIImage(named: ImageIdentifiers.signinSyncQRButton)?
-                .tinted(withColor: .white), for: .normal)
-            scanButton.setTitleColor(UIColor.Photon.LightGrey05, for: .normal)
-            scanButton.backgroundColor = UIColor.Photon.Blue50
-        }
+        let theme = themeManager.currentTheme
+        scanButton.applyTheme(theme: theme)
+        emailButton.applyTheme(theme: theme)
+        scanButton.setImage(signinSyncQRImage?
+            .tinted(withColor: colors.textInverted), for: .normal)
     }
 
     // MARK: Button Tap Functions
 
     /// Scan QR code button tapped
-    @objc func scanbuttonTapped(_ sender: UIButton) {
+    @objc
+    func scanbuttonTapped(_ sender: UIButton) {
         let qrCodeVC = QRCodeViewController()
         qrCodeVC.qrCodeDelegate = self
-        TelemetryWrapper.recordEvent(category: .firefoxAccount, method: .tap, object: telemetryObject, extras: ["flow_type": "pairing"])
+        TelemetryWrapper.recordEvent(category: .firefoxAccount, method: .tap, object: .syncSignInScanQRCode)
         presentThemedViewController(navItemLocation: .Left, navItemText: .Close, vcBeingPresented: qrCodeVC, topTabsVisible: true)
     }
 
     /// Use email login button tapped
-    @objc func emailLoginTapped(_ sender: UIButton) {
-        let fxaWebVC = FxAWebViewController(pageType: .emailLoginFlow, profile: profile, dismissalStyle: fxaDismissStyle, deepLinkParams: deepLinkParams)
+    @objc
+    func emailLoginTapped(_ sender: UIButton) {
+        let shouldAskForPermission = OnboardingNotificationCardHelper().shouldAskForNotificationsPermission(telemetryObj: telemetryObject)
+        let fxaWebVC = FxAWebViewController(pageType: .emailLoginFlow,
+                                            profile: profile,
+                                            dismissalStyle: fxaDismissStyle,
+                                            deepLinkParams: deepLinkParams,
+                                            shouldAskForNotificationPermission: shouldAskForPermission)
         fxaWebVC.shouldDismissFxASignInViewController = { [weak self] in
             self?.shouldReload?()
             self?.dismissVC()
         }
-        TelemetryWrapper.recordEvent(category: .firefoxAccount, method: .qrPairing, object: telemetryObject, extras: ["flow_type": "email"])
+        TelemetryWrapper.recordEvent(category: .firefoxAccount, method: .tap, object: .syncSignInUseEmail)
         navigationController?.pushViewController(fxaWebVC, animated: true)
     }
 }
 
-// MARK: QRCodeViewControllerDelegate Functions
+// MARK: - QRCodeViewControllerDelegate Functions
 extension FirefoxAccountSignInViewController: QRCodeViewControllerDelegate {
     func didScanQRCodeWithURL(_ url: URL) {
-        let vc = FxAWebViewController(pageType: .qrCode(url: url.absoluteString), profile: profile, dismissalStyle: fxaDismissStyle, deepLinkParams: deepLinkParams)
+        let shouldAskForPermission = OnboardingNotificationCardHelper().shouldAskForNotificationsPermission(telemetryObj: telemetryObject)
+
+        let vc = FxAWebViewController(pageType: .qrCode(url: url.absoluteString),
+                                      profile: profile,
+                                      dismissalStyle: fxaDismissStyle,
+                                      deepLinkParams: deepLinkParams,
+                                      shouldAskForNotificationPermission: shouldAskForPermission)
         navigationController?.pushViewController(vc, animated: true)
     }
 
     func didScanQRCodeWithText(_ text: String) {
-        SentryIntegration.shared.send(message: "FirefoxAccountSignInVC Error: `didScanQRCodeWithText` should not be called")
+        logger.log("FirefoxAccountSignInVC Error: `didScanQRCodeWithText` should not be called",
+                   level: .info,
+                   category: .sync)
     }
 }
 
 // MARK: - FxA SignIn Flow
 extension FirefoxAccountSignInViewController {
-
     /// This function is called to determine if FxA sign in flow or settings page should be shown
     /// - Parameters:
     ///     - deepLinkParams: FxALaunchParams from deeplink query
     ///     - flowType: FxAPageType is used to determine if email login, qr code login, or user settings page should be presented
     ///     - referringPage: ReferringPage enum is used to handle telemetry events correctly for the view event and the FxA sign in tap events, need to know which route we took to get to them
     ///     - profile:
-    static func getSignInOrFxASettingsVC(_ deepLinkParams: FxALaunchParams? = nil, flowType: FxAPageType, referringPage: ReferringPage, profile: Profile) -> UIViewController {
+    static func getSignInOrFxASettingsVC(
+        _ deepLinkParams: FxALaunchParams,
+        flowType: FxAPageType,
+        referringPage: ReferringPage,
+        profile: Profile
+    ) -> UIViewController {
         // Show the settings page if we have already signed in. If we haven't then show the signin page
         let parentType: FxASignInParentType
         let object: TelemetryWrapper.EventObject
@@ -318,18 +328,5 @@ extension FirefoxAccountSignInViewController {
         let settingsTableViewController = SyncContentSettingsViewController()
         settingsTableViewController.profile = profile
         return settingsTableViewController
-    }
-}
-
-// MARK: - Notifiable
-extension FirefoxAccountSignInViewController: Notifiable {
-
-    func handleNotifications(_ notification: Notification) {
-        switch notification.name {
-        case .DisplayThemeChanged:
-            applyTheme()
-        default:
-            break
-        }
     }
 }

@@ -1,7 +1,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
 import Sync
@@ -17,11 +18,15 @@ class ManageFxAccountSetting: Setting {
     init(settings: SettingsTableViewController) {
         self.profile = settings.profile
 
-        super.init(title: NSAttributedString(string: .FxAManageAccount, attributes: [NSAttributedString.Key.foregroundColor: UIColor.theme.tableView.rowText]))
+        super.init(title: NSAttributedString(string: .FxAManageAccount, attributes: [NSAttributedString.Key.foregroundColor: settings.themeManager.currentTheme.colors.textPrimary]))
     }
 
     override func onClick(_ navigationController: UINavigationController?) {
-        let viewController = FxAWebViewController(pageType: .settingsPage, profile: profile, dismissalStyle: .popToRootVC, deepLinkParams: nil)
+        let fxaParams = FxALaunchParams(entrypoint: .manageFxASetting, query: [:])
+        let viewController = FxAWebViewController(pageType: .settingsPage,
+                                                  profile: profile,
+                                                  dismissalStyle: .popToRootVC,
+                                                  deepLinkParams: fxaParams)
         navigationController?.pushViewController(viewController, animated: true)
     }
 }
@@ -33,7 +38,7 @@ class DisconnectSetting: Setting {
     override var textAlignment: NSTextAlignment { return .center }
 
     override var title: NSAttributedString? {
-        return NSAttributedString(string: .SettingsDisconnectSyncButton, attributes: [NSAttributedString.Key.foregroundColor: UIColor.theme.general.destructiveRed])
+        return NSAttributedString(string: .SettingsDisconnectSyncButton, attributes: [NSAttributedString.Key.foregroundColor: settingsVC.themeManager.currentTheme.colors.textWarning])
     }
 
     init(settings: SettingsTableViewController) {
@@ -48,14 +53,17 @@ class DisconnectSetting: Setting {
             title: .SettingsDisconnectSyncAlertTitle,
             message: .SettingsDisconnectSyncAlertBody,
             preferredStyle: UIAlertController.Style.alert)
+
         alertController.addAction(
             UIAlertAction(title: .SettingsDisconnectCancelAction, style: .cancel) { (action) in
                 // Do nothing.
-        })
+            }
+        )
+
         alertController.addAction(
             UIAlertAction(title: .SettingsDisconnectDestructiveAction, style: .destructive) { (action) in
                 self.profile.removeAccount()
-                TelemetryWrapper.recordEvent(category: .firefoxAccount, method: .settings, object: .accountDisconnected)
+                TelemetryWrapper.recordEvent(category: .firefoxAccount, method: .tap, object: .syncUserLoggedOut)
 
                 // If there is more than one view controller in the navigation controller, we can pop.
                 // Otherwise, assume that we got here directly from the App Menu and dismiss the VC.
@@ -64,14 +72,16 @@ class DisconnectSetting: Setting {
                 } else {
                     self.settingsVC.dismiss(animated: true, completion: nil)
                 }
-        })
+            }
+        )
+
         navigationController?.present(alertController, animated: true, completion: nil)
     }
 }
 
 class DeviceNamePersister: SettingValuePersister {
     func readPersistedValue() -> String? {
-        guard let val = RustFirefoxAccounts.shared.accountManager.peek()?.deviceConstellation()?
+        guard let val = RustFirefoxAccounts.shared.accountManager?.deviceConstellation()?
             .state()?.localDevice?.displayName else {
                 return UserDefaults.standard.string(forKey: RustFirefoxAccounts.prefKeyLastDeviceName)
         }
@@ -81,7 +91,7 @@ class DeviceNamePersister: SettingValuePersister {
 
     func writePersistedValue(value: String?) {
         guard let newName = value,
-            let deviceConstellation = RustFirefoxAccounts.shared.accountManager.peek()?.deviceConstellation() else {
+            let deviceConstellation = RustFirefoxAccounts.shared.accountManager?.deviceConstellation() else {
             return
         }
         UserDefaults.standard.set(newName, forKey: RustFirefoxAccounts.prefKeyLastDeviceName)
@@ -105,8 +115,8 @@ class DeviceNameSetting: StringSetting {
         }
     }
 
-    override func onConfigureCell(_ cell: UITableViewCell) {
-        super.onConfigureCell(cell)
+    override func onConfigureCell(_ cell: UITableViewCell, theme: Theme) {
+        super.onConfigureCell(cell, theme: theme)
         textField.textAlignment = .natural
     }
 
@@ -117,7 +127,7 @@ class DeviceNameSetting: StringSetting {
     }
 }
 
-class SyncContentSettingsViewController: SettingsTableViewController {
+class SyncContentSettingsViewController: SettingsTableViewController, FeatureFlaggable {
     fileprivate var enginesToSyncOnExit: Set<String> = Set()
 
     init() {
@@ -125,7 +135,7 @@ class SyncContentSettingsViewController: SettingsTableViewController {
 
         self.title = .FxASettingsTitle
 
-        RustFirefoxAccounts.shared.accountManager.peek()?.deviceConstellation()?.refreshState()
+        RustFirefoxAccounts.shared.accountManager?.deviceConstellation()?.refreshState()
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -134,23 +144,51 @@ class SyncContentSettingsViewController: SettingsTableViewController {
 
     override func viewWillDisappear(_ animated: Bool) {
         if !enginesToSyncOnExit.isEmpty {
-            _ = self.profile.syncManager.syncNamedCollections(why: SyncReason.engineEnabled, names: Array(enginesToSyncOnExit))
+            _ = self.profile.syncManager.syncNamedCollections(why: .enabledChange, names: Array(enginesToSyncOnExit))
             enginesToSyncOnExit.removeAll()
         }
         super.viewWillDisappear(animated)
     }
 
-    func engineSettingChanged(_ engineName: String) -> (Bool) -> Void {
-        let prefName = "sync.engine.\(engineName).enabledStateChanged"
-        return { enabled in
-            if let _ = self.profile.prefs.boolForKey(prefName) { // Switch it back to not-changed
+    func engineSettingChanged(_ engineName: RustSyncManagerAPI.TogglableEngine) -> (Bool) -> Void {
+        let prefName = "sync.engine.\(engineName.rawValue).enabledStateChanged"
+        return { [unowned self] enabled in
+            if engineName == .creditcards {
+                self.creditCardSyncEnabledTelemetry(status: enabled)
+            } else if engineName == .passwords {
+                self.loginsSyncEnabledTelemetry(status: enabled)
+            }
+
+            if self.profile.prefs.boolForKey(prefName) != nil { // Switch it back to not-changed
                 self.profile.prefs.removeObjectForKey(prefName)
-                self.enginesToSyncOnExit.remove(engineName)
+                self.enginesToSyncOnExit.remove(engineName.rawValue)
             } else {
                 self.profile.prefs.setBool(true, forKey: prefName)
-                self.enginesToSyncOnExit.insert(engineName)
+                self.enginesToSyncOnExit.insert(engineName.rawValue)
             }
         }
+    }
+
+    private func creditCardSyncEnabledTelemetry(status: Bool) {
+        TelemetryWrapper.recordEvent(
+            category: .action,
+            method: .tap,
+            object: .creditCardSyncToggle,
+            extras: [
+                TelemetryWrapper.ExtraKey.isCreditCardSyncToggleEnabled.rawValue: status
+            ]
+        )
+    }
+
+    private func loginsSyncEnabledTelemetry(status: Bool) {
+        TelemetryWrapper.recordEvent(
+            category: .action,
+            method: .tap,
+            object: .loginsSyncEnabled,
+            extras: [
+                TelemetryWrapper.ExtraKey.isLoginSyncEnabled.rawValue: status
+            ]
+        )
     }
 
     override func generateSettings() -> [SettingSection] {
@@ -163,33 +201,49 @@ class SyncContentSettingsViewController: SettingsTableViewController {
             defaultValue: true,
             attributedTitleText: NSAttributedString(string: .FirefoxSyncBookmarksEngine),
             attributedStatusText: nil,
-            settingDidChange: engineSettingChanged("bookmarks"))
+            settingDidChange: engineSettingChanged(.bookmarks))
         let history = BoolSetting(
             prefs: profile.prefs,
             prefKey: "sync.engine.history.enabled",
             defaultValue: true,
             attributedTitleText: NSAttributedString(string: .FirefoxSyncHistoryEngine),
             attributedStatusText: nil,
-            settingDidChange: engineSettingChanged("history"))
+            settingDidChange: engineSettingChanged(.history))
         let tabs = BoolSetting(
             prefs: profile.prefs,
-            prefKey: "sync.engine.tabs.enabled",
+            prefKey: PrefsKeys.TabSyncEnabled,
             defaultValue: true,
             attributedTitleText: NSAttributedString(string: .FirefoxSyncTabsEngine),
             attributedStatusText: nil,
-            settingDidChange: engineSettingChanged("tabs"))
+            settingDidChange: engineSettingChanged(.tabs))
         let passwords = BoolSetting(
             prefs: profile.prefs,
             prefKey: "sync.engine.passwords.enabled",
             defaultValue: true,
             attributedTitleText: NSAttributedString(string: .FirefoxSyncLoginsEngine),
             attributedStatusText: nil,
-            settingDidChange: engineSettingChanged("passwords"))
+            settingDidChange: engineSettingChanged(.passwords))
+
+        let creditCards = BoolSetting(
+            prefs: profile.prefs,
+            prefKey: "sync.engine.creditcards.enabled",
+            defaultValue: true,
+            attributedTitleText: NSAttributedString(string: .FirefoxSyncCreditCardsEngine),
+            attributedStatusText: nil,
+            settingDidChange: engineSettingChanged(.creditcards))
+
+        var engineSectionChildren: [Setting] = [bookmarks, history, tabs, passwords]
+
+        if featureFlags.isFeatureEnabled(
+            .creditCardAutofillStatus,
+            checking: .buildOnly) {
+            engineSectionChildren.append(creditCards)
+        }
 
         let enginesSection = SettingSection(
             title: NSAttributedString(string: .FxASettingsSyncSettings),
             footerTitle: nil,
-            children: [bookmarks, history, tabs, passwords])
+            children: engineSectionChildren)
 
         let deviceName = DeviceNameSetting(settings: self)
         let deviceNameSection = SettingSection(

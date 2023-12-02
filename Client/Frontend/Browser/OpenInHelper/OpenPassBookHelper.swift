@@ -5,13 +5,24 @@
 import PassKit
 import Shared
 import WebKit
+import Common
 
 class OpenPassBookHelper {
-
     private enum InvalidPassError: Error {
         case contentsOfURL
         case dataTaskURL
         case openError
+
+        public var description: String {
+            switch self {
+            case .contentsOfURL:
+                return "Failed to open pass with content of URL"
+            case .dataTaskURL:
+                return "Failed to open pass from dataTask"
+            case .openError:
+                return "Failed to prompt or open pass"
+            }
+        }
     }
 
     private var response: URLResponse
@@ -20,19 +31,23 @@ class OpenPassBookHelper {
     private let cookieStore: WKHTTPCookieStore
     private lazy var session = makeURLSession(userAgent: UserAgent.fxaUserAgent,
                                               configuration: .ephemeral)
+    private let logger: Logger
 
     init(response: URLResponse,
          cookieStore: WKHTTPCookieStore,
-         presenter: Presenter) {
+         presenter: Presenter,
+         logger: Logger = DefaultLogger.shared) {
         self.response = response
         self.url = response.url
         self.cookieStore = cookieStore
         self.presenter = presenter
+        self.logger = logger
     }
 
     static func shouldOpenWithPassBook(response: URLResponse,
                                        forceDownload: Bool) -> Bool {
         guard let mimeType = response.mimeType, response.url != nil else { return false }
+
         return mimeType == MIMEType.Passbook && PKAddPassesViewController.canAddPasses() && !forceDownload
     }
 
@@ -40,8 +55,8 @@ class OpenPassBookHelper {
         do {
             try openPassWithContentsOfURL()
             completion()
-
-        } catch InvalidPassError.contentsOfURL {
+        } catch let error as InvalidPassError {
+            sendLogError(with: error.description)
             openPassWithCookies { error in
                 if error != nil {
                     self.presentErrorAlert(completion: completion)
@@ -49,19 +64,19 @@ class OpenPassBookHelper {
                     completion()
                 }
             }
-
         } catch {
+            sendLogError(with: error.localizedDescription)
             presentErrorAlert(completion: completion)
         }
     }
 
     private func openPassWithCookies(completion: @escaping (InvalidPassError?) -> Void) {
         configureCookies { [weak self] in
-            self?.openPassfromDataTask(completion: completion)
+            self?.openPassFromDataTask(completion: completion)
         }
     }
 
-    private func openPassfromDataTask(completion: @escaping (InvalidPassError?) -> Void) {
+    private func openPassFromDataTask(completion: @escaping (InvalidPassError?) -> Void) {
         getData(completion: { data in
             guard let data = data else {
                 completion(InvalidPassError.dataTaskURL)
@@ -71,6 +86,7 @@ class OpenPassBookHelper {
             do {
                 try self.open(passData: data)
             } catch {
+                self.sendLogError(with: error.localizedDescription)
                 completion(InvalidPassError.dataTaskURL)
             }
         })
@@ -83,7 +99,7 @@ class OpenPassBookHelper {
         }
 
         session.dataTask(with: url) { (data, response, error) in
-            guard let _ = validatedHTTPResponse(response, statusCode: 200..<300),
+            guard validatedHTTPResponse(response, statusCode: 200..<300) != nil,
                   let data = data
             else {
                 completion(nil)
@@ -113,6 +129,7 @@ class OpenPassBookHelper {
         do {
             try open(passData: passData)
         } catch {
+            sendLogError(with: error.localizedDescription)
             throw InvalidPassError.contentsOfURL
         }
     }
@@ -130,6 +147,7 @@ class OpenPassBookHelper {
                 presenter.present(addController, animated: true, completion: nil)
             }
         } catch {
+            sendLogError(with: error.localizedDescription)
             throw InvalidPassError.openError
         }
     }
@@ -144,5 +162,13 @@ class OpenPassBookHelper {
         presenter.present(alertController, animated: true, completion: {
             completion()
         })
+    }
+
+    private func sendLogError(with errorDescription: String) {
+        // Log error to help debug https://github.com/mozilla-mobile/firefox-ios/issues/12331
+        logger.log("Unknown error when adding pass to Apple Wallet",
+                   level: .warning,
+                   category: .webview,
+                   description: errorDescription)
     }
 }

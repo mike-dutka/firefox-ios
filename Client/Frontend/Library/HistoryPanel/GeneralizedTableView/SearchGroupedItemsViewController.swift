@@ -2,17 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-/**
-This ViewController is meant to show a tableView of STG items in a flat list with NO section headers.
- When we have coordinators, where the coordinator provides the VM to the VC, we can
- generalize this.
- */
-
+import Common
 import UIKit
 import Storage
+import Shared
+import SiteImageView
 
-class SearchGroupedItemsViewController: UIViewController, Loggable {
-
+/// This ViewController is meant to show a tableView of STG items in a flat list with NO section headers.
+/// When we have coordinators, where the coordinator provides the VM to the VC, we can generalize this.
+class SearchGroupedItemsViewController: UIViewController, UITableViewDelegate, Themeable {
     // MARK: - Properties
 
     typealias a11y = AccessibilityIdentifiers.LibraryPanels.GroupedList
@@ -23,11 +21,13 @@ class SearchGroupedItemsViewController: UIViewController, Loggable {
 
     let profile: Profile
     let viewModel: SearchGroupedItemsViewModel
-    var libraryPanelDelegate: LibraryPanelDelegate? // Set this at the creation site!
-    private lazy var siteImageHelper = SiteImageHelper(profile: profile)
-    private var themeManager: ThemeManager
+    weak var libraryPanelDelegate: LibraryPanelDelegate?
+    var themeManager: ThemeManager
+    var themeObserver: NSObjectProtocol?
+    var notificationCenter: NotificationProtocol
+    private var logger: Logger
 
-    lazy private var tableView: UITableView = .build { [weak self] tableView in
+    private lazy var tableView: UITableView = .build { [weak self] tableView in
         guard let self = self else { return }
         tableView.dataSource = self.diffableDatasource
         tableView.accessibilityIdentifier = a11y.tableView
@@ -40,7 +40,7 @@ class SearchGroupedItemsViewController: UIViewController, Loggable {
         }
     }
 
-    fileprivate lazy var doneButton: UIBarButtonItem =  {
+    private lazy var doneButton: UIBarButtonItem =  {
         let button = UIBarButtonItem(title: String.AppSettingsDone, style: .done, target: self, action: #selector(doneButtonAction))
         button.accessibilityIdentifier = "ShowGroupDoneButton"
         return button
@@ -52,20 +52,20 @@ class SearchGroupedItemsViewController: UIViewController, Loggable {
 
     init(viewModel: SearchGroupedItemsViewModel,
          profile: Profile,
-         themeManager: ThemeManager = AppContainer.shared.resolve()) {
+         themeManager: ThemeManager = AppContainer.shared.resolve(),
+         notificationCenter: NotificationProtocol = NotificationCenter.default,
+         logger: Logger = DefaultLogger.shared) {
         self.viewModel = viewModel
         self.profile = profile
         self.themeManager = themeManager
+        self.notificationCenter = notificationCenter
+        self.logger = logger
 
         super.init(nibName: nil, bundle: nil)
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-
-    deinit {
-        browserLog.debug("GeneralizedHistoryItemsViewController Deinitialized.")
     }
 
     // MARK: - Lifecycles
@@ -75,7 +75,8 @@ class SearchGroupedItemsViewController: UIViewController, Loggable {
 
         setupLayout()
         configureDatasource()
-        setupNotifications()
+
+        listenForThemeChange(view)
         applyTheme()
     }
 
@@ -88,7 +89,7 @@ class SearchGroupedItemsViewController: UIViewController, Loggable {
     // MARK: - Misc. helpers
 
     private func setupLayout() {
-        /// This View needs to be configured a certain way based on who's presenting it.
+        // This View needs to be configured a certain way based on who's presenting it.
         switch viewModel.presenter {
         case .recentlyVisited:
             title = viewModel.asGroup.displayTitle
@@ -114,33 +115,32 @@ class SearchGroupedItemsViewController: UIViewController, Loggable {
             guard let self = self else { return nil }
 
             if let site = item as? Site {
-                guard let cell = tableView.dequeueReusableCell(withIdentifier: TwoLineImageOverlayCell.cellIdentifier, for: indexPath) as? TwoLineImageOverlayCell else {
-                    self.browserLog.error("GeneralizedHistoryItems - Could not dequeue a TwoLineImageOverlayCell!")
+                guard let cell = tableView.dequeueReusableCell(withIdentifier: TwoLineImageOverlayCell.cellIdentifier,
+                                                               for: indexPath) as? TwoLineImageOverlayCell
+                else {
+                    self.logger.log("GeneralizedHistoryItems - Could not dequeue a TwoLineImageOverlayCell",
+                                    level: .debug,
+                                    category: .library)
                     return nil
                 }
-
+                let totalRows = tableView.numberOfRows(inSection: indexPath.section)
+                cell.addCustomSeparator(
+                    atTop: indexPath.row == 0,
+                    atBottom: indexPath.row == totalRows - 1
+                )
                 cell.titleLabel.text = site.title
                 cell.titleLabel.isHidden = site.title.isEmpty
                 cell.descriptionLabel.text = site.url
                 cell.descriptionLabel.isHidden = false
-                cell.leftImageView.layer.borderColor = self.themeManager.currentTheme.colors.layer4.cgColor
                 cell.leftImageView.layer.borderWidth = 0.5
-                self.getFavIcon(for: site) { [weak cell] image in
-                    cell?.leftImageView.image = image
-                    cell?.leftImageView.backgroundColor = UIColor.theme.general.faviconBackground
-                }
+                cell.leftImageView.setFavicon(FaviconImageViewModel(siteURLString: site.url))
+                cell.applyTheme(theme: self.themeManager.currentTheme)
 
                 return cell
             }
 
             // This shouldn't happen! An empty row!
             return UITableViewCell()
-        }
-    }
-
-    private func getFavIcon(for site: Site, completion: @escaping (UIImage?) -> Void) {
-        siteImageHelper.fetchImageFor(site: site, imageType: .favicon, shouldFallback: false) { image in
-            completion(image)
         }
     }
 
@@ -156,39 +156,25 @@ class SearchGroupedItemsViewController: UIViewController, Loggable {
 
     // MARK: - Misc. helpers
 
-    private func setupNotifications() {
-        viewModel.notifications.forEach {
-            NotificationCenter.default.addObserver(self, selector: #selector(handleNotifications), name: $0, object: nil)
-        }
-    }
-
-    @objc private func handleNotifications(_ notification: Notification) {
-        switch notification.name {
-        case .DisplayThemeChanged:
-            applyTheme()
-        default:
-            self.browserLog.error("Recieved unhandled notification! \(notification)")
-        }
-    }
-
-    @objc private func doneButtonAction() {
+    @objc
+    private func doneButtonAction() {
         dismiss(animated: true, completion: nil)
     }
-}
 
-extension SearchGroupedItemsViewController: UITableViewDelegate {
+    // MARK: - UITableViewDelegate
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         guard let item = diffableDatasource?.itemIdentifier(for: indexPath) else { return }
 
         if let site = item as? Site {
             handleSiteItemTapped(site: site)
         }
-
     }
 
     private func handleSiteItemTapped(site: Site) {
-        guard let url = URL(string: site.url) else {
-            browserLog.error("Couldn't navigate to site: \(site.url)")
+        guard let url = URL(string: site.url, invalidCharacters: false) else {
+            logger.log("Couldn't navigate to site",
+                       level: .warning,
+                       category: .library)
             return
         }
 
@@ -204,20 +190,13 @@ extension SearchGroupedItemsViewController: UITableViewDelegate {
             dismiss(animated: true, completion: nil)
         }
     }
-}
 
-extension SearchGroupedItemsViewController: NotificationThemeable {
+    // MARK: - Themeable
+
     func applyTheme() {
-        let theme = BuiltinThemeName(rawValue: LegacyThemeManager.instance.current.name) ?? .normal
-        if theme == .dark {
-            tableView.backgroundColor = UIColor.theme.homePanel.panelBackground
-        } else {
-            tableView.backgroundColor = UIColor.theme.homePanel.panelBackground
-        }
-
-        view.backgroundColor = .systemBackground
-        tableView.separatorColor = themeManager.currentTheme.colors.layer4
-
-        tableView.reloadData()
+        let theme = themeManager.currentTheme
+        tableView.backgroundColor = theme.colors.layer1
+        view.backgroundColor = theme.colors.layer1
+        tableView.separatorColor = theme.colors.borderPrimary
     }
 }

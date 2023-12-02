@@ -1,12 +1,13 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
+import Common
 
 private struct PrintedPageUX {
     static let PageInsets = CGFloat(36.0)
-    static let PageTextFont = DynamicFontHelper.defaultHelper.DefaultSmallFont
+    static let PageTextFont = DefaultDynamicFontHelper.preferredFont(withTextStyle: .body, size: 12, weight: .regular)
     static let PageMarginScale = CGFloat(0.5)
 }
 
@@ -69,5 +70,4 @@ class TabPrintPageRenderer: UIPrintPageRenderer {
         }
         text.draw(at: CGPoint(x: x, y: y), withAttributes: textAttributes)
     }
-
 }

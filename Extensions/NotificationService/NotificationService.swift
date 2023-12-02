@@ -1,21 +1,17 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Account
 import Shared
 import Storage
 import Sync
 import UserNotifications
-import os.log
-
-func consoleLog(_ msg: String) {
-    os_log("%{public}@", log: OSLog(subsystem: "org.mozilla.firefox", category: "firefoxnotificationservice"), type: OSLogType.debug, msg)
-}
 
 class NotificationService: UNNotificationServiceExtension {
     var display: SyncDataDisplay?
-    var profile: ExtensionProfile?
+    var profile: BrowserProfile?
 
     // This is run when an APNS notification with `mutable-content` is received.
     // If the app is backgrounded, then the alert notification is displayed.
@@ -23,13 +19,16 @@ class NotificationService: UNNotificationServiceExtension {
     // AppDelegate.application(_:didReceiveRemoteNotification:completionHandler:)
     // Once the notification is tapped, then the same userInfo is passed to the same method in the AppDelegate.
     override func didReceive(_ request: UNNotificationRequest, withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void) {
-        consoleLog("push received")
+        // Set-up Rust network stack. This is needed in addition to the call
+        // from the AppDelegate due to the fact that this uses a separate process
+        Viaduct.shared.useReqwestBackend()
+
         let userInfo = request.content.userInfo
 
         let content = request.content.mutableCopy() as! UNMutableNotificationContent
 
         if self.profile == nil {
-            self.profile = ExtensionProfile(localName: "profile")
+            self.profile = BrowserProfile(localName: "profile")
         }
 
         guard let profile = self.profile else {
@@ -37,29 +36,59 @@ class NotificationService: UNNotificationServiceExtension {
             return
         }
 
-        let queue = profile.queue
-        let display = SyncDataDisplay(content: content, contentHandler: contentHandler, tabQueue: queue)
+        let display = SyncDataDisplay(content: content, contentHandler: contentHandler)
         self.display = display
-        profile.syncDelegate = display
+        let handlerCompletion = { (result: Result<PushMessage, PushMessageError>) in
+            guard case .success(let event) = result else {
+                if case .failure(let failure) = result {
+                    self.didFinish(nil, with: failure)
+                }
+                return
+            }
+            self.didFinish(event)
+        }
+        self.handleEncryptedPushMessage(userInfo: userInfo, profile: profile, completion: handlerCompletion)
+    }
 
-        let handler = FxAPushMessageHandler(with: profile)
-
-        handler.handle(userInfo: userInfo).upon { res in
-            self.didFinish(res.successValue, with: res.failureValue as? PushMessageError)
+    func handleEncryptedPushMessage(userInfo: [AnyHashable: Any],
+                                    profile: BrowserProfile,
+                                    completion: @escaping (Result<PushMessage, PushMessageError>) -> Void
+    ) {
+        Task {
+            do {
+                let autopush = try await Autopush(files: profile.files)
+                var payload = [String: String]()
+                for (key, value) in userInfo {
+                    if let key = key as? String, let value = value as? String {
+                        payload[key] = value
+                    }
+                }
+                let decryptResult = try await autopush.decrypt(payload: payload)
+                guard let decryptedString = String(
+                    bytes: decryptResult.result.map { byte in UInt8(byte) },
+                    encoding: .utf8
+                ) else {
+                    completion(.failure(.notDecrypted))
+                    return
+                }
+                if decryptResult.scope == RustFirefoxAccounts.pushScope {
+                    let handler = FxAPushMessageHandler(with: profile)
+                    handler.handleDecryptedMessage(message: decryptedString, completion: completion)
+                } else {
+                    completion(.failure(.messageIncomplete("Unknown sender")))
+                }
+            } catch {
+                completion(.failure(.accountError))
+            }
         }
     }
 
     func didFinish(_ what: PushMessage? = nil, with error: PushMessageError? = nil) {
-        consoleLog("push didFinish start")
         defer {
-            // We cannot use tabqueue after the profile has shutdown;
-            // however, we can't use weak references, because TabQueue isn't a class.
-            // Rather than changing tabQueue, we manually nil it out here.
-            self.display?.tabQueue = nil
-
             profile?.shutdown()
-            consoleLog("push didFinish end")
         }
+
+        profile?.setCommandArrived()
 
         guard let display = self.display else { return }
 
@@ -82,16 +111,15 @@ class SyncDataDisplay {
     var notificationContent: UNMutableNotificationContent
 
     var tabQueue: TabQueue?
-    var messageDelivered: Bool = false
+    var messageDelivered = false
 
-    init(content: UNMutableNotificationContent, contentHandler: @escaping (UNNotificationContent) -> Void, tabQueue: TabQueue) {
+    init(content: UNMutableNotificationContent,
+         contentHandler: @escaping (UNNotificationContent) -> Void) {
         self.contentHandler = contentHandler
         self.notificationContent = content
-        self.tabQueue = tabQueue
-        SentryIntegration.shared.setup(sendUsageData: true)
     }
 
-    func displayNotification(_ message: PushMessage? = nil, profile: ExtensionProfile?, with error: PushMessageError? = nil) {
+    func displayNotification(_ message: PushMessage? = nil, profile: BrowserProfile?, with error: PushMessageError? = nil) {
         guard let message = message, error == nil else {
             return displayUnknownMessageNotification(debugInfo: "Error \(error?.description ?? "")")
         }
@@ -101,8 +129,8 @@ class SyncDataDisplay {
             displayNewSentTabNotification(tab: tab)
         case .deviceConnected(let deviceName):
             displayDeviceConnectedNotification(deviceName)
-        case .deviceDisconnected(let deviceName):
-            displayDeviceDisconnectedNotification(deviceName)
+        case .deviceDisconnected:
+            displayDeviceDisconnectedNotification()
         case .thisDeviceDisconnected:
             displayThisDeviceDisconnectedNotification()
         default:
@@ -110,25 +138,16 @@ class SyncDataDisplay {
             break
         }
     }
-}
 
-extension SyncDataDisplay {
     func displayDeviceConnectedNotification(_ deviceName: String) {
         presentNotification(title: .FxAPush_DeviceConnected_title,
                             body: .FxAPush_DeviceConnected_body,
                             bodyArg: deviceName)
     }
 
-    func displayDeviceDisconnectedNotification(_ deviceName: String?) {
-        if let deviceName = deviceName {
-            presentNotification(title: .FxAPush_DeviceDisconnected_title,
-                                body: .FxAPush_DeviceDisconnected_body,
-                                bodyArg: deviceName)
-        } else {
-            // We should never see this branch
-            presentNotification(title: .FxAPush_DeviceDisconnected_title,
-                                body: .FxAPush_DeviceDisconnected_UnknownDevice_body)
-        }
+    func displayDeviceDisconnectedNotification() {
+        presentNotification(title: .FxAPush_DeviceDisconnected_title,
+                            body: .FxAPush_DeviceDisconnected_UnknownDevice_body)
     }
 
     func displayThisDeviceDisconnectedNotification() {
@@ -137,7 +156,6 @@ extension SyncDataDisplay {
     }
 
     func displayAccountVerifiedNotification() {
-        SentryIntegration.shared.send(message: "SentTab error: account not verified")
         #if MOZ_CHANNEL_BETA || DEBUG
             presentNotification(title: .SentTab_NoTabArrivingNotification_title, body: "DEBUG: Account Verified")
             return
@@ -147,7 +165,6 @@ extension SyncDataDisplay {
     }
 
     func displayUnknownMessageNotification(debugInfo: String) {
-        SentryIntegration.shared.send(message: "SentTab error: \(debugInfo)")
         #if MOZ_CHANNEL_BETA || DEBUG
             presentNotification(title: .SentTab_NoTabArrivingNotification_title, body: "DEBUG: " + debugInfo)
             return
@@ -155,11 +172,12 @@ extension SyncDataDisplay {
         presentNotification(title: .SentTab_NoTabArrivingNotification_title, body: .SentTab_NoTabArrivingNotification_body)
         #endif
     }
-}
 
-extension SyncDataDisplay {
     func displayNewSentTabNotification(tab: [String: String]) {
-        if let urlString = tab["url"], let url = URL(string: urlString), url.isWebPage(), let title = tab["title"] {
+        if let urlString = tab["url"],
+            let url = URL(string: urlString, invalidCharacters: false),
+            url.isWebPage(),
+            let title = tab["title"] {
             let tab = [
                 "title": title,
                 "url": url.absoluteString,
@@ -169,49 +187,8 @@ extension SyncDataDisplay {
 
             notificationContent.userInfo["sentTabs"] = [tab] as NSArray
 
-            // Add tab to the queue.
-            let item = ShareItem(url: urlString, title: title, favicon: nil)
-            _ = tabQueue?.addToQueue(item).value // Force synchronous.
-
             presentNotification(title: .SentTab_TabArrivingNotification_NoDevice_title, body: url.absoluteDisplayExternalString)
         }
-    }
-}
-
-extension SyncDataDisplay {
-    func presentSentTabsNotification(_ tabs: [NSDictionary]) {
-        let title: String
-        let body: String
-
-        if tabs.isEmpty {
-            title = .SentTab_NoTabArrivingNotification_title
-            #if MOZ_CHANNEL_BETA || DEBUG
-                body = "DEBUG: Sent Tabs with no tab"
-            #else
-                body = .SentTab_NoTabArrivingNotification_body
-            #endif
-            SentryIntegration.shared.send(message: "SentTab error: no tab")
-        } else {
-            let deviceNames = Set(tabs.compactMap { $0["deviceName"] as? String })
-            if let deviceName = deviceNames.first, deviceNames.count == 1 {
-                title = String(format: .SentTab_TabArrivingNotification_WithDevice_title, deviceName)
-            } else {
-                title = .SentTab_TabArrivingNotification_NoDevice_title
-            }
-
-            if tabs.count == 1 {
-                // We give the fallback string as the url,
-                // because we have only just introduced "displayURL" as a key.
-                body = (tabs[0]["displayURL"] as? String) ??
-                    (tabs[0]["url"] as! String)
-            } else if deviceNames.isEmpty {
-                body = .SentTab_TabArrivingNotification_NoDevice_body
-            } else {
-                body = String(format: .SentTab_TabArrivingNotification_WithDevice_body, AppInfo.displayName)
-            }
-        }
-
-        presentNotification(title: title, body: body)
     }
 
     func presentNotification(title: String, body: String, titleArg: String? = nil, bodyArg: String? = nil) {
@@ -230,15 +207,6 @@ extension SyncDataDisplay {
         // This is the only place we change messageDelivered. We can check if contentHandler hasn't be called because of
         // our logic (rather than something funny with our environment, or iOS killing us).
         messageDelivered = true
-    }
-}
-
-extension SyncDataDisplay: SyncDelegate {
-    func displaySentTab(for url: URL, title: String, from deviceName: String?) {
-        if url.isWebPage() {
-            let item = ShareItem(url: url.absoluteString, title: title, favicon: nil)
-            _ = tabQueue?.addToQueue(item).value // Force synchronous.
-        }
     }
 }
 

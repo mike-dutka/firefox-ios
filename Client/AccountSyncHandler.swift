@@ -4,16 +4,20 @@
 
 import Foundation
 import Storage
+import Common
 
 /// `AccountSyncHandler` exists to observe certain `TabEventLabel` notifications,
 /// and react accordingly.
-class AccountSyncHandler: TabEventHandler, Loggable {
+class AccountSyncHandler: TabEventHandler {
+    private let throttler: Throttler
+    private let profile: Profile
 
-    let throttler = Throttler(seconds: 5.0, on: DispatchQueue.global(qos: .utility))
-    let profile: Profile
-
-    init(with profile: Profile) {
+    init(with profile: Profile,
+         throttleTime: Double = 5.0,
+         queue: DispatchQueueInterface = DispatchQueue.global()) {
         self.profile = profile
+        self.throttler = Throttler(seconds: throttleTime,
+                                   on: queue)
 
         register(self, forTabEvents: .didLoadPageMetadata, .didGainFocus)
     }
@@ -44,5 +48,4 @@ class AccountSyncHandler: TabEventHandler, Loggable {
             _ = self?.profile.syncManager.syncNamedCollections(why: .user, names: ["tabs"])
         }
     }
-
 }

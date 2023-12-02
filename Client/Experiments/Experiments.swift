@@ -1,17 +1,17 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import MozillaAppServices
 import Shared
-import XCGLogger
 
-private let log = Logger.browserLogger
 private let nimbusAppName = "firefox_ios"
 private let NIMBUS_URL_KEY = "NimbusURL"
 private let NIMBUS_LOCAL_DATA_KEY = "nimbus_local_data"
 private let NIMBUS_USE_PREVIEW_COLLECTION_KEY = "nimbus_use_preview_collection"
+private let NIMBUS_IS_FIRST_RUN_KEY = "NimbusFirstRun"
 
 /// `Experiments` is the main entry point to use the `Nimbus` experimentation platform in Firefox for iOS.
 ///
@@ -43,28 +43,8 @@ private let NIMBUS_USE_PREVIEW_COLLECTION_KEY = "nimbus_use_preview_collection"
 /// The server components of Nimbus are: `RemoteSettings` which serves the experiment definitions to
 /// clients, and `Experimenter`, which is the user interface for creating and administering experiments.
 ///
-/// Rust errors are not expected, but will be reported via Sentry.
+/// Rust errors are not expected, but will be reported via logger.
 enum Experiments {
-
-    /// `InitializationOptions` controls how we initially initialize Nimbus.
-    ///
-    /// - **preload**: includes a file URL that stores the initial experiments document.
-    ///     This will preload Nimbus with experiment data and also fetch new data from the remote server
-    /// - **normal**: initialize Nimbus with no custom configuration.
-    /// - **testing**: initialize Nimbus with custom experiments data.
-    enum InitializationOptions {
-        case preload(fileUrl: URL)
-        case normal
-        case testing(localPayload: String)
-
-        var isTesting: Bool {
-            switch self {
-            case .testing: return true
-            default: return false
-            }
-        }
-    }
-
     private static var studiesSetting: Bool?
     private static var telemetrySetting: Bool?
 
@@ -108,6 +88,9 @@ enum Experiments {
         let profilePath: String?
         if AppConstants.isRunningUITests || AppConstants.isRunningPerfTests {
             profilePath = (UIApplication.shared.delegate as? UITestAppDelegate)?.dirForTestProfile
+        } else if AppConstants.isRunningUnitTest {
+            let dir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            profilePath = dir.path
         } else {
             profilePath = FileManager.default.containerURL(
                 forSecurityApplicationGroupIdentifier: AppInfo.sharedContainerIdentifier
@@ -119,9 +102,6 @@ enum Experiments {
             URL(fileURLWithPath: $0).appendingPathComponent("nimbus.db").path
         }
 
-        if let dbPath = dbPath, Logger.logPII {
-            log.info("Nimbus database: \(dbPath)")
-        }
         return dbPath
     }
 
@@ -129,7 +109,9 @@ enum Experiments {
         guard let url = Bundle.main.object(forInfoDictionaryKey: NIMBUS_URL_KEY) as? String,
               !url.isEmptyOrWhitespace()
         else {
-            log.error("No Nimbus URL found in Info.plist")
+            DefaultLogger.shared.log("No Nimbus URL found in Info.plist",
+                                     level: .warning,
+                                     category: .experiments)
             return nil
         }
 
@@ -144,63 +126,63 @@ enum Experiments {
         storage.bool(forKey: NIMBUS_USE_PREVIEW_COLLECTION_KEY)
     }
 
-    static var customTargetingAttributes: [String: String] = [:]
-
-    static var serverSettings: NimbusServerSettings? = {
-        // If no URL is specified, or it's not valid continue with as if
-        // we're enabled. This to allow testing of the app, without standing
-        // up a `RemoteSettings` server.
-        guard let urlString = Experiments.remoteSettingsURL,
-              let url = URL(string: urlString)
-        else { return nil }
-
-        if usePreviewCollection() {
-            return NimbusServerSettings(url: url, collection: "nimbus-preview")
-        } else {
-            return NimbusServerSettings(url: url)
-        }
-    }()
-
     /// The `NimbusApi` object. This is the entry point to do anything with the Nimbus SDK on device.
-    public static var shared: NimbusApi = {
-        guard let dbPath = Experiments.dbPath else {
-            log.error("Nimbus didn't get to create, because of a nil dbPath")
-            return NimbusDisabled.shared
+    public static var shared: NimbusInterface = {
+        let defaults = UserDefaults.standard
+        let isFirstRun: Bool = defaults.object(forKey: NIMBUS_IS_FIRST_RUN_KEY) == nil
+        if isFirstRun {
+            defaults.set(false, forKey: NIMBUS_IS_FIRST_RUN_KEY)
         }
+
+        let isPhone = UIDevice.current.userInterfaceIdiom == .phone
+
+        let customTargetingAttributes: [String: Any] =  [
+            "isFirstRun": "\(isFirstRun)",
+            "is_first_run": isFirstRun,
+            "is_phone": isPhone,
+        ]
 
         // App settings, to allow experiments to target the app name and the
         // channel. The values given here should match what `Experimenter`
         // thinks it is.
         let appSettings = NimbusAppSettings(
             appName: nimbusAppName,
-            channel: AppConstants.BuildChannel.nimbusString,
-            customTargetingAttributes: Experiments.customTargetingAttributes
+            channel: AppConstants.buildChannel.nimbusString,
+            customTargetingAttributes: customTargetingAttributes
         )
 
         let errorReporter: NimbusErrorReporter = { err in
-            SentryIntegration.shared.sendWithStacktrace(
-                message: "Error in Nimbus SDK",
-                tag: SentryTag.nimbus,
-                severity: .error,
-                description: err.localizedDescription
-            )
+            DefaultLogger.shared.log("Error in Nimbus SDK",
+                                     level: .warning,
+                                     category: .experiments,
+                                     description: err.localizedDescription)
         }
 
-        do {
-            let nimbus = try Nimbus.create(
-                serverSettings,
-                appSettings: appSettings,
-                dbPath: dbPath,
-                resourceBundles: [Strings.bundle, Bundle.main],
-                errorReporter: errorReporter
-            )
-            log.info("Nimbus is now available!")
-            return nimbus
-        } catch {
-            errorReporter(error)
-            log.error("Nimbus errored during create")
+        let initialExperiments = Bundle.main.url(forResource: "initial_experiments", withExtension: "json")
+
+        guard let dbPath = Experiments.dbPath else {
+            DefaultLogger.shared.log("Nimbus didn't get to create, because of a nil dbPath",
+                                     level: .warning,
+                                     category: .experiments)
             return NimbusDisabled.shared
         }
+
+        let bundles = [
+            Bundle.main,
+            Strings.bundle,
+            Strings.bundle.fallbackTranslationBundle(language: "en-US")
+        ].compactMap { $0 }
+
+        return NimbusBuilder(dbPath: dbPath)
+            .with(url: remoteSettingsURL)
+            .using(previewCollection: usePreviewCollection())
+            .with(errorReporter: errorReporter)
+            .with(initialExperiments: initialExperiments)
+            .isFirstRun(isFirstRun)
+            .with(bundles: bundles)
+            .with(featureManifest: FxNimbus.shared)
+            .with(commandLineArgs: CommandLine.arguments)
+            .build(appInfo: appSettings)
     }()
 
     /// A convenience method to initialize the `NimbusApi` object at startup.
@@ -213,28 +195,17 @@ enum Experiments {
     /// - Parameters:
     ///     - fireURL: an optional file URL that stores the initial experiments document.
     ///     - firstRun: a flag indicating that this is the first time that the app has been run.
-    public static func intialize(_ options: InitializationOptions) {
+    public static func intialize() {
+        // Getting the singleton first time initializes it.
         let nimbus = Experiments.shared
 
-        nimbus.initialize()
+        DefaultLogger.shared.log("Nimbus is ready!",
+                                 level: .info,
+                                 category: .experiments)
 
-        switch options {
-        case .preload(let url): nimbus.setExperimentsLocally(url)
-        case .testing(let payload): nimbus.setExperimentsLocally(payload)
-        default: break /* noop */
-        }
-
-        // We should immediately calculate the experiment enrollments
-        // that we've just acquired from the fileURL, or we fetched last run.
-        nimbus.applyPendingExperiments()
-
-        // if we're not testing, we should download the next version of the experiments
-        // document. This happens in the background
-        if !options.isTesting {
-            nimbus.fetchExperiments()
-        }
-
-        log.info("Nimbus is initializing!")
+        // This does its work on another thread, downloading the experiment recipes
+        // for the next run. It should be the last thing we do before returning.
+        nimbus.fetchExperiments()
     }
 }
 
@@ -243,7 +214,7 @@ private extension AppBuildChannel {
         switch self {
         case .release: return "release"
         case .beta: return "beta"
-        case .developer: return "nightly"
+        case .developer: return "developer"
         case .other: return "other"
         }
     }

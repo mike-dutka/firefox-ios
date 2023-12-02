@@ -1,15 +1,19 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import Shared
+import ComponentLibrary
 
 protocol SearchEnginePickerDelegate: AnyObject {
     func searchEnginePicker(_ searchEnginePicker: SearchEnginePicker?, didSelectSearchEngine engine: OpenSearchEngine?)
 }
 
 class SearchSettingsTableViewController: ThemedTableViewController {
+    private let profile: Profile
+    private let model: SearchEngines
+
     fileprivate let SectionDefault = 0
     fileprivate let ItemDefaultEngine = 0
     fileprivate let ItemDefaultSuggestions = 1
@@ -22,23 +26,31 @@ class SearchSettingsTableViewController: ThemedTableViewController {
 
     fileprivate var showDeletion = false
 
-    var profile: Profile?
-    var tabManager: TabManager?
-
     var updateSearchIcon: (() -> Void)?
     fileprivate var isEditable: Bool {
+        guard let defaultEngine = model.defaultEngine else { return false }
+
         // If the default engine is a custom one, make sure we have more than one since we can't edit the default.
         // Otherwise, enable editing if we have at least one custom engine.
         let customEngineCount = model.orderedEngines.filter({$0.isCustomEngine}).count
-        return model.defaultEngine.isCustomEngine ? customEngineCount > 1 : customEngineCount > 0
+        return defaultEngine.isCustomEngine ? customEngineCount > 1 : customEngineCount > 0
     }
 
-    var model: SearchEngines!
+    init(profile: Profile) {
+        self.profile = profile
+        model = profile.searchEngines
+
+        super.init()
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        navigationItem.title = .SearchSettingsTitle
+        navigationItem.title = .Settings.Search.Title
 
         // To allow re-ordering the list of search engines at all times.
         tableView.isEditing = true
@@ -66,6 +78,7 @@ class SearchSettingsTableViewController: ThemedTableViewController {
         // Otherwise, there is nothing to delete.
         navigationItem.rightBarButtonItem?.isEnabled = isEditable
         tableView.reloadData()
+        applyTheme()
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -74,7 +87,8 @@ class SearchSettingsTableViewController: ThemedTableViewController {
     }
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        let cell = ThemedTableViewCell()
+        let cell = dequeueCellFor(indexPath: indexPath)
+        cell.applyTheme(theme: themeManager.currentTheme)
         var engine: OpenSearchEngine!
 
         if indexPath.section == SectionDefault {
@@ -82,16 +96,17 @@ class SearchSettingsTableViewController: ThemedTableViewController {
             case ItemDefaultEngine:
                 engine = model.defaultEngine
                 cell.editingAccessoryType = .disclosureIndicator
-                cell.accessibilityLabel = .SearchSettingsDefaultSearchEngineAccessibilityLabel
+                cell.accessibilityLabel = .Settings.Search.AccessibilityLabels.DefaultSearchEngine
                 cell.accessibilityValue = engine.shortName
                 cell.textLabel?.text = engine.shortName
                 cell.imageView?.image = engine.image.createScaled(IconSize)
                 cell.imageView?.layer.cornerRadius = 4
                 cell.imageView?.layer.masksToBounds = true
             case ItemDefaultSuggestions:
-                cell.textLabel?.text = .SearchSettingsShowSearchSuggestions
-                let toggle = UISwitchThemed()
-                toggle.onTintColor = UIColor.theme.tableView.controlTint
+                cell.textLabel?.text = .Settings.Search.ShowSearchSuggestions
+                cell.textLabel?.numberOfLines = 0
+                let toggle = ThemedSwitch()
+                toggle.applyTheme(theme: themeManager.currentTheme)
                 toggle.addTarget(self, action: #selector(didToggleSearchSuggestions), for: .valueChanged)
                 toggle.isOn = model.shouldShowSearchSuggestions
                 cell.editingAccessoryView = toggle
@@ -107,8 +122,8 @@ class SearchSettingsTableViewController: ThemedTableViewController {
                 engine = model.orderedEngines[index]
                 cell.showsReorderControl = true
 
-                let toggle = UISwitchThemed()
-                toggle.onTintColor = UIColor.theme.tableView.controlTint
+                let toggle = ThemedSwitch()
+                toggle.applyTheme(theme: themeManager.currentTheme)
                 // This is an easy way to get from the toggle control to the corresponding index.
                 toggle.tag = index
                 toggle.addTarget(self, action: #selector(didToggleEngine), for: .valueChanged)
@@ -118,6 +133,7 @@ class SearchSettingsTableViewController: ThemedTableViewController {
                 cell.textLabel?.text = engine.shortName
                 cell.textLabel?.adjustsFontSizeToFitWidth = true
                 cell.textLabel?.minimumScaleFactor = 0.5
+                cell.textLabel?.numberOfLines = 0
                 cell.imageView?.image = engine.image.createScaled(IconSize)
                 cell.imageView?.layer.cornerRadius = 4
                 cell.imageView?.layer.masksToBounds = true
@@ -157,14 +173,16 @@ class SearchSettingsTableViewController: ThemedTableViewController {
             // Every engine is a valid choice for the default engine, even the current default engine.
             searchEnginePicker.engines = model.orderedEngines.sorted { e, f in e.shortName < f.shortName }
             searchEnginePicker.delegate = self
-            searchEnginePicker.selectedSearchEngineName = model.defaultEngine.shortName
+            searchEnginePicker.selectedSearchEngineName = model.defaultEngine?.shortName
             navigationController?.pushViewController(searchEnginePicker, animated: true)
         } else if indexPath.item + 1 == model.orderedEngines.count {
             let customSearchEngineForm = CustomSearchViewController()
             customSearchEngineForm.profile = self.profile
             customSearchEngineForm.successCallback = {
                 guard let window = self.view.window else { return }
-                SimpleToast().showAlertWithText(.ThirdPartySearchEngineAdded, bottomContainer: window)
+                SimpleToast().showAlertWithText(.ThirdPartySearchEngineAdded,
+                                                bottomContainer: window,
+                                                theme: self.themeManager.currentTheme)
             }
             navigationController?.pushViewController(customSearchEngineForm, animated: true)
         }
@@ -188,11 +206,9 @@ class SearchSettingsTableViewController: ThemedTableViewController {
     }
 
     override func tableView(_ tableView: UITableView, willDisplay cell: UITableViewCell, forRowAt indexPath: IndexPath) {
-        // Hide a thin vertical line that iOS renders between the accessoryView and the reordering control.
-        if cell.isEditing {
-            for v in cell.subviews where v.classForCoder.description() == "_UITableCellVerticalSeparator" {
-                v.backgroundColor = UIColor.clear
-            }
+        // Change color of a thin vertical line that iOS renders between the accessoryView and the reordering control.
+        for subview in cell.subviews where subview.classForCoder.description() == "_UITableViewCellVerticalSeparator" {
+            subview.backgroundColor = themeManager.currentTheme.colors.borderPrimary
         }
 
         // Change re-order control tint color to match app theme
@@ -200,7 +216,7 @@ class SearchSettingsTableViewController: ThemedTableViewController {
             for subViewB in subViewA.subviews {
                 if let imageView = subViewB as? UIImageView {
                     imageView.image = imageView.image?.withRenderingMode(.alwaysTemplate)
-                    imageView.tintColor = UIColor.theme.tableView.accessoryViewTint
+                    imageView.tintColor = themeManager.currentTheme.colors.iconSecondary
                 }
             }
         }
@@ -215,13 +231,13 @@ class SearchSettingsTableViewController: ThemedTableViewController {
     }
 
     override func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-        guard let headerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: ThemedTableSectionHeaderFooterView.cellIdentifier) as? ThemedTableSectionHeaderFooterView else { return nil }
+        guard let headerView = super.tableView(tableView, viewForHeaderInSection: section) as? ThemedTableSectionHeaderFooterView else { return nil }
 
         var sectionTitle: String
         if section == SectionDefault {
-            sectionTitle = .SearchSettingsDefaultSearchEngineTitle
+            sectionTitle = .Settings.Search.DefaultSearchEngineTitle
         } else {
-            sectionTitle = .SearchSettingsQuickSearchEnginesTitle
+            sectionTitle = .Settings.Search.QuickSearchEnginesTitle
         }
         headerView.titleLabel.text = sectionTitle
 
@@ -231,7 +247,7 @@ class SearchSettingsTableViewController: ThemedTableViewController {
     override func tableView(_ tableView: UITableView, viewForFooterInSection section: Int) -> UIView? {
         guard let footerView = tableView.dequeueReusableHeaderFooterView(withIdentifier: ThemedTableSectionHeaderFooterView.cellIdentifier) as? ThemedTableSectionHeaderFooterView else { return nil }
 
-        footerView.applyTheme()
+        footerView.applyTheme(theme: themeManager.currentTheme)
         return footerView
     }
 
@@ -278,8 +294,12 @@ class SearchSettingsTableViewController: ThemedTableViewController {
         if editingStyle == .delete {
             let index = indexPath.item + 1
             let engine = model.orderedEngines[index]
-            model.deleteCustomEngine(engine)
-            tableView.deleteRows(at: [indexPath], with: .right)
+
+            model.deleteCustomEngine(engine) { [weak self] in
+                tableView.deleteRows(at: [indexPath], with: .right)
+                // Change navigationItem's right button item title to Edit and disable the edit button once the deletion is done
+                self?.setEditing(false, animated: true)
+            }
 
             // End editing if we are no longer edit since we've deleted all editable cells.
             if !isEditable {
@@ -300,11 +320,17 @@ class SearchSettingsTableViewController: ThemedTableViewController {
             #selector(finishEditing) : #selector(beginEditing)
         tableView.reloadData()
     }
+
+    override func applyTheme() {
+        super.applyTheme()
+        tableView.separatorColor = themeManager.currentTheme.colors.borderPrimary
+    }
 }
 
 // MARK: - Selectors
 extension SearchSettingsTableViewController {
-    @objc func didToggleEngine(_ toggle: UISwitch) {
+    @objc
+    func didToggleEngine(_ toggle: ThemedSwitch) {
         let engine = model.orderedEngines[toggle.tag] // The tag is 1-based.
         if toggle.isOn {
             model.enableEngine(engine)
@@ -313,7 +339,8 @@ extension SearchSettingsTableViewController {
         }
     }
 
-    @objc func didToggleSearchSuggestions(_ toggle: UISwitch) {
+    @objc
+    func didToggleSearchSuggestions(_ toggle: ThemedSwitch) {
         // Setting the value in settings dismisses any opt-in.
         model.shouldShowSearchSuggestions = toggle.isOn
     }
@@ -322,15 +349,19 @@ extension SearchSettingsTableViewController {
         _ = navigationController?.popViewController(animated: true)
     }
 
-    @objc func dismissAnimated() {
-        self.dismiss(animated: true, completion: nil)
+    @objc
+    func dismissAnimated() {
+        notificationCenter.post(name: .SearchSettingsChanged)
+        dismiss(animated: true, completion: nil)
     }
 
-    @objc func beginEditing() {
+    @objc
+    func beginEditing() {
         setEditing(true, animated: false)
     }
 
-    @objc func finishEditing() {
+    @objc
+    func finishEditing() {
         setEditing(false, animated: false)
     }
 }

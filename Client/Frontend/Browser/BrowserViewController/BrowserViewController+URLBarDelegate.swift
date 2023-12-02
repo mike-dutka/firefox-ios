@@ -1,11 +1,13 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Shared
 import Storage
 import Telemetry
 import Glean
+import Common
+import ComponentLibrary
 
 protocol OnViewDismissable: AnyObject {
     var onViewDismissed: (() -> Void)? { get set }
@@ -30,14 +32,26 @@ class DismissableNavigationViewController: UINavigationController, OnViewDismiss
 
 extension BrowserViewController: URLBarDelegate {
     func showTabTray(withFocusOnUnselectedTab tabToFocus: Tab? = nil,
-                     focusedSegment: TabTrayViewModel.Segment? = nil) {
+                     focusedSegment: TabTrayPanelType? = nil) {
         updateFindInPageVisibility(visible: false)
 
-        self.tabTrayViewController = TabTrayViewController(
+        guard !isTabTrayRefactorEnabled else {
+            navigationHandler?.showTabTray(selectedPanel: focusedSegment ?? .tabs)
+            return
+        }
+
+        showLegacyTabTrayViewController(withFocusOnUnselectedTab: tabToFocus,
+                                        focusedSegment: focusedSegment)
+    }
+
+    private func showLegacyTabTrayViewController(withFocusOnUnselectedTab tabToFocus: Tab? = nil,
+                                                 focusedSegment: TabTrayPanelType? = nil) {
+        self.tabTrayViewController = LegacyTabTrayViewController(
             tabTrayDelegate: self,
             profile: profile,
             tabToFocus: tabToFocus,
             tabManager: tabManager,
+            overlayManager: overlayManager,
             focusedSegment: focusedSegment)
 
         tabTrayViewController?.openInNewTab = { url, isPrivate in
@@ -46,7 +60,11 @@ extension BrowserViewController: URLBarDelegate {
             // If in overlay mode switching doesnt correctly dismiss the homepanels
             guard !self.topTabsVisible, !self.urlBar.inOverlayMode else { return }
             // We're not showing the top tabs; show a toast to quick switch to the fresh new tab.
-            let toast = ButtonToast(labelText: .ContextMenuButtonToastNewTabOpenedLabelText, buttonText: .ContextMenuButtonToastNewTabOpenedButtonText, completion: { buttonPressed in
+            let viewModel = ButtonToastViewModel(labelText: .ContextMenuButtonToastNewTabOpenedLabelText,
+                                                 buttonText: .ContextMenuButtonToastNewTabOpenedButtonText)
+            let toast = ButtonToast(viewModel: viewModel,
+                                    theme: self.themeManager.currentTheme,
+                                    completion: { buttonPressed in
                 if buttonPressed {
                     self.tabManager.selectTab(tab)
                 }
@@ -79,6 +97,88 @@ extension BrowserViewController: URLBarDelegate {
         tabManager.selectedTab?.reload()
     }
 
+    func urlBarDidPressShare(_ urlBar: URLBarView, shareView: UIView) {
+        TelemetryWrapper.recordEvent(category: .action,
+                                     method: .tap,
+                                     object: .awesomebarLocation,
+                                     value: .awesomebarShareTap,
+                                     extras: nil)
+
+        if let selectedtab = tabManager.selectedTab, let tabUrl = selectedtab.canonicalURL?.displayURL {
+            navigationHandler?.showShareExtension(
+                url: tabUrl,
+                sourceView: shareView,
+                toastContainer: contentContainer,
+                popoverArrowDirection: isBottomSearchBar ? .down : .up)
+        }
+    }
+
+    func urlBarDidPressShopping(_ urlBar: URLBarView, shoppingButton: UIButton) {
+        guard let productURL = urlBar.currentURL else { return }
+        TelemetryWrapper.recordEvent(category: .action, method: .tap, object: .shoppingButton)
+
+        let dismissedFakespot = dismissFakespotIfNeeded()
+        if !dismissedFakespot {
+            // open flow
+            handleFakespotFlow(productURL: productURL)
+            if isReduxIntegrationEnabled {
+                store.dispatch(FakespotAction.toggleAppearance(true))
+            }
+        } else if isReduxIntegrationEnabled {
+            // Fakespot was closed/dismissed
+            store.dispatch(FakespotAction.toggleAppearance(false))
+        }
+    }
+
+    internal func dismissFakespotIfNeeded(animated: Bool = true) -> Bool {
+        if contentStackView.isSidebarVisible {
+            // hide sidebar as user tapped on shopping icon for a second time
+            navigationHandler?.dismissFakespotSidebar(sidebarContainer: contentStackView, parentViewController: self)
+            return true
+        } else if presentedViewController as? FakespotViewController != nil {
+            // dismiss modal as user tapped on shopping icon for a second time
+            navigationHandler?.dismissFakespotModal(animated: animated)
+            return true
+        }
+        return false
+    }
+
+    internal func handleFakespotFlow(productURL: URL, viewSize: CGSize? = nil) {
+        if FakespotUtils().shouldDisplayInSidebar(viewSize: viewSize) {
+            navigationHandler?.showFakespotFlowAsSidebar(productURL: productURL,
+                                                         sidebarContainer: contentStackView,
+                                                         parentViewController: self)
+        } else {
+            navigationHandler?.showFakespotFlowAsModal(productURL: productURL)
+        }
+    }
+
+    func urlBarPresentCFR(at sourceView: UIView) {
+        configureShoppingContextVC(at: sourceView)
+    }
+
+    private func configureShoppingContextVC(at sourceView: UIView) {
+        shoppingContextHintVC.configure(
+            anchor: sourceView,
+            withArrowDirection: isBottomSearchBar ? .down : .up,
+            andDelegate: self,
+            presentedUsing: { [unowned self] in
+                self.present(shoppingContextHintVC, animated: true)
+                TelemetryWrapper.recordEvent(
+                    category: .action,
+                    method: .navigate,
+                    object: .shoppingButton,
+                    value: .shoppingCFRsDisplayed
+                )
+            },
+            andActionForButton: { [weak self] in
+                guard let self else { return }
+                guard let productURL = self.urlBar.currentURL else { return }
+                self.handleFakespotFlow(productURL: productURL)
+            },
+            overlayState: overlayManager)
+    }
+
     func urlBarDidPressQRButton(_ urlBar: URLBarView) {
         let qrCodeViewController = QRCodeViewController()
         qrCodeViewController.qrCodeDelegate = self
@@ -87,41 +187,9 @@ extension BrowserViewController: URLBarDelegate {
     }
 
     func urlBarDidTapShield(_ urlBar: URLBarView) {
-        if let tab = self.tabManager.selectedTab {
-            let etpViewModel = EnhancedTrackingProtectionMenuVM(tab: tab, profile: profile)
-            etpViewModel.onOpenSettingsTapped = {
-                let settingsTableViewController = AppSettingsTableViewController(
-                    with: self.profile,
-                    and: self.tabManager,
-                    delegate: self,
-                    deeplinkingTo: .contentBlocker)
-
-                let controller = ThemedNavigationController(rootViewController: settingsTableViewController)
-                controller.presentingModalViewControllerDelegate = self
-
-                // Wait to present VC in an async dispatch queue to prevent a case where dismissal
-                // of this popover on iPad seems to block the presentation of the modal VC.
-                DispatchQueue.main.async {
-                    self.present(controller, animated: true, completion: nil)
-                }
-            }
-
-            let etpVC = EnhancedTrackingProtectionMenuVC(viewModel: etpViewModel)
-            if UIDevice.current.userInterfaceIdiom == .phone {
-                etpVC.modalPresentationStyle = .custom
-                etpVC.transitioningDelegate = self
-            } else {
-                etpVC.asPopover = true
-                etpVC.modalPresentationStyle = .popover
-                etpVC.popoverPresentationController?.sourceView = urlBar.locationView.trackingProtectionButton
-                etpVC.popoverPresentationController?.permittedArrowDirections = .up
-                etpVC.popoverPresentationController?.delegate = self
-            }
-
-            TelemetryWrapper.recordEvent(category: .action, method: .press, object: .trackingProtectionMenu)
-            self.present(etpVC, animated: true, completion: nil)
-        }
-    }
+        TelemetryWrapper.recordEvent(category: .action, method: .press, object: .trackingProtectionMenu)
+        navigationHandler?.showEnhancedTrackingProtection(sourceView: urlBar.locationView.trackingProtectionButton)
+     }
 
     func urlBarDidPressStop(_ urlBar: URLBarView) {
         tabManager.selectedTab?.stop()
@@ -132,8 +200,6 @@ extension BrowserViewController: URLBarDelegate {
     }
 
     func urlBarDidPressReaderMode(_ urlBar: URLBarView) {
-        libraryDrawerViewController?.close()
-
         guard let tab = tabManager.selectedTab,
               let readerMode = tab.getContentScript(name: "ReaderMode") as? ReaderMode
         else { return }
@@ -163,10 +229,11 @@ extension BrowserViewController: URLBarDelegate {
         switch result.value {
         case .success:
             UIAccessibility.post(notification: UIAccessibility.Notification.announcement, argument: String.ReaderModeAddPageSuccessAcessibilityLabel)
-            SimpleToast().showAlertWithText(.ShareAddToReadingListDone, bottomContainer: self.webViewContainer)
-        case .failure(let error):
+            SimpleToast().showAlertWithText(.ShareAddToReadingListDone,
+                                            bottomContainer: contentContainer,
+                                            theme: themeManager.currentTheme)
+        case .failure:
             UIAccessibility.post(notification: UIAccessibility.Notification.announcement, argument: String.ReaderModeAddPageMaybeExistsErrorAccessibilityLabel)
-            print("readingList.createRecordWithURL(url: \"\(url.absoluteString)\", ...) failed with error: \(error)")
         }
         return true
     }
@@ -206,7 +273,7 @@ extension BrowserViewController: URLBarDelegate {
     }
 
     func urlBarDidLongPressLocation(_ urlBar: URLBarView) {
-        let urlActions = self.getLongPressLocationBarActions(with: urlBar, webViewContainer: self.webViewContainer)
+        let urlActions = self.getLongPressLocationBarActions(with: urlBar, alertContainer: contentContainer)
         let generator = UIImpactFeedbackGenerator(style: .heavy)
         generator.impactOccurred()
 
@@ -217,7 +284,8 @@ extension BrowserViewController: URLBarDelegate {
     }
 
     func urlBarDidPressScrollToTop(_ urlBar: URLBarView) {
-        if let selectedTab = tabManager.selectedTab, homepageViewController == nil {
+        guard let selectedTab = tabManager.selectedTab else { return }
+        if !contentContainer.hasHomepage {
             // Only scroll to top if we are not showing the home view controller
             selectedTab.webView?.scrollView.setContentOffset(CGPoint.zero, animated: true)
         }
@@ -239,13 +307,12 @@ extension BrowserViewController: URLBarDelegate {
     }
 
     func urlBar(_ urlBar: URLBarView, didEnterText text: String) {
-        urlBar.updateSearchEngineImage()
         if text.isEmpty {
             hideSearchController()
         } else {
             showSearchController()
         }
-
+        urlBar.locationTextField?.applyUIMode(isPrivate: tabManager.selectedTab?.isPrivate ?? false, theme: self.themeManager.currentTheme)
         searchController?.searchQuery = text
         searchLoader?.query = text
     }
@@ -270,13 +337,12 @@ extension BrowserViewController: URLBarDelegate {
         let possibleQuery = String(trimmedText[trimmedText.index(after: possibleKeywordQuerySeparatorSpace)...])
 
         profile.places.getBookmarkURLForKeyword(keyword: possibleKeyword).uponQueue(.main) { result in
-
             if var urlString = result.successValue ?? "",
                 let escapedQuery = possibleQuery.addingPercentEncoding(withAllowedCharacters: NSCharacterSet.urlQueryAllowed),
                 let range = urlString.range(of: "%s") {
                 urlString.replaceSubrange(range, with: escapedQuery)
 
-                if let url = URL(string: urlString) {
+                if let url = URL(string: urlString, invalidCharacters: false) {
                     self.finishEditingAndSubmit(url, visitType: VisitType.typed, forTab: currentTab)
                     return
                 }
@@ -287,29 +353,29 @@ extension BrowserViewController: URLBarDelegate {
     }
 
     func submitSearchText(_ text: String, forTab tab: Tab) {
-        let engine = profile.searchEngines.defaultEngine
-
-        if let searchURL = engine.searchURLForQuery(text) {
-            // We couldn't find a matching search keyword, so do a search query.
-            Telemetry.default.recordSearch(location: .actionBar, searchEngine: engine.engineID ?? "other")
-            GleanMetrics.Search.counts["\(engine.engineID ?? "custom").\(SearchesMeasurement.SearchLocation.actionBar.rawValue)"].add()
-            searchTelemetry?.shouldSetUrlTypeSearch = true
-
-            let searchData = TabGroupData(searchTerm: text,
-                                          searchUrl: searchURL.absoluteString,
-                                          nextReferralUrl: "")
-            tab.metadataManager?.updateTimerAndObserving(state: .navSearchLoaded, searchData: searchData, isPrivate: tab.isPrivate)
-            finishEditingAndSubmit(searchURL, visitType: VisitType.typed, forTab: tab)
-        } else {
-            // We still don't have a valid URL, so something is broken. Give up.
-            print("Error handling URL entry: \"\(text)\".")
-            assertionFailure("Couldn't generate search URL: \(text)")
+        guard let engine = profile.searchEngines.defaultEngine,
+              let searchURL = engine.searchURLForQuery(text)
+        else {
+            DefaultLogger.shared.log("Error handling URL entry: \"\(text)\".", level: .warning, category: .tabs)
+            return
         }
+
+        let conversionMetrics = UserConversionMetrics()
+        conversionMetrics.didPerformSearch()
+        // We couldn't find a matching search keyword, so do a search query.
+        Telemetry.default.recordSearch(location: .actionBar, searchEngine: engine.engineID ?? "other")
+        GleanMetrics.Search.counts["\(engine.engineID ?? "custom").\(SearchesMeasurement.SearchLocation.actionBar.rawValue)"].add()
+        searchTelemetry?.shouldSetUrlTypeSearch = true
+
+        let searchData = LegacyTabGroupData(searchTerm: text,
+                                            searchUrl: searchURL.absoluteString,
+                                            nextReferralUrl: "")
+        tab.metadataManager?.updateTimerAndObserving(state: .navSearchLoaded, searchData: searchData, isPrivate: tab.isPrivate)
+        finishEditingAndSubmit(searchURL, visitType: VisitType.typed, forTab: tab)
     }
 
     func urlBarDidEnterOverlayMode(_ urlBar: URLBarView) {
-        libraryDrawerViewController?.close()
-        urlBar.updateSearchEngineImage()
+        urlBar.searchEnginesDidUpdate()
         guard let profile = profile as? BrowserProfile else { return }
 
         if .blankPage == NewTabAccessors.getNewTabPage(profile.prefs) {
@@ -319,25 +385,20 @@ extension BrowserViewController: URLBarDelegate {
                 toast.removeFromSuperview()
             }
 
-            showHomepage(inline: false)
+            showEmbeddedHomepage(inline: false)
         }
+
+        urlBar.applyTheme(theme: themeManager.currentTheme)
     }
 
     func urlBarDidLeaveOverlayMode(_ urlBar: URLBarView) {
         destroySearchController()
         updateInContentHomePanel(tabManager.selectedTab?.url as URL?)
+
+        urlBar.applyTheme(theme: themeManager.currentTheme)
     }
 
     func urlBarDidBeginDragInteraction(_ urlBar: URLBarView) {
         dismissVisibleMenus()
-    }
-}
-
-extension BrowserViewController: UIViewControllerTransitioningDelegate {
-    func presentationController(forPresented presented: UIViewController, presenting: UIViewController?, source: UIViewController) -> UIPresentationController? {
-        let globalETPStatus = FirefoxTabContentBlocker.isTrackingProtectionEnabled(prefs: profile.prefs)
-        return SlideOverPresentationController(presentedViewController: presented,
-                                               presenting: presenting,
-                                               withGlobalETPStatus: globalETPStatus)
     }
 }

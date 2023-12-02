@@ -1,12 +1,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 
 class BackForwardListAnimator: NSObject, UIViewControllerAnimatedTransitioning {
-
-    var presenting: Bool = false
+    var presenting = false
     let animationDuration = 0.4
 
     func animateTransition(using transitionContext: UIViewControllerContextTransitioning) {
@@ -50,9 +49,13 @@ extension BackForwardListAnimator {
             backForward.view.frame = bvc.view.frame
             backForward.view.alpha = 0
             containerView.addSubview(backForward.view)
-            backForward.view.snp.updateConstraints { make in
-                make.edges.equalTo(containerView)
-            }
+            backForward.view.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                backForward.view.topAnchor.constraint(equalTo: containerView.topAnchor),
+                backForward.view.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+                backForward.view.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+                backForward.view.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            ])
             backForward.view.layoutIfNeeded()
 
             UIView.animate(
@@ -68,7 +71,6 @@ extension BackForwardListAnimator {
                 }, completion: { (completed) -> Void in
                     transitionContext.completeTransition(completed)
                 })
-
         } else {
             UIView.animate(
                 withDuration: transitionDuration(using: transitionContext),

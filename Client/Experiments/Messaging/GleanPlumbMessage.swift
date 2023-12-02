@@ -10,6 +10,7 @@ protocol MessageDataProtocol {
     var title: String? { get }
     var text: String { get }
     var buttonLabel: String? { get }
+    var experiment: String? { get }
 }
 
 extension MessageData: MessageDataProtocol {}
@@ -23,12 +24,11 @@ extension StyleData: StyleDataProtocol {}
 
 /// Message is a representation of `MessageData` from `GleanPlumb` that we can better utilize.
 struct GleanPlumbMessage {
-
     /// The message Key, a unique identifier.
     let id: String
 
     /// An access point to MessageData from Nimbus Messaging.
-    let data: MessageDataProtocol
+    internal let data: MessageDataProtocol
 
     /// The action to be done when a user positively engages with the message (CTA).
     let action: String
@@ -40,29 +40,31 @@ struct GleanPlumbMessage {
     let style: StyleDataProtocol
 
     /// The minimal data about a message that we should persist.
-    var metadata: GleanPlumbMessageMetaData
+    internal var metadata: GleanPlumbMessageMetaData
 
     var isExpired: Bool {
         metadata.isExpired || metadata.impressions >= style.maxDisplayCount
     }
 
-    func isUnderExperimentWith(key experimentKey: String?) -> Bool {
-        guard let experimentKey = experimentKey else { return false }
-
-        if data.isControl { return true }
-
-        if id.hasSuffix("-") {
-            return id.hasPrefix(experimentKey)
-        }
-
-        return id == experimentKey
+    var buttonLabel: String? {
+        data.buttonLabel
     }
 
+    var text: String {
+        data.text
+    }
+
+    var title: String? {
+        data.title
+    }
+
+    var surface: MessageSurfaceId {
+        data.surface
+    }
 }
 
 /// `MessageMeta` is where we store parts of the message that help us aggregate, query and determine non-expired messages.
 class GleanPlumbMessageMetaData: Codable {
-
     /// The message Key.
     let id: String
 

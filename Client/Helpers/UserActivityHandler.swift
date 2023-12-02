@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
@@ -8,14 +8,19 @@ import Storage
 import CoreSpotlight
 import MobileCoreServices
 import WebKit
+import SiteImageView
+import Common
 
-private let browsingActivityType: String = "org.mozilla.ios.firefox.browsing"
+private let browsingActivityType: String = "mdutka.ios.firefox.browsing"
 
 private let searchableIndex = CSSearchableIndex.default()
 
 class UserActivityHandler {
-    init() {
-        register(self, forTabEvents: .didClose, .didLoseFocus, .didGainFocus, .didChangeURL, .didLoadPageMetadata, .didLoadReadability) // .didLoadFavicon, // TODO: Bug 1390294
+    private let logger: Logger
+
+    init(logger: Logger = DefaultLogger.shared) {
+        self.logger = logger
+        register(self, forTabEvents: .didClose, .didLoseFocus, .didGainFocus, .didChangeURL, .didLoadPageMetadata, .didLoadReadability)
     }
 
     class func clearSearchIndex(completionHandler: ((Error?) -> Void)? = nil) {
@@ -55,13 +60,15 @@ extension UserActivityHandler: TabEventHandler {
     }
 
     func tab(_ tab: Tab, didLoadPageMetadata metadata: PageMetadata) {
-        guard let url = URL(string: metadata.siteURL) else { return }
+        guard let url = URL(string: metadata.siteURL, invalidCharacters: false) else { return }
 
         setUserActivityForTab(tab, url: url)
     }
 
     func tab(_ tab: Tab, didLoadReadability page: ReadabilityResult) {
-        spotlightIndex(page, for: tab)
+        Task {
+            await spotlightIndex(page, for: tab)
+        }
     }
 
     func tabDidClose(_ tab: Tab) {
@@ -71,10 +78,8 @@ extension UserActivityHandler: TabEventHandler {
     }
 }
 
-private let log = Logger.browserLogger
-
 extension UserActivityHandler {
-    func spotlightIndex(_ page: ReadabilityResult, for tab: Tab) {
+    func spotlightIndex(_ page: ReadabilityResult, for tab: Tab) async {
         guard let url = tab.url,
               !tab.isPrivate,
               url.isWebPage(includeDataURIs: false),
@@ -103,12 +108,13 @@ extension UserActivityHandler {
         case .screenshot:
             attributeSet.thumbnailData = tab.screenshot?.pngData()
         case .favicon:
-            if let baseDomain = tab.url?.baseDomain {
-                attributeSet.thumbnailData = FaviconFetcher.getFaviconFromDiskCache(imageKey: baseDomain)?.pngData()
-            }
-        case .letter:
-            if let url = tab.url {
-                attributeSet.thumbnailData = FaviconFetcher.letter(forUrl: url).pngData()
+            if let urlString = tab.url?.absoluteString {
+                let faviconFetcher = DefaultSiteImageHandler.factory()
+                let siteImageModel = SiteImageModel(id: UUID(),
+                                                    expectedImageType: .favicon,
+                                                    siteURLString: urlString)
+                let image = await faviconFetcher.getImage(site: siteImageModel)
+                attributeSet.thumbnailData = image.faviconImage?.pngData()
             }
         default:
             attributeSet.thumbnailData = nil
@@ -122,30 +128,23 @@ extension UserActivityHandler {
             attributeSet.authors = [author]
         }
 
-        let identifier = !page.url.isEmptyOrWhitespace() ? page.url : tab.currentURL()?.absoluteString
+        let identifier = tab.currentURL()?.absoluteString
 
-        let item = CSSearchableItem(uniqueIdentifier: identifier, domainIdentifier: "org.mozilla.ios.firefox", attributeSet: attributeSet)
+        let item = CSSearchableItem(uniqueIdentifier: identifier, domainIdentifier: "mdutka.ios.firefox", attributeSet: attributeSet)
 
         if let numDays = spotlightConfig.keepForDays {
             let day: TimeInterval = 60 * 60 * 24
-            item.expirationDate = Date.init(timeIntervalSinceNow: Double(numDays) * day)
+            item.expirationDate = Date(timeIntervalSinceNow: Double(numDays) * day)
         }
-        searchableIndex.indexSearchableItems([item]) { error in
-            if let error = error {
-                log.info("Spotlight: Indexing error: \(error.localizedDescription)")
-            } else {
-                log.info("Spotlight: Search item successfully indexed!")
-            }
-        }
-    }
-
-    func spotlightDeindex(_ page: ReadabilityResult) {
-        searchableIndex.deleteSearchableItems(withIdentifiers: [page.url]) { error in
-            if let error = error {
-                log.info("Spotlight: Deindexing error: \(error.localizedDescription)")
-            } else {
-                log.info("Spotlight: Search item successfully removed!")
-            }
+        do {
+            try await searchableIndex.indexSearchableItems([item])
+            logger.log("Spotlight: Search item successfully indexed!",
+                       level: .debug,
+                       category: .unlabeled)
+        } catch {
+            logger.log("Spotlight: Indexing error: \(error.localizedDescription)",
+                       level: .warning,
+                       category: .unlabeled)
         }
     }
 }

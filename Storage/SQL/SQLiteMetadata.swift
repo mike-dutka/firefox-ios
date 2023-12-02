@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
@@ -9,7 +9,7 @@ import Shared
 open class SQLiteMetadata {
     let db: BrowserDB
 
-    required public init(db: BrowserDB) {
+    public required init(db: BrowserDB) {
         self.db = db
     }
 }
@@ -54,5 +54,4 @@ extension SQLiteMetadata: Metadata {
         let sql = "DELETE FROM page_metadata WHERE expired_at <= (CAST(strftime('%s', 'now') AS LONG)*1000)"
         return self.db.run(sql)
     }
-
 }

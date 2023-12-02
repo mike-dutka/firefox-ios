@@ -1,10 +1,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
 import WebKit
+import Common
 
 /**
  * Handles screenshots for a given tab, including pages with non-webview content.
@@ -13,9 +14,12 @@ class ScreenshotHelper {
     var viewIsVisible = false
 
     fileprivate weak var controller: BrowserViewController?
+    private let logger: Logger
 
-    init(controller: BrowserViewController) {
+    init(controller: BrowserViewController,
+         logger: Logger = DefaultLogger.shared) {
         self.controller = controller
+        self.logger = logger
     }
 
     /// Takes a screenshot of the WebView to be displayed on the tab view page
@@ -25,13 +29,16 @@ class ScreenshotHelper {
      */
     func takeScreenshot(_ tab: Tab) {
         guard let webView = tab.webView, let url = tab.url else {
-            SentryIntegration.shared.send(message: "Tab Snapshot Error", tag: .tabManager, severity: .debug, description: "Tab webView or url is nil")
+            logger.log("Tab Snapshot Error",
+                       level: .debug,
+                       category: .tabs,
+                       description: "Tab webView or url is nil")
             return
         }
         // Handle home page snapshots, can not use Apple API snapshot function for this
         if InternalURL(url)?.isAboutHomeURL ?? false {
-            if let homePanel = controller?.homepageViewController {
-                let screenshot = homePanel.view.screenshot(quality: UIConstants.ActiveScreenshotQuality)
+            if let homeview = controller?.contentContainer.contentView {
+                let screenshot = homeview.screenshot(quality: UIConstants.ActiveScreenshotQuality)
                 tab.hasHomeScreenshot = true
                 tab.setScreenshot(screenshot)
                 TabEvent.post(.didSetScreenshot(isHome: true), for: tab)
@@ -41,6 +48,7 @@ class ScreenshotHelper {
             let configuration = WKSnapshotConfiguration()
             // This is for a bug in certain iOS 13 versions, snapshots cannot be taken correctly without this boolean being set
             configuration.afterScreenUpdates = false
+            configuration.snapshotWidth = 320
 
             webView.takeSnapshot(with: configuration) { image, error in
                 if let image = image {
@@ -48,9 +56,15 @@ class ScreenshotHelper {
                     tab.setScreenshot(image)
                     TabEvent.post(.didSetScreenshot(isHome: false), for: tab)
                 } else if let error = error {
-                    SentryIntegration.shared.send(message: "Tab snapshot error", tag: .tabManager, severity: .debug, description: error.localizedDescription)
+                    self.logger.log("Tab Snapshot Error",
+                                    level: .debug,
+                                    category: .tabs,
+                                    description: error.localizedDescription)
                 } else {
-                    SentryIntegration.shared.send(message: "Tab snapshot error", tag: .tabManager, severity: .debug, description: "No error description")
+                    self.logger.log("Tab Snapshot Error",
+                                    level: .debug,
+                                    category: .tabs,
+                                    description: "No error description")
                 }
             }
         }

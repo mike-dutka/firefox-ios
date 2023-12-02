@@ -2,16 +2,16 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
+import Shared
 
 protocol PhotonActionSheetContainerCellDelegate: AnyObject {
     func didClick(item: SingleActionViewModel?)
-    func layoutChanged(item: SingleActionViewModel)
 }
 
 // A PhotonActionSheet cell
-class PhotonActionSheetContainerCell: UITableViewCell {
-
+class PhotonActionSheetContainerCell: UITableViewCell, ReusableCell, ThemeApplicable {
     weak var delegate: PhotonActionSheetContainerCellDelegate?
     private lazy var containerStackView: UIStackView = .build { stackView in
         stackView.alignment = .fill
@@ -41,12 +41,11 @@ class PhotonActionSheetContainerCell: UITableViewCell {
 
     // MARK: Table view
 
-    func configure(actions: PhotonRowActions, viewModel: PhotonActionSheetViewModel) {
+    func configure(actions: PhotonRowActions, viewModel: PhotonActionSheetViewModel, theme: Theme) {
         for item in actions.items {
-            item.tintColor = viewModel.tintColor
-            item.multipleItemsSetup.isMultiItems = actions.items.count > 1
-            configure(with: item)
+            configure(with: item, theme: theme)
         }
+        applyTheme(theme: theme)
     }
 
     // MARK: - Setup
@@ -60,13 +59,12 @@ class PhotonActionSheetContainerCell: UITableViewCell {
         ])
     }
 
-    func configure(with item: SingleActionViewModel) {
+    func configure(with item: SingleActionViewModel, theme: Theme) {
         let childView = PhotonActionSheetView()
-        childView.configure(with: item)
+        childView.configure(with: item, theme: theme)
         childView.addVerticalBorder(ifShouldBeShown: !containerStackView.arrangedSubviews.isEmpty)
         childView.delegate = self
         containerStackView.addArrangedSubview(childView)
-        containerStackView.axis = item.multipleItemsSetup.axis
     }
 
     func hideBottomBorder(isHidden: Bool) {
@@ -74,15 +72,13 @@ class PhotonActionSheetContainerCell: UITableViewCell {
           .compactMap { $0 as? PhotonActionSheetView }
           .forEach { $0.bottomBorder.isHidden = isHidden }
     }
+
+    func applyTheme(theme: Theme) { }
 }
 
 // MARK: - PhotonActionSheetViewDelegate
 extension PhotonActionSheetContainerCell: PhotonActionSheetViewDelegate {
     func didClick(item: SingleActionViewModel?) {
         delegate?.didClick(item: item)
-    }
-
-    func layoutChanged(item: SingleActionViewModel) {
-        delegate?.layoutChanged(item: item)
     }
 }

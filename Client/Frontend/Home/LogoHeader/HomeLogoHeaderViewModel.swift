@@ -2,26 +2,27 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
 
 class HomeLogoHeaderViewModel {
-
     struct UX {
-        static let bottomSpacing: CGFloat = 12
+        static let bottomSpacing: CGFloat = 30
     }
 
     private let profile: Profile
     var onTapAction: ((UIButton) -> Void)?
+    var theme: Theme
 
-    init(profile: Profile) {
+    init(profile: Profile, theme: Theme) {
         self.profile = profile
+        self.theme = theme
     }
 }
 
 // MARK: HomeViewModelProtocol
 extension HomeLogoHeaderViewModel: HomepageViewModelProtocol, FeatureFlaggable {
-
     var sectionType: HomepageSectionType {
         return .logoHeader
     }
@@ -30,7 +31,7 @@ extension HomeLogoHeaderViewModel: HomepageViewModelProtocol, FeatureFlaggable {
         return .emptyHeader
     }
 
-    func section(for traitCollection: UITraitCollection) -> NSCollectionLayoutSection {
+    func section(for traitCollection: UITraitCollection, size: CGSize) -> NSCollectionLayoutSection {
         let itemSize = NSCollectionLayoutSize(widthDimension: .fractionalWidth(1),
                                               heightDimension: .estimated(100))
         let item = NSCollectionLayoutItem(layoutSize: itemSize)
@@ -59,15 +60,15 @@ extension HomeLogoHeaderViewModel: HomepageViewModelProtocol, FeatureFlaggable {
         return featureFlags.isFeatureEnabled(.wallpapers, checking: .buildOnly)
     }
 
-    func refreshData(for traitCollection: UITraitCollection,
-                     isPortrait: Bool = UIWindow.isPortrait,
-                     device: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom) {}
+    func setTheme(theme: Theme) {
+        self.theme = theme
+    }
 }
 
 extension HomeLogoHeaderViewModel: HomepageSectionHandler {
-
     func configure(_ cell: UICollectionViewCell, at indexPath: IndexPath) -> UICollectionViewCell {
         guard let logoHeaderCell = cell as? HomeLogoHeaderCell else { return UICollectionViewCell() }
+        logoHeaderCell.applyTheme(theme: theme)
         return logoHeaderCell
     }
 }

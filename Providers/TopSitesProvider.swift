@@ -1,16 +1,14 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
 import UIKit
 import Storage
-import SyncTelemetry
 
 /// A provider for frecency and pinned top sites, used for the home page and widgets
 protocol TopSitesProvider {
-
     /// Get top sites from frecency and pinned tiles
     func getTopSites(numberOfMaxItems: Int,
                      completion: @escaping ([Site]?) -> Void)
@@ -26,7 +24,6 @@ protocol TopSitesProvider {
 }
 
 extension TopSitesProvider {
-
     func getTopSites(numberOfMaxItems: Int = Self.numberOfMaxItems,
                      completion: @escaping ([Site]?) -> Void) {
         getTopSites(numberOfMaxItems: numberOfMaxItems, completion: completion)
@@ -42,27 +39,30 @@ extension TopSitesProvider {
 }
 
 class TopSitesProviderImplementation: TopSitesProvider {
-
-    private let browserHistoryFetcher: BrowserHistory
+    private let pinnedSiteFetcher: PinnedSites
+    private let placesFetcher: RustPlaces
     private let prefs: Prefs
 
     private var frecencySites = [Site]()
     private var pinnedSites = [Site]()
 
-    init(browserHistoryFetcher: BrowserHistory,
-         prefs: Prefs) {
-        self.browserHistoryFetcher = browserHistoryFetcher
+    init(
+        placesFetcher: RustPlaces,
+        pinnedSiteFetcher: PinnedSites,
+        prefs: Prefs
+    ) {
+        self.placesFetcher = placesFetcher
+        self.pinnedSiteFetcher = pinnedSiteFetcher
         self.prefs = prefs
     }
 
     func getTopSites(numberOfMaxItems: Int,
                      completion: @escaping ([Site]?) -> Void) {
-
         let group = DispatchGroup()
         getFrecencySites(group: group, numberOfMaxItems: numberOfMaxItems)
         getPinnedSites(group: group)
 
-        group.notify(queue: .global(qos: .userInitiated)) { [weak self] in
+        group.notify(queue: .global()) { [weak self] in
             guard let self = self else { return }
             self.calculateTopSites(completion: completion)
         }
@@ -79,22 +79,33 @@ class TopSitesProviderImplementation: TopSitesProvider {
 private extension TopSitesProviderImplementation {
     func getFrecencySites(group: DispatchGroup, numberOfMaxItems: Int) {
         group.enter()
-        browserHistoryFetcher
-            .getTopSitesWithLimit(numberOfMaxItems)
-            .uponQueue(.global(qos: .userInitiated)) { [weak self] result in
-                if let sites = result.successValue?.asArray() {
-                    self?.frecencySites = sites
-                }
-
+        DispatchQueue.global().async { [weak self] in
+            // It's possible that the top sites fetch is the
+            // very first use of places, lets make sure that
+            // our connection is open
+            guard let placesFetcher = self?.placesFetcher else {
                 group.leave()
+                return
             }
+            if !placesFetcher.isOpen {
+                _ = placesFetcher.reopenIfClosed()
+            }
+            placesFetcher.getTopFrecentSiteInfos(limit: numberOfMaxItems, thresholdOption: FrecencyThresholdOption.none)
+                .uponQueue(.global()) { [weak self] result in
+                    if let sites = result.successValue {
+                        self?.frecencySites = sites
+                    }
+
+                    group.leave()
+                }
+        }
     }
 
     func getPinnedSites(group: DispatchGroup) {
         group.enter()
-        browserHistoryFetcher
+        pinnedSiteFetcher
             .getPinnedTopSites()
-            .uponQueue(.global(qos: .userInitiated)) { [weak self] result in
+            .uponQueue(.global()) { [weak self] result in
                 if let sites = result.successValue?.asArray() {
                     self?.pinnedSites = sites
                 }
@@ -110,7 +121,7 @@ private extension TopSitesProviderImplementation {
         // How sites are merged together. We compare against the url's base domain.
         // Example m.youtube.com is compared against `youtube.com`
         let unionOnURL = { (site: Site) -> String in
-            return URL(string: site.url)?.normalizedHost ?? ""
+            return URL(string: site.url, invalidCharacters: false)?.normalizedHost ?? ""
         }
 
         // Fetch the default sites
@@ -125,10 +136,10 @@ private extension TopSitesProviderImplementation {
 
         // Favour topsites from defaultSites as they have better favicons. But keep PinnedSites
         let newSites = allSites.map { site -> Site in
-            if let _ = site as? PinnedSite {
+            if let site = site as? PinnedSite {
                 return site
             }
-            let domain = URL(string: site.url)?.shortDisplayString
+            let domain = URL(string: site.url, invalidCharacters: false)?.shortDisplayString
             return defaultSites.find { $0.title.lowercased() == domain } ?? site
         }
 

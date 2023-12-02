@@ -1,9 +1,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 extension Notification.Name {
-
     // add a property to allow the observation of firefox accounts
     public static let FirefoxAccountChanged = Notification.Name("FirefoxAccountChanged")
 
@@ -47,20 +46,17 @@ extension Notification.Name {
 
     public static let DynamicFontChanged = Notification.Name("DynamicFontChanged")
 
-    public static let UserInitiatedSyncManually = Notification.Name("UserInitiatedSyncManually")
-
     public static let FaviconDidLoad = Notification.Name("FaviconDidLoad")
 
     public static let ReachabilityStatusChanged = Notification.Name("ReachabilityStatusChanged")
 
     public static let HomePanelPrefsChanged = Notification.Name("HomePanelPrefsChanged")
 
+    public static let FakespotViewControllerDidDismiss = Notification.Name("FakespotViewControllerDidDismiss")
+
+    public static let FakespotViewControllerDidAppear = Notification.Name("FakespotViewControllerDidAppear")
+
     public static let FileDidDownload = Notification.Name("FileDidDownload")
-
-    public static let DisplayThemeChanged = Notification.Name("DisplayThemeChanged")
-
-    // This will eventually replace DisplayThemeChanged
-    public static let ThemeDidChange = Notification.Name("ThemeDidChange")
 
     public static let SearchBarPositionDidChange = Notification.Name("SearchBarPositionDidChange")
 
@@ -82,16 +78,27 @@ extension Notification.Name {
 
     public static let LibraryPanelStateDidChange = Notification.Name("LibraryPanelStateDidChange")
 
+    public static let SearchSettingsChanged = Notification.Name("SearchSettingsChanged")
+
+    public static let TabDataUpdated = Notification.Name("TabDataUpdated")
+
+    public static let PendingBlobDownloadAddedToQueue = Notification.Name("PendingBlobDownloadAddedToQueue")
+
     // MARK: Tab manager
 
     // Tab manager creates a toast for undo recently closed tabs and a notification is
     // fired when user taps on undo button on Toast
     public static let DidTapUndoCloseAllTabToast = Notification.Name("DidTapUndoCloseAllTabToast")
 
+    // Has to be used in combination of OpenTabNotificationObject
+    public static let OpenTabNotification = Notification.Name("OpenTabNotification")
+
     // MARK: Settings
 
+    public static let BlockPopup = Notification.Name("BlockPopup")
     public static let BookmarksUpdated = Notification.Name("BookmarksUpdated")
     public static let ReadingListUpdated = Notification.Name("ReadingListUpdated")
     public static let TopSitesUpdated = Notification.Name("TopSitesUpdated")
     public static let HistoryUpdated = Notification.Name("HistoryUpdated")
+    public static let DefaultSearchEngineUpdated = Notification.Name("DefaultSearchEngineUpdated")
 }

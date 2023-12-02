@@ -1,11 +1,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import Shared
 import Storage
 import Account
+import Common
 
 extension UIStackView {
     func addBackground(color: UIColor) {
@@ -73,6 +74,7 @@ class ShareViewController: UIViewController {
     private var actionRowHeights = [NSLayoutConstraint]()
     private var pageInfoRowTitleLabel: UILabel?
     private var pageInfoRowUrlLabel: UILabel?
+    private let themeManager = DefaultThemeManager(sharedContainerIdentifier: AppInfo.sharedContainerIdentifier)
 
     weak var delegate: ShareControllerDelegate?
 
@@ -86,7 +88,7 @@ class ShareViewController: UIViewController {
     }
 
     func setupUI() {
-        view.backgroundColor = ShareTheme.defaultBackground.color
+        view.backgroundColor = themeManager.currentTheme.colors.layer2
         view.subviews.forEach({ $0.removeFromSuperview() })
 
         setupNavBar()
@@ -104,7 +106,7 @@ class ShareViewController: UIViewController {
         }
 
         let profile = BrowserProfile(localName: "profile")
-        RustFirefoxAccounts.startup(prefs: profile.prefs).uponQueue(.main) { _ in }
+        RustFirefoxAccounts.startup(prefs: profile.prefs) { _ in }
     }
 
     private func setupRows() {
@@ -114,12 +116,12 @@ class ShareViewController: UIViewController {
         makeSeparator(addTo: stackView)
 
         if shareItem?.isUrlType() ?? true {
-            makeActionRow(addTo: stackView, label: .ShareOpenInFirefox, imageName: "open-in-firefox", action: #selector(actionOpenInFirefoxNow), hasNavigation: false)
-            makeActionRow(addTo: stackView, label: .ShareLoadInBackground, imageName: "menu-Show-Tabs", action: #selector(actionLoadInBackground), hasNavigation: false)
-            makeActionRow(addTo: stackView, label: .ShareBookmarkThisPage, imageName: "AddToBookmarks", action: #selector(actionBookmarkThisPage), hasNavigation: false)
+            makeActionRow(addTo: stackView, label: .ShareOpenInFirefox, imageName: "logoFirefoxLarge", action: #selector(actionOpenInFirefoxNow), hasNavigation: false)
+            makeActionRow(addTo: stackView, label: .ShareLoadInBackground, imageName: "tabTrayLarge", action: #selector(actionLoadInBackground), hasNavigation: false)
+            makeActionRow(addTo: stackView, label: .ShareBookmarkThisPage, imageName: "bookmarkLarge", action: #selector(actionBookmarkThisPage), hasNavigation: false)
             makeActionRow(addTo: stackView, label: .ShareAddToReadingList, imageName: "AddToReadingList", action: #selector(actionAddToReadingList), hasNavigation: false)
             makeSeparator(addTo: stackView)
-            makeActionRow(addTo: stackView, label: .ShareSendToDevice, imageName: "menu-Send-to-Device", action: #selector(actionSendToDevice), hasNavigation: true)
+            makeActionRow(addTo: stackView, label: .ShareSendToDevice, imageName: "deviceDesktopSendLarge", action: #selector(actionSendToDevice), hasNavigation: true)
         } else {
             pageInfoRowUrlLabel?.removeFromSuperview()
             makeActionRow(addTo: stackView, label: .ShareSearchInFirefox, imageName: "quickSearch", action: #selector(actionSearchInFirefox), hasNavigation: false)
@@ -144,7 +146,7 @@ class ShareViewController: UIViewController {
     private func makeSeparator(addTo parent: UIStackView) {
         let view = UIView()
         view.translatesAutoresizingMaskIntoConstraints = false
-        view.backgroundColor = ShareTheme.separator.color
+        view.backgroundColor = themeManager.currentTheme.colors.borderPrimary
         parent.addArrangedSubview(view)
         NSLayoutConstraint.activate([
             view.leadingAnchor.constraint(equalTo: parent.leadingAnchor),
@@ -214,21 +216,21 @@ class ShareViewController: UIViewController {
 
         let icon = UIImageView(image: UIImage(named: imageName)?.withRenderingMode(.alwaysTemplate))
         icon.contentMode = .scaleAspectFit
-        icon.tintColor = ShareTheme.actionRowTextAndIcon.color
+        icon.tintColor = themeManager.currentTheme.colors.iconPrimary
         icon.translatesAutoresizingMaskIntoConstraints = false
 
         let title = UILabel()
         title.font = UX.baseFont
         title.handleLongLabels()
-        title.textColor = ShareTheme.actionRowTextAndIcon.color
+        title.textColor = themeManager.currentTheme.colors.textPrimary
         title.text = label
         [icon, title].forEach { row.addArrangedSubview($0) }
         icon.widthAnchor.constraint(equalToConstant: CGFloat(UX.actionRowIconSize)).isActive = true
 
         if hasNavigation {
-            let navButton = UIImageView(image: UIImage(named: "menu-Disclosure")?.withRenderingMode(.alwaysTemplate))
+            let navButton = UIImageView(image: UIImage(named: "chevronRightLarge")?.withRenderingMode(.alwaysTemplate))
             navButton.contentMode = .scaleAspectFit
-            navButton.tintColor = ShareTheme.actionRowTextAndIcon.color
+            navButton.tintColor = themeManager.currentTheme.colors.textPrimary
             navButton.translatesAutoresizingMaskIntoConstraints = false
             row.addArrangedSubview(navButton)
             navButton.widthAnchor.constraint(equalToConstant: 14).isActive = true
@@ -256,7 +258,8 @@ class ShareViewController: UIViewController {
         }
     }
 
-    @objc func finish(afterDelay: TimeInterval = UX.durationToShowDoneDialog) {
+    @objc
+    func finish(afterDelay: TimeInterval = UX.durationToShowDoneDialog) {
         delegate?.finish(afterDelay: afterDelay)
     }
 
@@ -264,7 +267,7 @@ class ShareViewController: UIViewController {
         let stackView = UIStackView()
         stackView.axis = .horizontal
         stackView.translatesAutoresizingMaskIntoConstraints = false
-        stackView.addBackground(color: ShareTheme.doneLabelBackground.color)
+        stackView.addBackground(color: themeManager.currentTheme.colors.iconAction)
         stackView.rightLeftEdges(inset: UX.rowInset)
         parent.addArrangedSubview(stackView)
         stackView.heightAnchor.constraint(equalToConstant: CGFloat(UX.pageInfoRowHeight)).isActive = true
@@ -291,7 +294,7 @@ class ShareViewController: UIViewController {
     private func setupNavBar() {
         let appearance = UINavigationBarAppearance()
         appearance.configureWithDefaultBackground()
-        appearance.backgroundColor = ShareTheme.defaultBackground.color
+        appearance.backgroundColor = themeManager.currentTheme.colors.layer2
         appearance.shadowColor = .clear
         appearance.shadowImage = UIImage()
 
@@ -319,7 +322,8 @@ class ShareViewController: UIViewController {
 }
 
 extension ShareViewController {
-    @objc func actionLoadInBackground(gesture: UIGestureRecognizer) {
+    @objc
+    func actionLoadInBackground(gesture: UIGestureRecognizer) {
         // To avoid re-rentry from double tap, each action function disables the gesture
         gesture.isEnabled = false
         animateToActionDoneView(withTitle: .ShareLoadInBackgroundDone)
@@ -336,7 +340,8 @@ extension ShareViewController {
         finish()
     }
 
-    @objc func actionBookmarkThisPage(gesture: UIGestureRecognizer) {
+    @objc
+    func actionBookmarkThisPage(gesture: UIGestureRecognizer) {
         gesture.isEnabled = false
         animateToActionDoneView(withTitle: .ShareBookmarkThisPageDone)
 
@@ -357,7 +362,8 @@ extension ShareViewController {
         finish()
     }
 
-    @objc func actionAddToReadingList(gesture: UIGestureRecognizer) {
+    @objc
+    func actionAddToReadingList(gesture: UIGestureRecognizer) {
         gesture.isEnabled = false
         animateToActionDoneView(withTitle: .ShareAddToReadingListDone)
 
@@ -373,12 +379,13 @@ extension ShareViewController {
         finish()
     }
 
-    @objc func actionSendToDevice(gesture: UIGestureRecognizer) {
+    @objc
+    func actionSendToDevice(gesture: UIGestureRecognizer) {
         guard let shareItem = shareItem, case .shareItem(let item) = shareItem else { return }
 
         gesture.isEnabled = false
         view.isUserInteractionEnabled = false
-        RustFirefoxAccounts.shared.accountManager.uponQueue(.main) { _ in
+        if RustFirefoxAccounts.shared.accountManager != nil {
             self.view.isUserInteractionEnabled = true
             self.sendToDevice = SendToDevice()
             guard let sendToDevice = self.sendToDevice else { return }
@@ -394,7 +401,7 @@ extension ShareViewController {
         let profile = BrowserProfile(localName: "profile")
         profile.prefs.setBool(true, forKey: PrefsKeys.AppExtensionTelemetryOpenUrl)
 
-       func firefoxUrl(_ url: String) -> String {
+        func firefoxUrl(_ url: String) -> String {
             let encoded = url.addingPercentEncoding(withAllowedCharacters: NSCharacterSet.alphanumerics) ?? ""
             if isSearch {
                 return "firefox://open-text?text=\(encoded)"
@@ -402,7 +409,7 @@ extension ShareViewController {
             return "firefox://open-url?url=\(encoded)"
         }
 
-        guard let url = URL(string: firefoxUrl(url)) else { return }
+        guard let url = URL(string: firefoxUrl(url), invalidCharacters: false) else { return }
         var responder = self as UIResponder?
         let selectorOpenURL = sel_registerName("openURL:")
         while let current = responder {
@@ -415,7 +422,8 @@ extension ShareViewController {
         }
     }
 
-    @objc func actionSearchInFirefox(gesture: UIGestureRecognizer) {
+    @objc
+    func actionSearchInFirefox(gesture: UIGestureRecognizer) {
         gesture.isEnabled = false
 
         if let shareItem = shareItem, case .rawText(let text) = shareItem {
@@ -425,7 +433,8 @@ extension ShareViewController {
         finish(afterDelay: 0)
     }
 
-    @objc func actionOpenInFirefoxNow(gesture: UIGestureRecognizer) {
+    @objc
+    func actionOpenInFirefoxNow(gesture: UIGestureRecognizer) {
         gesture.isEnabled = false
 
         if let shareItem = shareItem, case .shareItem(let item) = shareItem {

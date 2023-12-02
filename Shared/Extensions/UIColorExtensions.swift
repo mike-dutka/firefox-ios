@@ -1,35 +1,17 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
+import SwiftUI
 import UIKit
 
-public struct Color {
-    public var red: CGFloat
-    public var green: CGFloat
-    public var blue: CGFloat
-    public var alpha: CGFloat
-}
-
 extension UIColor {
-    /**
-     * Initializes and returns a color object for the given RGB hex integer.
-     */
-    public convenience init(rgb: Int) {
-        self.init(
-            red: CGFloat((rgb & 0xFF0000) >> 16) / 255.0,
-            green: CGFloat((rgb & 0x00FF00) >> 8)  / 255.0,
-            blue: CGFloat((rgb & 0x0000FF) >> 0)  / 255.0,
-            alpha: 1)
-    }
-
-    public convenience init(rgba: UInt64) {
-        self.init(
-            red: CGFloat((rgba & 0xFF000000) >> 24) / 255.0,
-            green: CGFloat((rgba & 0x00FF0000) >> 16)  / 255.0,
-            blue: CGFloat((rgba & 0x0000FF00) >> 8)  / 255.0,
-            alpha: CGFloat((rgba & 0x000000FF) >> 0) / 255.0
-        )
+    private struct ColorComponents {
+        public var red: CGFloat
+        public var green: CGFloat
+        public var blue: CGFloat
+        public var alpha: CGFloat
     }
 
     public convenience init(colorString: String) {
@@ -45,7 +27,10 @@ extension UIColor {
         let b = ((colorRef?.count ?? 0) > 2 ? colorRef?[2] : g) ?? 0
         let a = cgColor.alpha
 
-        var color = String(format: "#%02lX%02lX%02lX", lroundf(Float(r * 255)), lroundf(Float(g * 255)), lroundf(Float(b * 255)))
+        var color = String(format: "#%02lX%02lX%02lX",
+                           lroundf(Float(r * 255)),
+                           lroundf(Float(g * 255)),
+                           lroundf(Float(b * 255)))
         if a < 1 {
             color += String(format: "%02lX", lroundf(Float(a)))
         }
@@ -53,12 +38,16 @@ extension UIColor {
         return color
     }
 
-    public var components: Color {
+    private var components: ColorComponents {
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
         var alpha: CGFloat = 0
         getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        return Color(red: red, green: green, blue: blue, alpha: alpha)
+        return ColorComponents(red: red, green: green, blue: blue, alpha: alpha)
+    }
+
+    public var color: Color {
+        return Color(self)
     }
 }

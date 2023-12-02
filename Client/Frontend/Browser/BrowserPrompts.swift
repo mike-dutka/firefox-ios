@@ -1,12 +1,13 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import WebKit
 import Shared
 
-@objc protocol JSPromptAlertControllerDelegate: AnyObject {
+@objc
+protocol JSPromptAlertControllerDelegate: AnyObject {
     func promptAlertControllerDidDismiss(_ alertController: JSPromptAlertController)
 }
 
@@ -34,27 +35,20 @@ class JSPromptAlertController: UIAlertController {
  */
 protocol JSAlertInfo {
     func alertController() -> JSPromptAlertController
-    func cancel()
 }
 
 struct MessageAlert: JSAlertInfo {
     let message: String
     let frame: WKFrameInfo
-    let completionHandler: () -> Void
 
     func alertController() -> JSPromptAlertController {
-        let alertController = JSPromptAlertController(title: titleForJavaScriptPanelInitiatedByFrame(frame),
+        let alertController = JSPromptAlertController(
+            title: titleForJavaScriptPanelInitiatedByFrame(frame),
             message: message,
             preferredStyle: .alert)
-        alertController.addAction(UIAlertAction(title: .OKString, style: .default) { _ in
-            self.completionHandler()
-        })
+        alertController.addAction(UIAlertAction(title: .OKString, style: .default))
         alertController.alertInfo = self
         return alertController
-    }
-
-    func cancel() {
-        completionHandler()
     }
 }
 
@@ -63,12 +57,6 @@ struct ConfirmPanelAlert: JSAlertInfo {
     let frame: WKFrameInfo
     let completionHandler: (Bool) -> Void
 
-    init(message: String, frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
-        self.message = message
-        self.frame = frame
-        self.completionHandler = completionHandler
-    }
-
     func alertController() -> JSPromptAlertController {
         // Show JavaScript confirm dialogs.
         let alertController = JSPromptAlertController(title: titleForJavaScriptPanelInitiatedByFrame(frame), message: message, preferredStyle: .alert)
@@ -76,34 +64,25 @@ struct ConfirmPanelAlert: JSAlertInfo {
             self.completionHandler(true)
         })
         alertController.addAction(UIAlertAction(title: .CancelString, style: .cancel) { _ in
-            self.cancel()
+            self.completionHandler(false)
         })
         alertController.alertInfo = self
         return alertController
-    }
-
-    func cancel() {
-        completionHandler(false)
     }
 }
 
 struct TextInputAlert: JSAlertInfo {
     let message: String
     let frame: WKFrameInfo
-    let completionHandler: (String?) -> Void
     let defaultText: String?
+    let completionHandler: (String?) -> Void
 
     var input: UITextField!
 
-    init(message: String, frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void, defaultText: String?) {
-        self.message = message
-        self.frame = frame
-        self.completionHandler = completionHandler
-        self.defaultText = defaultText
-    }
-
     func alertController() -> JSPromptAlertController {
-        let alertController = JSPromptAlertController(title: titleForJavaScriptPanelInitiatedByFrame(frame), message: message, preferredStyle: .alert)
+        let alertController = JSPromptAlertController(title: titleForJavaScriptPanelInitiatedByFrame(frame),
+                                                      message: message,
+                                                      preferredStyle: .alert)
         var input: UITextField!
         alertController.addTextField(configurationHandler: { (textField: UITextField) in
             input = textField
@@ -113,14 +92,10 @@ struct TextInputAlert: JSAlertInfo {
             self.completionHandler(input.text)
         })
         alertController.addAction(UIAlertAction(title: .CancelString, style: .cancel) { _ in
-            self.cancel()
+            self.completionHandler(nil)
         })
         alertController.alertInfo = self
         return alertController
-    }
-
-    func cancel() {
-        completionHandler(nil)
     }
 }
 

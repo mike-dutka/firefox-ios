@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
@@ -24,17 +24,6 @@ public func == (lhs: ClientAndTabs, rhs: ClientAndTabs) -> Bool {
            (lhs.tabs == rhs.tabs)
 }
 
-public protocol RemoteClientsAndTabs: SyncCommands {
-    func wipeClients() -> Deferred<Maybe<()>>
-    func getClientGUIDs() -> Deferred<Maybe<Set<GUID>>>
-    func getClients() -> Deferred<Maybe<[RemoteClient]>>
-    func getClient(guid: GUID) -> Deferred<Maybe<RemoteClient?>>
-    func getClient(fxaDeviceId: String) -> Deferred<Maybe<RemoteClient?>>
-    func insertOrUpdateClient(_ client: RemoteClient) -> Deferred<Maybe<Int>>
-    func insertOrUpdateClients(_ clients: [RemoteClient]) -> Deferred<Maybe<Int>>
-    func deleteClient(guid: GUID) -> Success
-}
-
 public struct RemoteTab: Equatable {
     public let clientGUID: String?
     public let URL: Foundation.URL
@@ -42,10 +31,9 @@ public struct RemoteTab: Equatable {
     public let history: [Foundation.URL]
     public let lastUsed: Timestamp
     public let icon: Foundation.URL?
-    public var faviconURL: String? // Empty for now until #10000 is done
 
     public static func shouldIncludeURL(_ url: Foundation.URL) -> Bool {
-        if let _ = InternalURL(url) {
+        if InternalURL(url) != nil {
             return false
         }
 
@@ -86,10 +74,4 @@ public func == (lhs: RemoteTab, rhs: RemoteTab) -> Bool {
         lhs.history == rhs.history &&
         lhs.lastUsed == rhs.lastUsed &&
         lhs.icon == rhs.icon
-}
-
-extension RemoteTab: CustomStringConvertible {
-    public var description: String {
-        return "<RemoteTab clientGUID: \(clientGUID ?? "nil"), URL: \(URL), title: \(title), lastUsed: \(lastUsed)>"
-    }
 }

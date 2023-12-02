@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 
@@ -9,14 +9,15 @@ public struct PrefsKeys {
     // When this pref is set (by the user) it overrides default behaviour which is just based on app locale.
     public static let KeyEnableChinaSyncService = "useChinaSyncService"
     public static let KeyLastRemoteTabSyncTime = "lastRemoteTabSyncTime"
+
+    // Global sync state for rust sync manager
+    public static let RustSyncManagerPersistedState = "rustSyncManagerPersistedStateKey"
+    public static let HasVerifiedRustLogins = "hasVerifiedRustLogins"
+
     public static let KeyLastSyncFinishTime = "lastSyncFinishTime"
     public static let KeyDefaultHomePageURL = "KeyDefaultHomePageURL"
     public static let KeyNoImageModeStatus = "NoImageModeStatus"
-    public static let KeyNightModeButtonIsInMenu = "NightModeButtonIsInMenuPrefKey"
-    public static let KeyNightModeStatus = "NightModeStatus"
-    public static let KeyNightModeEnabledDarkTheme = "NightModeEnabledDarkTheme"
     public static let KeyMailToOption = "MailToOption"
-    public static let KeyLastVersionNumber = "KeyLastVersionNumber"
     public static let HasFocusInstalled = "HasFocusInstalled"
     public static let HasPocketInstalled = "HasPocketInstalled"
     public static let IntroSeen = "IntroViewControllerSeen"
@@ -26,7 +27,6 @@ public struct PrefsKeys {
     public static let LoginsSaveEnabled = "saveLogins"
     public static let LoginsShowShortcutMenuItem = "showLoginsInAppMenu"
     public static let KeyInstallSession = "installSessionNumber"
-    public static let KeyETPCoverSheetShowType = "etpCoverSheetShowType"
     public static let KeyDefaultBrowserCardShowType = "defaultBrowserCardShowType"
     public static let DidDismissDefaultBrowserMessage = "DidDismissDefaultBrowserCard"
     public static let KeyDidShowDefaultBrowserOnboarding = "didShowDefaultBrowserOnboarding"
@@ -34,10 +34,23 @@ public struct PrefsKeys {
     public static let NewTabCustomUrlPrefKey = "HomePageURLPref"
     public static let GoogleTopSiteAddedKey = "googleTopSiteAddedKey"
     public static let GoogleTopSiteHideKey = "googleTopSiteHideKey"
-    public static let SessionCount = "sessionCount"
     public static let InstallType = "InstallType"
     public static let KeyCurrentInstallVersion = "KeyCurrentInstallVersion"
     public static let KeySecondRun = "SecondRun"
+    public static let KeyAutofillCreditCardStatus = "KeyAutofillCreditCardStatus"
+
+    public struct Session {
+        public static let FirstAppUse = "firstAppUse"
+        public static let Last = "lastSession"
+        public static let Count = "sessionCount"
+        public static let firstWeekAppOpenTimestamps = "firstWeekAppOpenTimestamps"
+        public static let firstWeekSearchesTimestamps = "firstWeekSearchesTimestamps"
+        public static let didUpdateConversionValue = "didUpdateConversionValue"
+    }
+
+    public struct AppVersion {
+        public static let Latest = "latestAppVersion"
+    }
 
     public struct Wallpapers {
         public static let MetadataLastCheckedDate = "WallpaperMetadataLastCheckedUserPrefsKey"
@@ -49,41 +62,28 @@ public struct PrefsKeys {
         public static let v1MigrationCheck = "v1MigrationCheckUserPrefsKey"
     }
 
+    public struct Notifications {
+        public static let SyncNotifications = "SyncNotificationsUserPrefsKey"
+        public static let TipsAndFeaturesNotifications = "TipsAndFeaturesNotificationsUserPrefsKey"
+    }
+
     // For ease of use, please list keys alphabetically.
     public struct FeatureFlags {
-        public static let ASPocketStories = "ASPocketStoriesUserPrefsKey"
-        public static let ASSponsoredPocketStories = "ASSponsoredPocketStoriesUserPrefsKey"
         public static let CustomWallpaper = "CustomWallpaperUserPrefsKey"
+        public static let FirefoxSuggest = "FirefoxSuggest"
         public static let HistoryHighlightsSection = "HistoryHighlightsSectionUserPrefsKey"
         public static let HistoryGroups = "HistoryGroupsUserPrefsKey"
         public static let InactiveTabs = "InactiveTabsUserPrefsKey"
         public static let JumpBackInSection = "JumpBackInSectionUserPrefsKey"
-        public static let PullToRefresh = "PullToRefreshUserPrefsKey"
-        public static let RecentlySavedSection = "RecentlySavedSectionUserPrefsKey"
         public static let SearchBarPosition = "SearchBarPositionUsersPrefsKey"
-        public static let StartAtHome = "StartAtHomeUserPrefsKey"
-        public static let SponsoredShortcuts = "SponsoredShortcutsUserPrefsKey"
-        public static let TabTrayGroups = "TabTrayGroupsUserPrefsKey"
-        public static let TopSiteSection = "TopSitesUserPrefsKey"
     }
 
-    public struct LegacyFeatureFlags {
-        public static let ASPocketStories = "ASPocketStoriesVisible"
-        public static let CustomWallpaper = "customWallpaperPrefKey"
-        public static let HistoryHighlightsSection = "historyHighlightsSectionEnabled"
-        public static let HistoryGroups = "historyGroupsEnabled"
-        public static let InactiveTabs = "KeyInactiveTabs"
-        public static let JumpBackInSection = "jumpBackInSectionEnabled"
-        public static let PullToRefresh = "pullToRefresh"
-        public static let RecentlySavedSection = "recentlySavedSectionEnabled"
-        public static let KeySearchBarPosition = "SearchBarPosition"
-        public static let StartAtHome = "startAtHome"
-        public static let TabTrayGroups = "KeyEnableGroupedTabsKey"
-        public static let SponsoredShortcuts = "sponsoredShortcutsKey"
-        public static let TopSiteSection = "topSitesKey"
-
-        public static let MigrationCheck = "MigrationCheck"
-        public static let WallpaperDirectoryMigrationCheck = "WallpaperDirectoryMigrationCheck"
+    public struct UserFeatureFlagPrefs {
+        public static let ASPocketStories = "ASPocketStoriesUserPrefsKey"
+        public static let RecentlySavedSection = "RecentlySavedSectionUserPrefsKey"
+        public static let SponsoredShortcuts = "SponsoredShortcutsUserPrefsKey"
+        public static let StartAtHome = "StartAtHomeUserPrefsKey"
+        public static let TopSiteSection = "TopSitesUserPrefsKey"
     }
 
     // Firefox contextual hint
@@ -94,6 +94,8 @@ public struct PrefsKeys {
         case jumpBackInSyncedTabConfiguredKey = "JumpBackInSyncedTabConfigured"
         case inactiveTabsKey = "ContextualHintInactiveTabs"
         case toolbarOnboardingKey = "ContextualHintToolbarOnboardingKey"
+        case shoppingOnboardingKey = "ShoppingOnboardingCFRKey"
+        case shoppingOnboardingCFRsCounterKey = "ShoppingOnboardingCFRsCounterKey"
     }
 
     // Activity Stream
@@ -116,16 +118,48 @@ public struct PrefsKeys {
     public static let KeyInactiveTabsModel = "KeyInactiveTabsModelKey"
     public static let KeyInactiveTabsFirstTimeRun = "KeyInactiveTabsFirstTimeRunKey"
     public static let KeyTabDisplayOrder = "KeyTabDisplayOrderKey"
+    public static let TabMigrationKey = "TabMigrationKey"
+    public static let TabSyncEnabled = "sync.engine.tabs.enabled"
 
     // Widgetkit Key
     public static let WidgetKitSimpleTabKey = "WidgetKitSimpleTabKey"
     public static let WidgetKitSimpleTopTab = "WidgetKitSimpleTopTab"
+
+    // Shopping Keys
+    public static let Shopping2023EnableAds = "Shopping2023EnableAdsKey"
+    public static let Shopping2023OptIn = "Shopping2023OptInKey"
+    public static let Shopping2023OptInSeen = "Shopping2023OptInSeenKey"
+    public static let Shopping2023ExplicitOptOut = "Shopping2023ExplicitOptOutKey"
 
     // WallpaperManager Keys - Legacy
     public static let WallpaperManagerCurrentWallpaperObject = "WallpaperManagerCurrentWallpaperObject"
     public static let WallpaperManagerCurrentWallpaperImage = "WallpaperManagerCurrentWallpaperImage"
     public static let WallpaperManagerCurrentWallpaperImageLandscape = "WallpaperManagerCurrentWallpaperImageLandscape"
     public static let WallpaperManagerLogoSwitchPreference = "WallpaperManagerLogoSwitchPreference"
+
+    // Application Services migrated to Places DB Successfully
+    public static let PlacesHistoryMigrationSucceeded = "PlacesHistoryMigrationSucceeded"
+
+    // The number of times we have attempted the Application Services to Places DB migration
+    public static let HistoryMigrationAttemptNumber = "HistoryMigrationAttemptNumber"
+
+    // The last timestamp we polled FxA for missing send tabs
+    public static let PollCommandsTimestamp = "PollCommandsTimestamp"
+
+    // The last recorded CFR timestamp
+    public static let FakespotLastCFRTimestamp = "FakespotLastCFRTimestamp"
+
+    // Representing whether or not the last user session was private
+    public static let LastSessionWasPrivate = "wasLastSessionPrivate"
+
+    // Only used to force nimbus features to true with tests
+    public static let NimbusFeatureTestsOverride = "NimbusFeatureTestsOverride"
+
+    // Only used to force faster transition of tabs to the inactive state (10 seconds)
+    public static let FasterInactiveTabsOverride = "FasterInactiveTabsOverride"
+
+    // Only used to force showing the App Store review dialog for debugging purposes
+    public static let ForceShowAppReviewPromptOverride = "ForceShowAppReviewPromptOverride"
 }
 
 public struct PrefsDefaults {

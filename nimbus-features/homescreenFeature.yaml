@@ -1,0 +1,46 @@
+features:
+  homescreenFeature:
+    description: The homescreen that the user goes to when they press home or new tab.
+    variables:
+      sections-enabled:
+        description: >
+          This property provides a lookup table of whether or not the given section should be enabled.
+          If the section is enabled, it should be toggleable in the settings screen, and on by default.
+        type: Map<HomeScreenSection, Boolean>
+        default:
+          {
+            "jump-back-in": true,
+            "recent-explorations": true,
+          }
+      pocket-sponsored-stories:
+        description: >
+          This property defines whether pocket sponsored
+          stories appear on the homepage.
+        type: Boolean
+        default: false
+    defaults:
+      - channel: developer
+        value: {
+          "sections-enabled": {
+            "jump-back-in": true,
+            "recent-explorations": true,
+          },
+          "pocket-sponsored-stories": true
+        }
+      - channel: beta
+        value: {
+          "sections-enabled": {
+            "jump-back-in": true,
+            "recent-explorations": true,
+          },
+          "pocket-sponsored-stories": false
+        }
+
+enums:
+  HomeScreenSection:
+    description: The identifiers for the sections of the homescreen.
+    variants:
+      jump-back-in:
+        description: The tabs the user was looking immediately before being interrupted.
+      recent-explorations:
+        description: The tab groups

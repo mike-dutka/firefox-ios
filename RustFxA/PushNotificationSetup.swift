@@ -1,45 +1,41 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
-* License, v. 2.0. If a copy of the MPL was not distributed with this
-* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Shared
 import MozillaAppServices
 
 open class PushNotificationSetup {
-    private var pushClient: PushClient?
-    private var pushRegistration: PushRegistration?
-
-    public func didRegister(withDeviceToken deviceToken: Data) {
-        // If we've already registered this push subscription, we don't need to do it again.
-        let apnsToken = deviceToken.hexEncodedString
-        let keychain = MZKeychainWrapper.sharedClientAppContainerKeychain
-        guard keychain.string(forKey: KeychainKey.apnsToken, withAccessibility: .afterFirstUnlock) != apnsToken else { return }
-
-        RustFirefoxAccounts.shared.accountManager.uponQueue(.main) { accountManager in
-            let config = PushConfigurationLabel(rawValue: AppConstants.scheme)!.toConfiguration()
-            self.pushClient = PushClientImplementation(endpointURL: config.endpointURL,
-                                                       experimentalMode: false)
-
-            self.pushClient?.register(apnsToken) { [weak self] pushRegistration in
-                guard let pushRegistration = pushRegistration else { return }
-                self?.pushRegistration = pushRegistration
-                keychain.set(apnsToken, forKey: KeychainKey.apnsToken, withAccessibility: .afterFirstUnlock)
-
-                let subscription = pushRegistration.defaultSubscription
-                let devicePush = DevicePushSubscription(endpoint: subscription.endpoint.absoluteString,
-                                                        publicKey: subscription.p256dhPublicKey,
-                                                        authKey: subscription.authKey)
-                accountManager.deviceConstellation()?.setDevicePushSubscription(sub: devicePush)
-                keychain.set(pushRegistration as NSCoding,
-                             forKey: KeychainKey.fxaPushRegistration,
-                             withAccessibility: .afterFirstUnlock)
+    /// Disables FxA push notifications for the user
+    public func disableNotifications() {
+        MZKeychainWrapper.sharedClientAppContainerKeychain.removeObject(forKey: KeychainKey.apnsToken, withAccessibility: .afterFirstUnlock)
+        if let accountManager = RustFirefoxAccounts.shared.accountManager {
+            let subscriptionEndpoint = accountManager.deviceConstellation()?.state()?.localDevice?.pushSubscription?.endpoint
+            if let subscriptionEndpoint = subscriptionEndpoint, subscriptionEndpoint.isEmpty {
+                // Already disabled, lets quit early
+                return
             }
+            let devicePush = DevicePushSubscription(endpoint: "",
+                                                    publicKey: "",
+                                                    authKey: "")
+            accountManager.deviceConstellation()?.setDevicePushSubscription(sub: devicePush)
         }
     }
 
-    public func unregister() {
-        if let pushRegistration = pushRegistration {
-            pushClient?.unregister(pushRegistration) {}
+    public func updatePushRegistration(subscriptionResponse: SubscriptionResponse) {
+        let endpoint = subscriptionResponse.subscriptionInfo.endpoint
+        let publicKey = subscriptionResponse.subscriptionInfo.keys.p256dh
+        let authKey = subscriptionResponse.subscriptionInfo.keys.auth
+        let devicePush = DevicePushSubscription(endpoint: endpoint,
+                                                publicKey: publicKey,
+                                                authKey: authKey)
+        if let accountManager = RustFirefoxAccounts.shared.accountManager {
+            let currentSubscription = accountManager.deviceConstellation()?.state()?.localDevice?.pushSubscription
+            if currentSubscription == devicePush {
+                return
+            }
+            accountManager.deviceConstellation()?.setDevicePushSubscription(sub: devicePush)
         }
     }
 }

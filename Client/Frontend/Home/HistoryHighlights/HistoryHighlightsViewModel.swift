@@ -1,15 +1,17 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Storage
 import UIKit
+import Shared
+import Common
 
 struct HistoryHighlightsModel {
     let title: String
     let description: String?
-    let favIconImage: UIImage?
+    let urlString: String?
     let corners: CACornerMask?
     let hideBottomLine: Bool
     let isFillerCell: Bool
@@ -24,16 +26,16 @@ struct HistoryHighlightsModel {
 
     init(title: String,
          description: String?,
+         urlString: String? = nil,
          shouldHideBottomLine: Bool,
          with corners: CACornerMask? = nil,
-         and heroImage: UIImage? = nil,
          andIsFillerCell: Bool = false,
          shouldAddShadow: Bool = false) {
         self.title = title
         self.description = description
+        self.urlString = urlString
         self.hideBottomLine = shouldHideBottomLine
         self.corners = corners
-        self.favIconImage = heroImage
         self.isFillerCell = andIsFillerCell
         self.shouldAddShadow = shouldAddShadow
     }
@@ -42,19 +44,16 @@ struct HistoryHighlightsModel {
     init(shouldHideBottomLine: Bool,
          with corners: CACornerMask? = nil,
          shouldAddShadow: Bool) {
-
         self.init(title: "",
                   description: "",
                   shouldHideBottomLine: shouldHideBottomLine,
                   with: corners,
-                  and: nil,
                   andIsFillerCell: true,
                   shouldAddShadow: shouldAddShadow)
     }
 }
 
 class HistoryHighlightsViewModel {
-
     struct UX {
         static let maxNumberOfItemsPerColumn = 3
         static let maxNumberOfColumns = 3
@@ -64,18 +63,20 @@ class HistoryHighlightsViewModel {
     }
 
     // MARK: - Properties & Variables
+    var theme: Theme
     var historyItems = [HighlightItem]()
     private var profile: Profile
     private var isPrivate: Bool
-    private var urlBar: URLBarViewProtocol
-    private lazy var siteImageHelper = SiteImageHelper(profile: profile)
     private var hasSentSectionEvent = false
     private var historyHighlightsDataAdaptor: HistoryHighlightsDataAdaptor
     private let dispatchQueue: DispatchQueueInterface
     private let telemetry: TelemetryWrapperProtocol
+    private var logger: Logger
+
     var onTapItem: ((HighlightItem) -> Void)?
     var historyHighlightLongPressHandler: ((HighlightItem, UIView?) -> Void)?
     var headerButtonAction: ((UIButton) -> Void)?
+
     weak var delegate: HomepageDataModelDelegate?
     private var wallpaperManager: WallpaperManager
 
@@ -94,7 +95,7 @@ class HistoryHighlightsViewModel {
     /// Group weight used to create collection view compositional layout
     /// Case 1: For compact and a single column use 0.9 to occupy must of the width of the parent
     /// Case 2: For compact and multiple columns 0.8 to show part of the next column
-    /// Case 3: For ipad and iphone landscape we use 1/3 of the available width
+    /// Case 3: For iPad and iPhone landscape we use 1/3 of the available width
     var groupWidthWeight: NSCollectionLayoutDimension {
         guard !UIDevice().isIphoneLandscape,
               UIDevice.current.userInterfaceIdiom != .pad else {
@@ -108,17 +109,19 @@ class HistoryHighlightsViewModel {
     // MARK: - Inits
     init(with profile: Profile,
          isPrivate: Bool,
-         urlBar: URLBarViewProtocol,
+         theme: Theme,
          historyHighlightsDataAdaptor: HistoryHighlightsDataAdaptor,
          dispatchQueue: DispatchQueueInterface = DispatchQueue.main,
          telemetry: TelemetryWrapperProtocol = TelemetryWrapper.shared,
-         wallpaperManager: WallpaperManager) {
+         wallpaperManager: WallpaperManager,
+         logger: Logger = DefaultLogger.shared) {
         self.profile = profile
         self.isPrivate = isPrivate
-        self.urlBar = urlBar
+        self.theme = theme
         self.dispatchQueue = dispatchQueue
         self.telemetry = telemetry
         self.wallpaperManager = wallpaperManager
+        self.logger = logger
         self.historyHighlightsDataAdaptor = historyHighlightsDataAdaptor
         self.historyHighlightsDataAdaptor.delegate = self
     }
@@ -137,20 +140,11 @@ class HistoryHighlightsViewModel {
     }
 
     func switchTo(_ highlight: HighlightItem) {
-        if urlBar.inOverlayMode { urlBar.leaveOverlayMode() }
-
         onTapItem?(highlight)
         telemetry.recordEvent(category: .action,
                               method: .tap,
                               object: .firefoxHomepage,
                               value: .historyHighlightsItemOpened)
-    }
-
-    // TODO: Good candidate for protocol because is used in JumpBackIn and here
-    func getFavIcon(for site: Site, completion: @escaping (UIImage?) -> Void) {
-        siteImageHelper.fetchImageFor(site: site, imageType: .favicon, shouldFallback: false) { image in
-            completion(image)
-        }
     }
 
     func getItemDetailsAt(index: Int) -> HighlightItem? {
@@ -166,15 +160,13 @@ class HistoryHighlightsViewModel {
 
 // MARK: HomeViewModelProtocol
 extension HistoryHighlightsViewModel: HomepageViewModelProtocol, FeatureFlaggable {
-
     var sectionType: HomepageSectionType {
         return .historyHighlights
     }
 
     var headerViewModel: LabelButtonHeaderViewModel {
         var textColor: UIColor?
-        if let wallpaperVersion: WallpaperVersion = featureFlags.getCustomState(for: .wallpaperVersion),
-           wallpaperVersion == .v1 {
+        if wallpaperManager.featureAvailable {
             textColor = wallpaperManager.currentWallpaper.textColor
         }
 
@@ -194,7 +186,7 @@ extension HistoryHighlightsViewModel: HomepageViewModelProtocol, FeatureFlaggabl
         return !isPrivate
     }
 
-    func section(for traitCollection: UITraitCollection) -> NSCollectionLayoutSection {
+    func section(for traitCollection: UITraitCollection, size: CGSize) -> NSCollectionLayoutSection {
         let item = NSCollectionLayoutItem(
             layoutSize: NSCollectionLayoutSize(widthDimension: .fractionalWidth(1),
                                                heightDimension: .estimated(UX.estimatedCellHeight))
@@ -246,14 +238,13 @@ extension HistoryHighlightsViewModel: HomepageViewModelProtocol, FeatureFlaggabl
         self.isPrivate = isPrivate
     }
 
-    func refreshData(for traitCollection: UITraitCollection,
-                     isPortrait: Bool = UIWindow.isPortrait,
-                     device: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom) {}
+    func setTheme(theme: Theme) {
+        self.theme = theme
+    }
 }
 
 // MARK: FxHomeSectionHandler
 extension HistoryHighlightsViewModel: HomepageSectionHandler {
-
     func configure(_ cell: UICollectionViewCell,
                    at indexPath: IndexPath) -> UICollectionViewCell {
         guard let cell = cell as? HistoryHighlightsCell else { return UICollectionViewCell() }
@@ -292,7 +283,6 @@ extension HistoryHighlightsViewModel: HomepageSectionHandler {
     func didSelectItem(at indexPath: IndexPath,
                        homePanelDelegate: HomePanelDelegate?,
                        libraryPanelDelegate: LibraryPanelDelegate?) {
-
         if let highlight = historyItems[safe: indexPath.row] {
             switchTo(highlight)
         }
@@ -404,26 +394,16 @@ extension HistoryHighlightsViewModel: HomepageSectionHandler {
                                                   cornersToRound: CACornerMask?,
                                                   shouldAddShadow: Bool,
                                                   item: HighlightItem) -> UICollectionViewCell {
-
         guard let cell = cell as? HistoryHighlightsCell else { return UICollectionViewCell() }
-
-        let itemURL = item.siteUrl?.absoluteString ?? ""
-        let site = Site(url: itemURL, title: item.displayTitle)
 
         let cellOptions = HistoryHighlightsModel(title: item.displayTitle,
                                                  description: nil,
+                                                 urlString: item.urlString,
                                                  shouldHideBottomLine: hideBottomLine,
                                                  with: cornersToRound,
                                                  shouldAddShadow: shouldAddShadow)
 
-        cell.updateCell(with: cellOptions)
-
-        let id = Int(arc4random())
-        cell.tag = id
-        getFavIcon(for: site) { image in
-            guard cell.tag == id else { return }
-            cell.heroImage.image = image
-        }
+        cell.configureCell(with: cellOptions, theme: theme)
 
         return cell
     }
@@ -433,7 +413,6 @@ extension HistoryHighlightsViewModel: HomepageSectionHandler {
                                              cornersToRound: CACornerMask?,
                                              shouldAddShadow: Bool,
                                              item: HighlightItem) -> UICollectionViewCell {
-
         guard let cell = cell as? HistoryHighlightsCell else { return UICollectionViewCell() }
 
         let cellOptions = HistoryHighlightsModel(title: item.displayTitle,
@@ -442,24 +421,22 @@ extension HistoryHighlightsViewModel: HomepageSectionHandler {
                                                  with: cornersToRound,
                                                  shouldAddShadow: shouldAddShadow)
 
-        cell.updateCell(with: cellOptions)
+        cell.configureCell(with: cellOptions, theme: theme)
 
         return cell
-
     }
 
     private func configureFillerCell(_ cell: UICollectionViewCell,
                                      hideBottomLine: Bool,
                                      cornersToRound: CACornerMask?,
                                      shouldAddShadow: Bool) -> UICollectionViewCell {
-
         guard let cell = cell as? HistoryHighlightsCell else { return UICollectionViewCell() }
 
         let cellOptions = HistoryHighlightsModel(shouldHideBottomLine: hideBottomLine,
                                                  with: cornersToRound,
                                                  shouldAddShadow: shouldAddShadow)
 
-        cell.updateCell(with: cellOptions)
+        cell.configureCell(with: cellOptions, theme: theme)
         return cell
     }
 }
@@ -469,7 +446,10 @@ extension HistoryHighlightsViewModel: HomepageSectionHandler {
 extension HistoryHighlightsViewModel: HistoryHighlightsDelegate {
     func didLoadNewData() {
         dispatchQueue.ensureMainThread {
-            self.historyItems = self.historyHighlightsDataAdaptor.getHistoryHightlights()
+            self.historyItems = self.historyHighlightsDataAdaptor.getHistoryHighlights()
+            self.logger.log("HistoryHighlights didLoadNewData and section shouldShow \(self.shouldShow)",
+                            level: .debug,
+                            category: .homepage)
             guard self.isEnabled else { return }
             self.delegate?.reloadView()
         }

@@ -1,26 +1,27 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import GCDWebServers
 import Shared
 
 protocol WebServerProtocol {
     var server: GCDWebServer { get }
-    @discardableResult func start() throws -> Bool
+    @discardableResult
+    func start() throws -> Bool
 }
 
 class WebServer: WebServerProtocol {
-    private let log = Logger.browserLogger
-
+    private var logger: Logger
     static let WebServerSharedInstance = WebServer()
 
     class var sharedInstance: WebServer {
         return WebServerSharedInstance
     }
 
-    let server: GCDWebServer = GCDWebServer()
+    let server = GCDWebServer()
 
     var base: String {
         return "http://localhost:\(server.port)"
@@ -34,11 +35,13 @@ class WebServer: WebServerProtocol {
     /// so this prevents them from accessing any resources.
     fileprivate let sessionToken = UUID().uuidString
 
-    init() {
+    init(logger: Logger = DefaultLogger.shared) {
         credentials = URLCredential(user: sessionToken, password: "", persistence: .forSession)
+        self.logger = logger
     }
 
-    @discardableResult func start() throws -> Bool {
+    @discardableResult
+    func start() throws -> Bool {
         if !server.isRunning {
             try server.start(options: [
                 GCDWebServerOption_Port: AppInfo.webserverPort,
@@ -77,7 +80,9 @@ class WebServer: WebServerProtocol {
             if let resource = NSURL(string: path)?.lastPathComponent {
                 server.addGETHandler(forPath: "/\(module)/\(resource)", filePath: path as String, isAttachment: false, cacheAge: UInt.max, allowRangeRequests: true)
             } else {
-                log.warning("Unable to locate resource at path: '\(path)'")
+                logger.log("Unable to locate resource at path: '\(path)'",
+                           level: .warning,
+                           category: .webview)
             }
         }
     }

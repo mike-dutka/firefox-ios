@@ -1,13 +1,13 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import Shared
 
 open class SuggestedSite: Site {
     override open var tileURL: URL {
-        return URL(string: url as String) ?? URL(string: "about:blank")!
+        return URL(string: url as String, invalidCharacters: false) ?? URL(string: "about:blank")!
     }
 
     let trackingId: Int

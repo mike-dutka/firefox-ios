@@ -2,37 +2,44 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Storage
 import Shared
 
 class PocketViewModel {
-
     struct UX {
         static let numberOfItemsInColumn = 3
         static let fractionalWidthiPhonePortrait: CGFloat = 0.90
-        static let fractionalWidthiPhoneLanscape: CGFloat = 0.46
+        static let fractionalWidthiPhoneLandscape: CGFloat = 0.46
+        static let sectionBottomSpacing: CGFloat = 16
+        static let headerFooterHeight: CGFloat = 34
     }
 
     // MARK: - Properties
 
     var isZeroSearch: Bool
+    var theme: Theme
     private var hasSentPocketSectionEvent = false
 
     var onTapTileAction: ((URL) -> Void)?
     var onLongPressTileAction: ((Site, UIView?) -> Void)?
-    var onScroll: (([NSCollectionLayoutVisibleItem]) -> Void)?
     weak var delegate: HomepageDataModelDelegate?
 
     private var dataAdaptor: PocketDataAdaptor
     private var pocketStoriesViewModels = [PocketStandardCellViewModel]()
     private var wallpaperManager: WallpaperManager
+    private var prefs: Prefs
 
     init(pocketDataAdaptor: PocketDataAdaptor,
          isZeroSearch: Bool = false,
+         theme: Theme,
+         prefs: Prefs,
          wallpaperManager: WallpaperManager) {
         self.dataAdaptor = pocketDataAdaptor
         self.isZeroSearch = isZeroSearch
+        self.theme = theme
+        self.prefs = prefs
         self.wallpaperManager = wallpaperManager
     }
 
@@ -43,7 +50,7 @@ class PocketViewModel {
         if device == .pad {
             return .absolute(PocketStandardCell.UX.cellWidth) // iPad
         } else if isLandscape {
-            return .fractionalWidth(UX.fractionalWidthiPhoneLanscape)
+            return .fractionalWidth(UX.fractionalWidthiPhoneLandscape)
         } else {
             return .fractionalWidth(UX.fractionalWidthiPhonePortrait)
         }
@@ -115,16 +122,14 @@ class PocketViewModel {
 }
 
 // MARK: HomeViewModelProtocol
-extension PocketViewModel: HomepageViewModelProtocol, FeatureFlaggable {
-
+extension PocketViewModel: HomepageViewModelProtocol {
     var sectionType: HomepageSectionType {
         return .pocket
     }
 
     var headerViewModel: LabelButtonHeaderViewModel {
         var textColor: UIColor?
-        if let wallpaperVersion: WallpaperVersion = featureFlags.getCustomState(for: .wallpaperVersion),
-           wallpaperVersion == .v1 {
+        if wallpaperManager.featureAvailable {
             textColor = wallpaperManager.currentWallpaper.textColor
         }
 
@@ -135,7 +140,7 @@ extension PocketViewModel: HomepageViewModelProtocol, FeatureFlaggable {
             textColor: textColor)
     }
 
-    func section(for traitCollection: UITraitCollection) -> NSCollectionLayoutSection {
+    func section(for traitCollection: UITraitCollection, size: CGSize) -> NSCollectionLayoutSection {
         let itemSize = NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1),
             heightDimension: .estimated(PocketStandardCell.UX.cellHeight)
@@ -157,20 +162,20 @@ extension PocketViewModel: HomepageViewModelProtocol, FeatureFlaggable {
             trailing: PocketStandardCell.UX.interGroupSpacing)
 
         let section = NSCollectionLayoutSection(group: group)
-        let headerSize = NSCollectionLayoutSize(widthDimension: .fractionalWidth(1),
-                                                heightDimension: .estimated(34))
-        let header = NSCollectionLayoutBoundarySupplementaryItem(layoutSize: headerSize,
+        let headerFooterSize = NSCollectionLayoutSize(widthDimension: .fractionalWidth(1),
+                                                      heightDimension: .estimated(UX.headerFooterHeight))
+        let header = NSCollectionLayoutBoundarySupplementaryItem(layoutSize: headerFooterSize,
                                                                  elementKind: UICollectionView.elementKindSectionHeader,
                                                                  alignment: .top)
-        section.boundarySupplementaryItems = [header]
-        section.visibleItemsInvalidationHandler = { (visibleItems, point, env) -> Void in
-            self.onScroll?(visibleItems)
-        }
+        let footer = NSCollectionLayoutBoundarySupplementaryItem(layoutSize: headerFooterSize,
+                                                                 elementKind: UICollectionView.elementKindSectionFooter,
+                                                                 alignment: .bottom)
+        section.boundarySupplementaryItems = [header, footer]
 
         let leadingInset = HomepageViewModel.UX.leadingInset(traitCollection: traitCollection)
         section.contentInsets = NSDirectionalEdgeInsets(top: 0,
                                                         leading: leadingInset,
-                                                        bottom: HomepageViewModel.UX.spacingBetweenSections,
+                                                        bottom: UX.sectionBottomSpacing,
                                                         trailing: 0)
         section.orthogonalScrollingBehavior = .continuous
         return section
@@ -182,31 +187,27 @@ extension PocketViewModel: HomepageViewModelProtocol, FeatureFlaggable {
     }
 
     var isEnabled: Bool {
-        // For Pocket, the user preference check returns a user preference if it exists in
-        // UserDefaults, and, if it does not, it will return a default preference based on
-        // a (nimbus pocket section enabled && Pocket.isLocaleSupported) check
-        return featureFlags.isFeatureEnabled(.pocket, checking: .buildAndUser)
+        let isFeatureEnabled = prefs.boolForKey(PrefsKeys.UserFeatureFlagPrefs.ASPocketStories) ?? true
+        return isFeatureEnabled && PocketProvider.islocaleSupported(Locale.current.identifier)
     }
 
     var hasData: Bool {
         return !pocketStoriesViewModels.isEmpty
     }
 
-    func refreshData(for traitCollection: UITraitCollection,
-                     isPortrait: Bool = UIWindow.isPortrait,
-                     device: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom) {}
-
     func screenWasShown() {
         hasSentPocketSectionEvent = false
+    }
+
+    func setTheme(theme: Theme) {
+        self.theme = theme
     }
 }
 
 // MARK: FxHomeSectionHandler
 extension PocketViewModel: HomepageSectionHandler {
-
     func configure(_ collectionView: UICollectionView,
                    at indexPath: IndexPath) -> UICollectionViewCell {
-
         recordSectionHasShown()
 
         if isStoryCell(index: indexPath.row) {
@@ -214,12 +215,12 @@ extension PocketViewModel: HomepageSectionHandler {
                                                           for: indexPath) as! PocketStandardCell
             let viewModel = pocketStoriesViewModels[indexPath.row]
             viewModel.tag = indexPath.row
-            cell.configure(viewModel: viewModel)
+            cell.configure(viewModel: viewModel, theme: theme)
             return cell
         } else {
             let cell = collectionView.dequeueReusableCell(withReuseIdentifier: PocketDiscoverCell.cellIdentifier,
                                                           for: indexPath) as! PocketDiscoverCell
-            cell.configure(text: .FirefoxHomepage.Pocket.DiscoverMore)
+            cell.configure(text: .FirefoxHomepage.Pocket.DiscoverMore, theme: theme)
             return cell
         }
     }
@@ -233,10 +234,8 @@ extension PocketViewModel: HomepageSectionHandler {
     func didSelectItem(at indexPath: IndexPath,
                        homePanelDelegate: HomePanelDelegate?,
                        libraryPanelDelegate: LibraryPanelDelegate?) {
-
         if isStoryCell(index: indexPath.row) {
             pocketStoriesViewModels[indexPath.row].onTap(indexPath)
-
         } else {
             showDiscoverMore()
         }

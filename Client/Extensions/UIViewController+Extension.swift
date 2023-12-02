@@ -1,8 +1,9 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
-* License, v. 2.0. If a copy of the MPL was not distributed with this
-* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Shared
+import Common
 
 enum NavigationItemLocation {
     case Left
@@ -25,7 +26,7 @@ enum NavigationItemText {
 
 struct ViewControllerConsts {
     struct PreferredSize {
-        static let IntroViewController = CGSize(width: 375, height: 667)
+        static let IntroViewController = CGSize(width: 570, height: 755)
         static let UpdateViewController = CGSize(width: 375, height: 667)
         static let DBOnboardingViewController = CGSize(width: 624, height: 680)
     }
@@ -75,7 +76,8 @@ extension UIViewController {
         presentWithModalDismissIfNeeded(themedNavigationController, animated: true)
     }
 
-    @objc func dismissVC() {
+    @objc
+    func dismissVC() {
         self.dismiss(animated: true, completion: nil)
     }
 
@@ -89,5 +91,50 @@ extension UIViewController {
         } else {
             present(viewController, animated: animated, completion: nil)
         }
+    }
+
+    /// Returns the `SceneDelegate` that's foregrounded, active and currently engaged with.
+    var sceneForVC: SceneDelegate? {
+        guard let scene = walkChainUntil(visiting: UIWindow.self)?
+            .windowScene?
+            .delegate as? SceneDelegate
+        else { return nil }
+
+        return scene
+    }
+
+    // MARK: - Logger Swizzling
+
+    /// Ignore some view controller out of logs to avoid spamming the logger, which would reduce the usefulness of logging view controllers
+    private enum LoggerIgnoreViewController: String, CaseIterable {
+        case compatibility = "UICompatibilityInputViewController"
+        case defaultTheme = "ThemedDefaultNavigationController"
+        case dismissable = "DismissableNavigationViewController"
+        case editingOverlay = "UIEditingOverlayViewController"
+        case inputWindow = "UIInputWindowController"
+        case themed = "ThemedNavigationController"
+        case screenTime = "STWebpageController"
+        case remoteScreenTime = "STWebRemoteViewController"
+    }
+
+    /// Add a swizzle on top of the viewWillAppear function to log whenever a view controller will appear. Needs to be only called once on app launch.
+    static func loggerSwizzle() {
+        let originalSelector = #selector(UIViewController.viewWillAppear(_:))
+        let swizzledSelector = #selector(UIViewController.loggerViewWillAppear(_:))
+
+        guard let originalMethod = class_getInstanceMethod(self, originalSelector),
+              let swizzledMethod = class_getInstanceMethod(self, swizzledSelector) else { return }
+
+        method_exchangeImplementations(originalMethod, swizzledMethod)
+    }
+
+    @objc
+    private func loggerViewWillAppear(_ animated: Bool) {
+        let values: [String] = LoggerIgnoreViewController.allCases.map { $0.rawValue }
+        if !values.contains("\(type(of: self))") {
+            DefaultLogger.shared.log("\(type(of: self)) will appear", level: .info, category: .lifecycle)
+        }
+
+        loggerViewWillAppear(animated)
     }
 }

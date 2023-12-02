@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import Shared
@@ -13,13 +13,13 @@ protocol CredentialWelcomeViewControllerDelegate: AnyObject {
 class CredentialWelcomeViewController: UIViewController {
     var delegate: CredentialWelcomeViewControllerDelegate?
 
-    lazy private var logoImageView: UIImageView = {
+    private lazy var logoImageView: UIImageView = {
         let image = UIImageView(image: UIImage(named: "logo-glyph"))
         image.translatesAutoresizingMaskIntoConstraints = false
         return image
     }()
 
-    lazy private var titleLabel: UILabel = {
+    private lazy var titleLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
         label.text = .LoginsWelcomeViewTitle2
@@ -29,7 +29,7 @@ class CredentialWelcomeViewController: UIViewController {
         return label
     }()
 
-    lazy private var taglineLabel: UILabel = {
+    private lazy var taglineLabel: UILabel = {
         let label = UILabel()
         label.translatesAutoresizingMaskIntoConstraints = false
         label.text = .LoginsWelcomeViewTagline
@@ -39,7 +39,7 @@ class CredentialWelcomeViewController: UIViewController {
         return label
     }()
 
-    lazy private var cancelButton: UIButton = {
+    private lazy var cancelButton: UIButton = {
         let button = UIButton(type: .system)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.setTitle(.CancelString, for: .normal)
@@ -47,7 +47,7 @@ class CredentialWelcomeViewController: UIViewController {
         return button
     }()
 
-    lazy private var proceedButton: UIButton = {
+    private lazy var proceedButton: UIButton = {
         let button = UIButton(type: .custom)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.backgroundColor = UIColor.Photon.Blue50
@@ -93,11 +93,13 @@ class CredentialWelcomeViewController: UIViewController {
         ])
     }
 
-    @objc func cancelButtonTapped(_ sender: UIButton) {
+    @objc
+    func cancelButtonTapped(_ sender: UIButton) {
         delegate?.credentialWelcomeViewControllerDidCancel()
     }
 
-    @objc func proceedButtonTapped(_ sender: UIButton) {
+    @objc
+    func proceedButtonTapped(_ sender: UIButton) {
         delegate?.credentialWelcomeViewControllerDidProceed()
     }
 }

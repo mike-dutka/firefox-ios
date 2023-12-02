@@ -1,12 +1,14 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
+import Common
+import ComponentLibrary
+import Shared
 
 struct LabelButtonHeaderViewModel {
     var leadingInset: CGFloat = 0
-    var trailingInset: CGFloat = HomepageViewModel.UX.standardInset
     var title: String?
     var titleA11yIdentifier: String?
     var isButtonHidden: Bool
@@ -22,13 +24,14 @@ struct LabelButtonHeaderViewModel {
 
 // Firefox home view controller header view
 class LabelButtonHeaderView: UICollectionReusableView, ReusableCell {
-
     struct UX {
         static let titleLabelTextSize: CGFloat = 20
         static let moreButtonTextSize: CGFloat = 15
         static let inBetweenSpace: CGFloat = 12
         static let bottomSpace: CGFloat = 10
         static let bottomButtonSpace: CGFloat = 6
+        static let leadingInset: CGFloat = 0
+        static let trailingInset: CGFloat = HomepageViewModel.UX.standardInset
     }
 
     // MARK: - UIElements
@@ -41,18 +44,16 @@ class LabelButtonHeaderView: UICollectionReusableView, ReusableCell {
 
     lazy var titleLabel: UILabel = .build { label in
         label.text = self.title
-        label.font = DynamicFontHelper.defaultHelper.preferredBoldFont(withTextStyle: .title3,
-                                                                       size: UX.titleLabelTextSize)
+        label.font = DefaultDynamicFontHelper.preferredBoldFont(withTextStyle: .title3,
+                                                                size: UX.titleLabelTextSize)
         label.adjustsFontForContentSizeCategory = true
         label.numberOfLines = 0
     }
 
     private lazy var moreButton: ActionButton = .build { button in
         button.isHidden = true
-        button.titleLabel?.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .subheadline,
-                                                                                size: UX.moreButtonTextSize)
-        button.contentHorizontalAlignment = .trailing
-        button.setTitleColor(UIColor.Photon.Grey50, for: .highlighted)
+        button.titleLabel?.font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .subheadline,
+                                                                         size: UX.moreButtonTextSize)
     }
 
     // MARK: - Variables
@@ -64,6 +65,7 @@ class LabelButtonHeaderView: UICollectionReusableView, ReusableCell {
 
     private var viewModel: LabelButtonHeaderViewModel?
     var notificationCenter: NotificationProtocol = NotificationCenter.default
+    private var stackViewLeadingConstraint: NSLayoutConstraint!
 
     // MARK: - Initializers
     override init(frame: CGRect) {
@@ -72,23 +74,31 @@ class LabelButtonHeaderView: UICollectionReusableView, ReusableCell {
         stackView.addArrangedSubview(moreButton)
         addSubview(stackView)
 
-        applyTheme()
-        adjustLayout()
+        setupLayout()
         setupNotifications(forObserver: self,
-                           observing: [.DisplayThemeChanged, .DynamicFontChanged])
+                           observing: [.DynamicFontChanged])
     }
 
-    func setConstraints(viewModel: LabelButtonHeaderViewModel) {
+    private func setupLayout() {
+        stackView.addArrangedSubview(titleLabel)
+        stackView.addArrangedSubview(moreButton)
+        addSubview(stackView)
+
+        stackViewLeadingConstraint = stackView.leadingAnchor.constraint(equalTo: leadingAnchor,
+                                                                        constant: UX.leadingInset)
         NSLayoutConstraint.activate([
             stackView.topAnchor.constraint(equalTo: topAnchor),
-            stackView.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor,
-                                               constant: viewModel.leadingInset),
-            stackView.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor,
-                                                constant: -viewModel.trailingInset),
+            stackViewLeadingConstraint,
+            stackView.trailingAnchor.constraint(equalTo: trailingAnchor,
+                                                constant: -UX.trailingInset),
             stackView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -UX.bottomSpace),
         ])
 
-        moreButton.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        // Setting custom values to resolve horizontal ambiguity
+        titleLabel.setContentCompressionResistancePriority(UILayoutPriority(751), for: .horizontal)
+        titleLabel.setContentHuggingPriority(UILayoutPriority(251), for: .horizontal)
+
+        adjustLayout()
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -109,7 +119,7 @@ class LabelButtonHeaderView: UICollectionReusableView, ReusableCell {
         moreButton.removeTarget(nil, action: nil, for: .allEvents)
     }
 
-    func configure(viewModel: LabelButtonHeaderViewModel) {
+    func configure(viewModel: LabelButtonHeaderViewModel, theme: Theme) {
         self.viewModel = viewModel
 
         title = viewModel.title
@@ -122,8 +132,9 @@ class LabelButtonHeaderView: UICollectionReusableView, ReusableCell {
             moreButton.accessibilityIdentifier = viewModel.buttonA11yIdentifier
         }
 
-        setConstraints(viewModel: viewModel)
-        applyTheme()
+        // Update constant value for `TabDisplayManager` usage that is not using Section inset
+        stackViewLeadingConstraint?.constant = viewModel.leadingInset
+        applyTheme(theme: theme)
     }
 
     // MARK: - Dynamic Type Support
@@ -145,16 +156,20 @@ class LabelButtonHeaderView: UICollectionReusableView, ReusableCell {
             stackView.axis = .horizontal
             moreButton.contentHorizontalAlignment = .trailing
         }
+
+        setNeedsLayout()
+        layoutIfNeeded()
     }
 }
 
 // MARK: - Theme
-extension LabelButtonHeaderView: NotificationThemeable {
-    func applyTheme() {
-        let textColor = viewModel?.textColor ?? LegacyThemeManager.instance.current.homePanel.topSiteHeaderTitle
+extension LabelButtonHeaderView: ThemeApplicable {
+    func applyTheme(theme: Theme) {
+        let titleColor = viewModel?.textColor ?? theme.colors.textPrimary
+        let moreButtonColor = viewModel?.textColor ?? theme.colors.textAccent
 
-        titleLabel.textColor = textColor
-        moreButton.setTitleColor(textColor, for: .normal)
+        titleLabel.textColor = titleColor
+        moreButton.setTitleColor(moreButtonColor, for: .normal)
     }
 }
 
@@ -162,8 +177,6 @@ extension LabelButtonHeaderView: NotificationThemeable {
 extension LabelButtonHeaderView: Notifiable {
     func handleNotifications(_ notification: Notification) {
         switch notification.name {
-        case .DisplayThemeChanged:
-            applyTheme()
         case .DynamicFontChanged:
             adjustLayout()
         default: break

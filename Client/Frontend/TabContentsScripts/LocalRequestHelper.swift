@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import WebKit
@@ -21,7 +21,6 @@ class LocalRequestHelper: TabContentScript {
         guard let token = params["appIdToken"],
               token == UserScriptManager.appIdToken
         else {
-            print("Missing required appid token.")
             return
         }
 

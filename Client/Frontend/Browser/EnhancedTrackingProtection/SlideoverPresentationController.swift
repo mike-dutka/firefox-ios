@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 
@@ -11,10 +11,10 @@ struct SlideOverUXConstants {
 }
 
 class SlideOverPresentationController: UIPresentationController {
-
     let blurEffectView: UIVisualEffectView!
-    var tapGestureRecognizer: UITapGestureRecognizer = UITapGestureRecognizer()
+    var tapGestureRecognizer = UITapGestureRecognizer()
     var globalETPStatus: Bool
+    weak var enhancedTrackingProtectionMenuDelegate: EnhancedTrackingProtectionMenuDelegate?
 
     init(presentedViewController: UIViewController, presenting presentingViewController: UIViewController?, withGlobalETPStatus status: Bool) {
         globalETPStatus = status
@@ -76,7 +76,8 @@ class SlideOverPresentationController: UIPresentationController {
         blurEffectView.frame = containerView!.bounds
     }
 
-    @objc func dismissController() {
-        presentedViewController.dismiss(animated: true, completion: nil)
+    @objc
+    func dismissController() {
+        enhancedTrackingProtectionMenuDelegate?.didFinish()
     }
 }

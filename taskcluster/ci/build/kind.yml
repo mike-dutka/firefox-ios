@@ -11,7 +11,7 @@ transforms:
     - taskgraph.transforms.task:transforms
 
 
-jobs:
+tasks:
     screenshots:
         attributes:
             chunk_locales: ["en-US"]
@@ -25,3 +25,8 @@ jobs:
                 - type: file
                   name: public/build/target.zip
                   path: /builds/worker/artifacts/l10n-screenshots-dd.zip
+        treeherder:
+            symbol: B(screenshots)
+            kind: build
+            tier: 1
+            platform: ios/opt

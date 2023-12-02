@@ -17,11 +17,6 @@ if [ -d l10n-screenshots ]; then
     exit 1
 fi
 
-if [ ! -d firefoxios-l10n ]; then
-    echo "Did not find a firefox-ios-l10n checkout. Are you running this on a localized build?"
-    exit 1
-fi
-
 mkdir -p l10n-screenshots
 
 if [ "$1" = '--test-without-building' ]; then
@@ -39,12 +34,13 @@ for lang in $LOCALES; do
     echo "$(date) Snapshotting $lang"
     mkdir "l10n-screenshots/$lang"
     fastlane snapshot --project Client.xcodeproj --scheme L10nSnapshotTests \
+        --number_of_retries 0 \
         --skip_open_summary \
         --xcargs "-maximum-parallel-testing-workers 2" \
         --derived_data_path l10n-screenshots-dd \
-        --ios_version "14.5" \
+        --ios_version "16.4" \
         --erase_simulator --localize_simulator \
-        --devices "iPhone 8" --languages "$lang" \
+        --devices "iPhone 14" --languages "$lang" \
         --output_directory "l10n-screenshots/$lang" \
         $EXTRA_FAST_LANE_ARGS
     echo "Fastlane exited with code: $?"

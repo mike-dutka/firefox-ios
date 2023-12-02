@@ -6,7 +6,6 @@ import Foundation
 
 /// A view whose primary modifiable layer is a gradient layer
 public class ConfigurableGradientView: UIView {
-
     init() {
         super.init(frame: .zero)
     }
@@ -20,7 +19,7 @@ public class ConfigurableGradientView: UIView {
         return layer as! CAGradientLayer
     }
 
-    public override class var layerClass: AnyClass {
+    override public class var layerClass: AnyClass {
         return CAGradientLayer.self
     }
 

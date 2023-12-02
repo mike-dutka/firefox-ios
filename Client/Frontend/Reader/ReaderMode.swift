@@ -1,12 +1,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
 import WebKit
 
-private let log = Logger.browserLogger
 let ReaderModeProfileKeyStyle = "readermode.style"
 
 enum ReaderModeMessageType: String {
@@ -26,28 +26,14 @@ enum ReaderModeState: String {
 }
 
 enum ReaderModeTheme: String {
-    case light = "light"
-    case dark = "dark"
-    case sepia = "sepia"
+    case light
+    case dark
+    case sepia
 
     static func preferredTheme(for theme: ReaderModeTheme? = nil) -> ReaderModeTheme {
-        // If there is no reader theme provided than we default to light theme
-        let readerTheme = theme ?? .light
-        // Get current Firefox theme (Dark vs Normal)
-        // Normal means light theme. This is the overall theme used
-        // by Firefox iOS app
-        let appWideTheme = LegacyThemeManager.instance.currentName
-        // We check for 3 basic themes we have Light / Dark / Sepia
-        // Theme: Dark - app-wide dark overrides all
-        if appWideTheme == .dark {
-            return .dark
-        // Theme: Sepia - special case for when the theme is sepia.
-        // For this we only check the them supplied and not the app wide theme
-        } else if readerTheme == .sepia {
-            return .sepia
-        }
-        // Theme: Light - Default case for when there is no theme supplied i.e. nil and we revert to light
-        return readerTheme
+        let themeManager: ThemeManager = AppContainer.shared.resolve()
+        guard themeManager.currentTheme.type != .dark else { return .dark }
+        return theme ?? .light
     }
 }
 
@@ -69,10 +55,10 @@ enum ReaderModeFontType: String {
 
         switch font {
         case .serif,
-             .serifBold:
+                .serifBold:
             self = isBoldFontEnabled ? .serifBold : .serif
         case .sansSerif,
-             .sansSerifBold:
+                .sansSerifBold:
             self = isBoldFontEnabled ? .sansSerifBold : .sansSerif
         case .none:
             self = .sansSerif
@@ -190,79 +176,85 @@ struct ReaderModeStyle {
     mutating func ensurePreferredColorThemeIfNeeded() {
         self.theme = ReaderModeTheme.preferredTheme(for: self.theme)
     }
-}
 
-let DefaultReaderModeStyle = ReaderModeStyle(theme: .light, fontType: .sansSerif, fontSize: ReaderModeFontSize.defaultSize)
+    static let `default` = ReaderModeStyle(theme: .light, fontType: .sansSerif, fontSize: ReaderModeFontSize.defaultSize)
+}
 
 /// This struct captures the response from the Readability.js code.
 struct ReadabilityResult {
-    var domain = ""
-    var url = ""
-    var content = ""
-    var textContent = ""
-    var title = ""
-    var credits = ""
-    var excerpt = ""
+    /// The `dir` global attribute is an enumerated attribute that indicates the directionality of the element's text
+    enum Direction: String {
+        /// Direction for languages that are written from the left to the right
+        case leftToRight = "ltr"
+        /// Direction for languages that are written from the right to the left
+        case rightToLeft = "rtl"
+        /// Direction base on the user agent algorithm, which uses a basic algorithm
+        /// as it parses the characters inside the element until it finds a character
+        /// with a strong directionality, then applies that directionality to the
+        /// whole element
+        case auto
+    }
+    let content: String
+    let textContent: String
+    let title: String
+    let credits: String
+    let byline: String
+    let excerpt: String
+    let length: Int
+    let language: String
+    let siteName: String
+    let direction: Direction
 
     init?(object: AnyObject?) {
-        if let dict = object as? NSDictionary {
-            if let uri = dict["uri"] as? NSDictionary {
-                if let url = uri["spec"] as? String {
-                    self.url = url
-                }
-                if let host = uri["host"] as? String {
-                    self.domain = host
-                }
-            }
-            if let content = dict["content"] as? String {
-                self.content = content
-            }
-            if let textContent = dict["textContent"] as? String {
-                self.textContent = textContent
-            }
-            if let excerpt = dict["excerpt"] as? String {
-                self.excerpt = excerpt
-            }
-            if let title = dict["title"] as? String {
-                self.title = title
-            }
-            if let credits = dict["byline"] as? String {
-                self.credits = credits
-            }
-        } else {
-            return nil
-        }
+        guard let dict = object as? NSDictionary else { return nil }
+
+        self.content = dict["content"] as? String ?? ""
+        self.textContent = dict["textContent"] as? String ?? ""
+        self.excerpt = dict["excerpt"] as? String ?? ""
+        self.title = dict["title"] as? String ?? ""
+        self.length = dict["length"] as? Int ?? .zero
+        self.language = dict["language"] as? String ?? ""
+        self.siteName = dict["siteName"] as? String ?? ""
+        self.credits = dict["credits"] as? String ?? ""
+        self.byline = dict["byline"] as? String ?? ""
+        self.direction = Direction(rawValue: dict["dir"] as? String ?? "") ?? .auto
     }
 
     /// Initialize from a JSON encoded string
     init?(string: String) {
         guard let data = string.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [String: String] else { return nil }
+              let object = try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed) as? [String: Any],
+              let content = object["content"] as? String,
+              let title = object["title"] as? String,
+              let credits = object["byline"] as? String
+        else { return nil }
 
-        let domain = object["domain"]
-        let url = object["url"]
-        let content = object["content"]
-        let textContent = object["textContent"]
-        let excerpt = object["excerpt"]
-        let title = object["title"]
-        let credits = object["credits"]
-
-        if domain == nil || url == nil || content == nil || title == nil || credits == nil {
-            return nil
-        }
-
-        self.domain = domain!
-        self.url = url!
-        self.content = content!
-        self.title = title!
-        self.credits = credits!
-        self.textContent = textContent ?? ""
-        self.excerpt = excerpt ?? ""
+        self.content = content
+        self.title = title
+        self.credits = credits
+        self.textContent = object["textContent"] as? String ?? ""
+        self.excerpt = object["excerpt"] as? String ?? ""
+        self.length = object["length"] as? Int ?? .zero
+        self.language = object["language"] as? String ?? ""
+        self.siteName = object["siteName"] as? String ?? ""
+        self.byline = object["byline"] as? String ?? ""
+        self.direction = Direction(rawValue: object["dir"] as? String ?? "") ?? .auto
     }
 
     /// Encode to a dictionary, which can then for example be json encoded
     func encode() -> [String: Any] {
-        return ["domain": domain, "url": url, "content": content, "title": title, "credits": credits, "textContent": textContent, "excerpt": excerpt]
+        return [
+            "content": content,
+            "title": title,
+            "credits": credits,
+            "textContent": textContent,
+            "excerpt": excerpt,
+            "byline": byline,
+            "length": length,
+            "dir": direction.rawValue,
+            "siteName": siteName,
+            "lang": language
+        ]
     }
 
     /// Encode to a JSON encoded string
@@ -284,6 +276,7 @@ let ReaderModeNamespace = "window.__firefox__.reader"
 class ReaderMode: TabContentScript {
     weak var delegate: ReaderModeDelegate?
 
+    private var logger: Logger
     fileprivate weak var tab: Tab?
     var state = ReaderModeState.unavailable
     fileprivate var originalURL: URL?
@@ -292,8 +285,10 @@ class ReaderMode: TabContentScript {
         return "ReaderMode"
     }
 
-    required init(tab: Tab) {
+    required init(tab: Tab,
+                  logger: Logger = DefaultLogger.shared) {
         self.tab = tab
+        self.logger = logger
     }
 
     func scriptMessageHandlerName() -> String? {
@@ -302,10 +297,10 @@ class ReaderMode: TabContentScript {
 
     fileprivate func handleReaderPageEvent(_ readerPageEvent: ReaderPageEvent) {
         switch readerPageEvent {
-            case .pageShow:
-                if let tab = tab {
-                    delegate?.readerMode(self, didDisplayReaderizedContentForTab: tab)
-                }
+        case .pageShow:
+            if let tab = tab {
+                delegate?.readerMode(self, didDisplayReaderizedContentForTab: tab)
+            }
         }
     }
 
@@ -317,7 +312,9 @@ class ReaderMode: TabContentScript {
 
     fileprivate func handleReaderContentParsed(_ readabilityResult: ReadabilityResult) {
         guard let tab = tab else { return }
-        log.info("ReaderMode: Readability result available!")
+        logger.log("Reader content parsed",
+                   level: .debug,
+                   category: .library)
         tab.readabilityResult = readabilityResult
         delegate?.readerMode(self, didParseReadabilityResult: readabilityResult, forTab: tab)
     }
@@ -329,22 +326,22 @@ class ReaderMode: TabContentScript {
         else { return }
 
         switch messageType {
-            case .pageEvent:
-                if let readerPageEvent = ReaderPageEvent(rawValue: msg["Value"] as? String ?? "Invalid") {
-                    handleReaderPageEvent(readerPageEvent)
-                }
-            case .stateChange:
-                if let readerModeState = ReaderModeState(rawValue: msg["Value"] as? String ?? "Invalid") {
-                    handleReaderModeStateChange(readerModeState)
-                }
-            case .contentParsed:
-                if let readabilityResult = ReadabilityResult(object: msg["Value"] as AnyObject?) {
-                    handleReaderContentParsed(readabilityResult)
-                }
+        case .pageEvent:
+            if let readerPageEvent = ReaderPageEvent(rawValue: msg["Value"] as? String ?? "Invalid") {
+                handleReaderPageEvent(readerPageEvent)
+            }
+        case .stateChange:
+            if let readerModeState = ReaderModeState(rawValue: msg["Value"] as? String ?? "Invalid") {
+                handleReaderModeStateChange(readerModeState)
+            }
+        case .contentParsed:
+            if let readabilityResult = ReadabilityResult(object: msg["Value"] as AnyObject?) {
+                handleReaderContentParsed(readabilityResult)
+            }
         }
     }
 
-    var style: ReaderModeStyle = DefaultReaderModeStyle {
+    var style: ReaderModeStyle = .default {
         didSet {
             if state == ReaderModeState.active {
                 tab?.webView?.evaluateJavascriptInDefaultContentWorld("\(ReaderModeNamespace).setStyle(\(style.encode()))") { object, error in

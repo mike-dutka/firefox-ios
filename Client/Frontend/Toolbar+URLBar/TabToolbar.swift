@@ -1,12 +1,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import UIKit
 import Shared
 
-class TabToolbar: UIView, FeatureFlaggable {
-
+class TabToolbar: UIView, SearchBarLocationProvider {
     // MARK: - Variables
 
     weak var tabToolbarDelegate: TabToolbarDelegate?
@@ -18,27 +18,19 @@ class TabToolbar: UIView, FeatureFlaggable {
     let forwardButton = ToolbarButton()
     let backButton = ToolbarButton()
     let multiStateButton = ToolbarButton()
-    let actionButtons: [NotificationThemeable & UIButton]
+    let actionButtons: [ThemeApplicable & UIButton]
 
-    private var isBottomSearchBar: Bool {
-        guard SearchBarSettingsViewModel.isEnabled else { return false }
-
-        if let position: SearchBarPosition = featureFlags.getCustomState(for: .searchBarPosition) {
-            return position == .bottom
-        }
-
-        return false
-    }
-
-    private let privateModeBadge = BadgeWithBackdrop(imageName: "privateModeBadge", backdropCircleColor: UIColor.Defaults.MobilePrivatePurple)
-    private let appMenuBadge = BadgeWithBackdrop(imageName: "menuBadge")
-    private let warningMenuBadge = BadgeWithBackdrop(imageName: "menuWarning", imageMask: "warning-mask")
+    private let privateModeBadge = BadgeWithBackdrop(imageName: ImageIdentifiers.privateModeBadge,
+                                                     isPrivateBadge: true)
+    private let appMenuBadge = BadgeWithBackdrop(imageName: ImageIdentifiers.menuBadge)
+    private let warningMenuBadge = BadgeWithBackdrop(imageName: ImageIdentifiers.menuWarning,
+                                                     imageMask: ImageIdentifiers.menuWarningMask)
 
     var helper: TabToolbarHelper?
     private let contentView = UIStackView()
 
     // MARK: - Initializers
-    private override init(frame: CGRect) {
+    override private init(frame: CGRect) {
         actionButtons = [backButton, forwardButton, multiStateButton, addNewTabButton, tabsButton, appMenuButton]
         super.init(frame: frame)
         setupAccessibility()
@@ -71,17 +63,16 @@ class TabToolbar: UIView, FeatureFlaggable {
             contentView.topAnchor.constraint(equalTo: topAnchor),
             contentView.leadingAnchor.constraint(equalTo: leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            contentView.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor)
+            contentView.bottomAnchor.constraint(equalTo: safeAreaLayoutGuide.bottomAnchor),
         ])
         super.updateConstraints()
     }
 
     private func setupAccessibility() {
-        backButton.accessibilityIdentifier = "TabToolbar.backButton"
-        forwardButton.accessibilityIdentifier = "TabToolbar.forwardButton"
-        multiStateButton.accessibilityIdentifier = "TabToolbar.multiStateButton"
-        tabsButton.accessibilityIdentifier = "TabToolbar.tabsButton"
-        addNewTabButton.accessibilityIdentifier = "TabToolbar.addNewTabButton"
+        backButton.accessibilityIdentifier = AccessibilityIdentifiers.Toolbar.backButton
+        forwardButton.accessibilityIdentifier = AccessibilityIdentifiers.Toolbar.forwardButton
+        tabsButton.accessibilityIdentifier = AccessibilityIdentifiers.Toolbar.tabsButton
+        addNewTabButton.accessibilityIdentifier = AccessibilityIdentifiers.Toolbar.addNewTabButton
         appMenuButton.accessibilityIdentifier = AccessibilityIdentifiers.Toolbar.settingsMenuButton
         accessibilityNavigationStyle = .combined
         accessibilityLabel = .TabToolbarNavigationToolbarAccessibilityLabel
@@ -135,9 +126,7 @@ extension TabToolbar: TabToolbarProtocol {
         helper?.setMiddleButtonState(state)
     }
 
-    func updatePageStatus(_ isWebPage: Bool) {
-
-    }
+    func updatePageStatus(_ isWebPage: Bool) { }
 
     func updateTabCount(_ count: Int, animated: Bool) {
         tabsButton.updateTabCount(count, animated: animated)
@@ -145,18 +134,17 @@ extension TabToolbar: TabToolbarProtocol {
 }
 
 // MARK: - Theme protocols
+extension TabToolbar: ThemeApplicable, PrivateModeUI {
+    func applyTheme(theme: Theme) {
+        backgroundColor = theme.colors.layer1
+        actionButtons.forEach { $0.applyTheme(theme: theme) }
 
-extension TabToolbar: NotificationThemeable, PrivateModeUI {
-    func applyTheme() {
-        backgroundColor = UIColor.theme.browser.background
-        helper?.setTheme(forButtons: actionButtons)
-
-        privateModeBadge.badge.tintBackground(color: UIColor.theme.browser.background)
-        appMenuBadge.badge.tintBackground(color: UIColor.theme.browser.background)
-        warningMenuBadge.badge.tintBackground(color: UIColor.theme.browser.background)
+        privateModeBadge.badge.tintBackground(color: theme.colors.layer1)
+        appMenuBadge.badge.tintBackground(color: theme.colors.layer1)
+        warningMenuBadge.badge.tintBackground(color: theme.colors.layer1)
     }
 
-    func applyUIMode(isPrivate: Bool) {
+    func applyUIMode(isPrivate: Bool, theme: Theme) {
         privateModeBadge(visible: isPrivate)
     }
 }

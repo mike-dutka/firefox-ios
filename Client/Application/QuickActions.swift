@@ -1,13 +1,13 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
+import Common
 import Storage
-
 import Shared
-import XCGLogger
 
+// MARK: - ShortcutType
 enum ShortcutType: String {
     case newTab = "NewTab"
     case newPrivateTab = "NewPrivateTab"
@@ -25,115 +25,101 @@ enum ShortcutType: String {
     }
 }
 
-class QuickActions: NSObject {
+// MARK: - QuickActionInfos
+struct QuickActionInfos {
+    static let version = "1.0"
+    static let versionKey = "dynamicQuickActionsVersion"
+    static let tabURLKey = "url"
+    static let tabTitleKey = "title"
+}
 
-    fileprivate let log = Logger.browserLogger
+// MARK: - QuickActions
+protocol QuickActions {
+    func addDynamicApplicationShortcutItemOfType(
+        _ type: ShortcutType,
+        fromShareItem shareItem: ShareItem,
+        toApplication application: UIApplication
+    )
 
-    static let QuickActionsVersion = "1.0"
-    static let QuickActionsVersionKey = "dynamicQuickActionsVersion"
+    func addDynamicApplicationShortcutItemOfType(
+        _ type: ShortcutType,
+        withUserData userData: [String: String],
+        toApplication application: UIApplication
+    )
 
-    static let TabURLKey = "url"
-    static let TabTitleKey = "title"
+    func removeDynamicApplicationShortcutItemOfType(
+        _ type: ShortcutType,
+        fromApplication application: UIApplication
+    )
+}
 
-    static var sharedInstance = QuickActions()
-
-    var launchedShortcutItem: UIApplicationShortcutItem?
-
-    // MARK: Administering Quick Actions
-    func addDynamicApplicationShortcutItemOfType(_ type: ShortcutType, fromShareItem shareItem: ShareItem, toApplication application: UIApplication) {
-            var userData = [QuickActions.TabURLKey: shareItem.url]
-            if let title = shareItem.title {
-                userData[QuickActions.TabTitleKey] = title
-            }
-        QuickActions.sharedInstance.addDynamicApplicationShortcutItemOfType(type, withUserData: userData, toApplication: application)
-    }
-
-    @discardableResult func addDynamicApplicationShortcutItemOfType(
+extension QuickActions {
+    func addDynamicApplicationShortcutItemOfType(
         _ type: ShortcutType,
         withUserData userData: [String: String] = [String: String](),
         toApplication application: UIApplication
-    ) -> Bool {
+    ) {
+        addDynamicApplicationShortcutItemOfType(type, withUserData: userData, toApplication: application)
+    }
+}
+
+struct QuickActionsImplementation: QuickActions {
+    private let logger: Logger
+
+    init(logger: Logger = DefaultLogger.shared) {
+        self.logger = logger
+    }
+
+    // MARK: Administering Quick Actions
+    func addDynamicApplicationShortcutItemOfType(_ type: ShortcutType,
+                                                 fromShareItem shareItem: ShareItem,
+                                                 toApplication application: UIApplication) {
+        var userData = [QuickActionInfos.tabURLKey: shareItem.url]
+        if let title = shareItem.title {
+            userData[QuickActionInfos.tabTitleKey] = title
+        }
+        addDynamicApplicationShortcutItemOfType(type,
+                                                withUserData: userData,
+                                                toApplication: application)
+    }
+
+    func addDynamicApplicationShortcutItemOfType(
+        _ type: ShortcutType,
+        withUserData userData: [String: String] = [String: String](),
+        toApplication application: UIApplication
+    ) {
         // add the quick actions version so that it is always in the user info
         var userData: [String: String] = userData
-        userData[QuickActions.QuickActionsVersionKey] = QuickActions.QuickActionsVersion
+        userData[QuickActionInfos.versionKey] = QuickActionInfos.version
         var dynamicShortcutItems = application.shortcutItems ?? [UIApplicationShortcutItem]()
         switch type {
         case .openLastBookmark:
-            let openLastBookmarkShortcut = UIMutableApplicationShortcutItem(type: ShortcutType.openLastBookmark.type,
+            let openLastBookmarkShortcut = UIMutableApplicationShortcutItem(
+                type: ShortcutType.openLastBookmark.type,
                 localizedTitle: .QuickActionsLastBookmarkTitle,
-                localizedSubtitle: userData[QuickActions.TabTitleKey],
-                icon: UIApplicationShortcutIcon(templateImageName: "quick_action_last_bookmark"),
+                localizedSubtitle: userData[QuickActionInfos.tabTitleKey],
+                icon: UIApplicationShortcutIcon(templateImageName: StandardImageIdentifiers.Large.bookmarkFill),
                 userInfo: userData as [String: NSSecureCoding]
             )
+
             if let index = (dynamicShortcutItems.firstIndex { $0.type == ShortcutType.openLastBookmark.type }) {
                 dynamicShortcutItems[index] = openLastBookmarkShortcut
             } else {
                 dynamicShortcutItems.append(openLastBookmarkShortcut)
             }
         default:
-            log.warning("Cannot add static shortcut item of type \(type)")
-            return false
+            logger.log("Cannot add static shortcut item of type \(type)", level: .warning, category: .unlabeled)
         }
         application.shortcutItems = dynamicShortcutItems
-        return true
     }
 
-    func removeDynamicApplicationShortcutItemOfType(_ type: ShortcutType, fromApplication application: UIApplication) {
+    func removeDynamicApplicationShortcutItemOfType(_ type: ShortcutType,
+                                                    fromApplication application: UIApplication) {
         guard var dynamicShortcutItems = application.shortcutItems,
               let index = (dynamicShortcutItems.firstIndex { $0.type == type.type })
         else { return }
 
         dynamicShortcutItems.remove(at: index)
         application.shortcutItems = dynamicShortcutItems
-    }
-
-    // MARK: Handling Quick Actions
-    @discardableResult func handleShortCutItem(_ shortcutItem: UIApplicationShortcutItem, withBrowserViewController bvc: BrowserViewController ) -> Bool {
-
-        // Verify that the provided `shortcutItem`'s `type` is one handled by the application.
-        guard let shortCutType = ShortcutType(fullType: shortcutItem.type) else { return false }
-
-        DispatchQueue.main.async {
-            self.handleShortCutItemOfType(shortCutType, userData: shortcutItem.userInfo, browserViewController: bvc)
-        }
-
-        return true
-    }
-
-    fileprivate func handleShortCutItemOfType(_ type: ShortcutType, userData: [String: NSSecureCoding]?, browserViewController: BrowserViewController) {
-        switch type {
-        case .newTab:
-            handleOpenNewTab(withBrowserViewController: browserViewController, isPrivate: false)
-        case .newPrivateTab:
-            handleOpenNewTab(withBrowserViewController: browserViewController, isPrivate: true)
-        case .openLastBookmark:
-            if let urlToOpen = (userData?[QuickActions.TabURLKey] as? String)?.asURL {
-                handleOpenURL(withBrowserViewController: browserViewController, urlToOpen: urlToOpen)
-            }
-        case .qrCode:
-            handleQRCode(with: browserViewController)
-        }
-    }
-
-    fileprivate func handleOpenNewTab(withBrowserViewController bvc: BrowserViewController, isPrivate: Bool) {
-        bvc.openBlankNewTab(focusLocationField: true, isPrivate: isPrivate)
-    }
-
-    fileprivate func handleOpenURL(withBrowserViewController bvc: BrowserViewController, urlToOpen: URL) {
-        // open bookmark in a non-private browsing tab
-        bvc.switchToPrivacyMode(isPrivate: false)
-
-        // find out if bookmarked URL is currently open
-        // if so, open to that tab,
-        // otherwise, create a new tab with the bookmarked URL
-        bvc.switchToTabForURLOrOpen(urlToOpen)
-    }
-
-    fileprivate func handleQRCode(with vc: QRCodeViewControllerDelegate & UIViewController) {
-        let qrCodeViewController = QRCodeViewController()
-        qrCodeViewController.qrCodeDelegate = vc
-        let controller = UINavigationController(rootViewController: qrCodeViewController)
-        vc.presentedViewController?.dismiss(animated: true)
-        vc.present(controller, animated: true, completion: nil)
     }
 }

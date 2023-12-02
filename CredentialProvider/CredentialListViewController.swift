@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import AuthenticationServices
@@ -11,9 +11,8 @@ protocol CredentialListViewProtocol: AnyObject {
 }
 
 class CredentialListViewController: UIViewController, CredentialListViewProtocol, UISearchControllerDelegate {
-
     fileprivate let cellIdentifier = "cellidentifier"
-    lazy private var tableView: UITableView = {
+    private lazy var tableView: UITableView = {
         let tableView = UITableView()
         tableView.separatorStyle = .none
         tableView.backgroundColor = UIColor.CredentialProvider.tableViewBackgroundColor
@@ -25,7 +24,7 @@ class CredentialListViewController: UIViewController, CredentialListViewProtocol
         return tableView
     }()
 
-    lazy private var cancelButton: UIButton = {
+    private lazy var cancelButton: UIButton = {
         let button = UIButton(type: UIButton.ButtonType.system)
         button.setTitle(.LoginsListSearchCancel, for: .normal)
         button.titleLabel?.font = .navigationButtonFont
@@ -128,7 +127,6 @@ class CredentialListViewController: UIViewController, CredentialListViewProtocol
                     string: .LoginsListSearchPlaceholderCredential,
                     attributes: [:]) // Set the placeholder text and color
         return searchController
-
     }
 
     private func addViewConstraints() {
@@ -142,7 +140,6 @@ class CredentialListViewController: UIViewController, CredentialListViewProtocol
 
             cancelButton.widthAnchor.constraint(equalToConstant: 60)
         ])
-
     }
 
     private func registerCells() {
@@ -152,17 +149,16 @@ class CredentialListViewController: UIViewController, CredentialListViewProtocol
         tableView.register(EmptyPlaceholderCell.self, forCellReuseIdentifier: EmptyPlaceholderCell.identifier)
     }
 
-    @objc func cancelAction() {
+    @objc
+    func cancelAction() {
         presenter?.cancelRequest()
     }
 }
 
 extension CredentialListViewController: UITableViewDataSource {
-
     func numberOfSections(in tableView: UITableView) -> Int {
         guard let presenter = presenter else { return 1 }
         return presenter.numberOfSections()
-
     }
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         guard let presenter = presenter else { return 1 }
@@ -170,7 +166,6 @@ extension CredentialListViewController: UITableViewDataSource {
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-
         switch presenter?.getItemsType(in: indexPath.section, for: indexPath.row) {
         case .emptyCredentialList:
             let cell = tableView.dequeueReusableCell(withIdentifier: EmptyPlaceholderCell.identifier, for: indexPath) as? EmptyPlaceholderCell

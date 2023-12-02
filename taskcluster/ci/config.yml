@@ -1,7 +1,9 @@
 ---
 trust-domain: mobile
 treeherder:
-    group-names: {}
+    group-names:
+        I: Docker Image Builds
+        B: Builds
 
 task-priority: highest
 
@@ -18,17 +20,17 @@ workers:
             provisioner: 'mobile-{level}'
             implementation: docker-worker
             os: linux
-            worker-type: 'bitrise'
+            worker-type: 'bitrise-gcp'
         images:
             provisioner: 'mobile-{level}'
             implementation: docker-worker
             os: linux
-            worker-type: 'images'
+            worker-type: 'images-gcp'
         misc:
             provisioner: 'mobile-{level}'
             implementation: docker-worker
             os: linux
-            worker-type: 'b-linux'
+            worker-type: 'b-linux-gcp'
 
 scriptworker:
     scope-prefix: mobile:firefox-ios:releng

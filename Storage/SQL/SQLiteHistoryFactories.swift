@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
@@ -8,12 +8,12 @@ import Shared
 /*
  * Factory methods for converting rows from SQLite into model objects
  */
-extension SQLiteHistory {
+extension BrowserDBSQLite {
     class func basicHistoryColumnFactory(_ row: SDRow) -> Site {
         let id = row["historyID"] as? Int
         let url = row["url"] as! String
         let title = row["title"] as! String
-        let guid = row["guid"] as! String
+        let guid = row["guid"] as? String
 
         // Extract a boolean from the row if it's present.
         let iB = row["is_bookmarked"] as? Int
@@ -30,20 +30,9 @@ extension SQLiteHistory {
 
         let latest = max(local, remote, either)
         if latest > 0 {
-            site.latestVisit = Visit(date: latest, type: VisitType.unknown)
+            site.latestVisit = Visit(date: latest, type: .link)
         }
-
         return site
-    }
-
-    class func iconColumnFactory(_ row: SDRow) -> Favicon? {
-        if let iconURL = row["iconURL"] as? String,
-            let iconDate = row["iconDate"] as? Double,
-            let _ = row["iconID"] as? Int {
-                let date = Date(timeIntervalSince1970: iconDate)
-                return Favicon(url: iconURL, date: date)
-        }
-        return nil
     }
 
     class func pageMetadataColumnFactory(_ row: SDRow) -> PageMetadata? {
@@ -59,25 +48,9 @@ extension SQLiteHistory {
             providerName: row["provider_name"] as? String)
     }
 
-    class func iconHistoryColumnFactory(_ row: SDRow) -> Site {
-        let site = basicHistoryColumnFactory(row)
-        site.icon = iconColumnFactory(row)
-        return site
-    }
-
-    class func iconHistoryMetadataColumnFactory(_ row: SDRow) -> Site {
-        let site = iconHistoryColumnFactory(row)
-        site.metadata = pageMetadataColumnFactory(row)
-        return site
-    }
-
-    class func basicHistoryMetadataColumnFactory(_ row: SDRow) -> Site {
+    class func historyMetadataColumnFactory(_ row: SDRow) -> Site {
         let site = basicHistoryColumnFactory(row)
         site.metadata = pageMetadataColumnFactory(row)
         return site
-    }
-
-    class func countAllVisitsFactory(_ row: SDRow) -> Int? {
-        return row[0] as? Int
     }
 }

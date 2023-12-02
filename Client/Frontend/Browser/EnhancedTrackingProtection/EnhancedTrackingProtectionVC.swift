@@ -1,9 +1,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Shared
 import UIKit
+import Common
+import SiteImageView
 
 struct ETPMenuUX {
     struct Fonts {
@@ -18,11 +20,12 @@ struct ETPMenuUX {
         static let viewCornerRadius: CGFloat = 8
         static let viewHeight: CGFloat = 44
         static let websiteLabelToHeroImageSpacing: CGFloat = 8
-        static let heroImageSize: CGFloat = 40
+        static let faviconImageSize: CGFloat = 40
         static let closeButtonSize: CGFloat = 30
+        static let faviconCornerRadius: CGFloat = 5
 
         struct Line {
-            static let distanceFromHeroImage: CGFloat = 17
+            static let distanceFromFavicon: CGFloat = 17
             static let height: CGFloat = 1
         }
     }
@@ -44,8 +47,16 @@ class ETPSectionView: UIView {
     }
 }
 
-class EnhancedTrackingProtectionMenuVC: UIViewController {
+protocol EnhancedTrackingProtectionMenuDelegate: AnyObject {
+    func settingsOpenPage(settings: Route.SettingsSection)
+    func didFinish()
+}
 
+class EnhancedTrackingProtectionMenuVC: UIViewController, Themeable {
+    var themeManager: ThemeManager
+    var themeObserver: NSObjectProtocol?
+    var notificationCenter: NotificationProtocol
+    weak var enhancedTrackingProtectionMenuDelegate: EnhancedTrackingProtectionMenuDelegate?
     // MARK: UI components
 
     // Header View
@@ -53,11 +64,9 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
         view.backgroundColor = .clear
     }
 
-    private var heroImage: UIImageView = .build { heroImage in
-        heroImage.contentMode = .scaleAspectFit
-        heroImage.clipsToBounds = true
-        heroImage.layer.masksToBounds = true
-        heroImage.layer.cornerRadius = 5
+    private var favicon: FaviconImageView = .build { favicon in
+        favicon.manuallySetImage(
+            UIImage(named: StandardImageIdentifiers.Large.globe)?.withRenderingMode(.alwaysTemplate) ?? UIImage())
     }
 
     private let siteDomainLabel: UILabel = .build { label in
@@ -68,13 +77,10 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
     private var closeButton: UIButton = .build { button in
         button.layer.cornerRadius = 0.5 * ETPMenuUX.UX.closeButtonSize
         button.clipsToBounds = true
-        button.setImage(UIImage(named: "close-medium"), for: .normal)
         button.imageView?.contentMode = .scaleAspectFit
     }
 
-    private let horizontalLine: UIView = .build { line in
-        line.backgroundColor = UIColor.theme.etpMenu.horizontalLine
-    }
+    private let horizontalLine: UIView = .build { _ in }
 
     // Connection Info view
     private let connectionView = ETPSectionView(frame: .zero)
@@ -92,7 +98,7 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
     }
 
     private let connectionDetailArrow: UIImageView = .build { image in
-        image.image = UIImage(imageLiteralResourceName: "goBack").withRenderingMode(.alwaysTemplate).imageFlippedForRightToLeftLayoutDirection()
+        image.image = UIImage(imageLiteralResourceName: StandardImageIdentifiers.Large.chevronLeft).withRenderingMode(.alwaysTemplate).imageFlippedForRightToLeftLayoutDirection()
         image.transform = CGAffineTransform(rotationAngle: .pi)
     }
 
@@ -112,7 +118,6 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
 
     private let toggleSwitch: UISwitch = .build { toggleSwitch in
         toggleSwitch.isEnabled = true
-        toggleSwitch.onTintColor = .systemBlue
     }
 
     private let toggleStatusLabel: UILabel = .build { label in
@@ -126,7 +131,6 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
     private var protectionButton: UIButton = .build { button in
         button.setTitle(.TPProtectionSettings, for: .normal)
         button.titleLabel?.font = ETPMenuUX.Fonts.viewTitleLabels
-        button.setTitleColor(.systemBlue, for: .normal)
         button.contentHorizontalAlignment = .left
     }
 
@@ -137,7 +141,7 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
     private var viewModel: EnhancedTrackingProtectionMenuVM
     private var hasSetPointOrigin = false
     private var pointOrigin: CGPoint?
-    var asPopover: Bool = false
+    var asPopover = false
 
     private var toggleContainerShouldBeHidden: Bool {
         return !viewModel.globalETPIsEnabled
@@ -147,8 +151,12 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
 
     // MARK: - View lifecycle
 
-    init(viewModel: EnhancedTrackingProtectionMenuVM) {
+    init(viewModel: EnhancedTrackingProtectionMenuVM,
+         themeManager: ThemeManager = AppContainer.shared.resolve(),
+         notificationCenter: NotificationProtocol = NotificationCenter.default) {
         self.viewModel = viewModel
+        self.themeManager = themeManager
+        self.notificationCenter = notificationCenter
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -169,6 +177,7 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
             addGestureRecognizer()
         }
         setupView()
+        listenForThemeChange(view)
     }
 
     override func viewDidLayoutSubviews() {
@@ -197,20 +206,20 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
     }
 
     private func setupHeaderView() {
-        headerContainer.addSubviews(heroImage, siteDomainLabel, closeButton, horizontalLine)
+        headerContainer.addSubviews(favicon, siteDomainLabel, closeButton, horizontalLine)
         view.addSubview(headerContainer)
 
         var headerConstraints = [
             headerContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             headerContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
 
-            heroImage.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor, constant: ETPMenuUX.UX.gutterDistance),
-            heroImage.topAnchor.constraint(equalTo: headerContainer.topAnchor, constant: ETPMenuUX.UX.gutterDistance),
-            heroImage.widthAnchor.constraint(equalToConstant: ETPMenuUX.UX.heroImageSize),
-            heroImage.heightAnchor.constraint(equalToConstant: ETPMenuUX.UX.heroImageSize),
+            favicon.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor, constant: ETPMenuUX.UX.gutterDistance),
+            favicon.topAnchor.constraint(equalTo: headerContainer.topAnchor, constant: ETPMenuUX.UX.gutterDistance),
+            favicon.widthAnchor.constraint(equalToConstant: ETPMenuUX.UX.faviconImageSize),
+            favicon.heightAnchor.constraint(equalToConstant: ETPMenuUX.UX.faviconImageSize),
 
-            siteDomainLabel.centerYAnchor.constraint(equalTo: heroImage.centerYAnchor),
-            siteDomainLabel.leadingAnchor.constraint(equalTo: heroImage.trailingAnchor, constant: 8),
+            siteDomainLabel.centerYAnchor.constraint(equalTo: favicon.centerYAnchor),
+            siteDomainLabel.leadingAnchor.constraint(equalTo: favicon.trailingAnchor, constant: 8),
             siteDomainLabel.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -15),
 
             closeButton.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor, constant: -ETPMenuUX.UX.gutterDistance),
@@ -220,7 +229,7 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
 
             horizontalLine.leadingAnchor.constraint(equalTo: headerContainer.leadingAnchor),
             horizontalLine.trailingAnchor.constraint(equalTo: headerContainer.trailingAnchor),
-            horizontalLine.topAnchor.constraint(equalTo: heroImage.bottomAnchor, constant: ETPMenuUX.UX.Line.distanceFromHeroImage),
+            horizontalLine.topAnchor.constraint(equalTo: favicon.bottomAnchor, constant: ETPMenuUX.UX.Line.distanceFromFavicon),
             horizontalLine.heightAnchor.constraint(equalToConstant: ETPMenuUX.UX.Line.height),
             headerContainer.bottomAnchor.constraint(equalTo: horizontalLine.bottomAnchor)
         ]
@@ -333,22 +342,11 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
     }
 
     private func updateViewDetails() {
-        heroImage.image = UIImage(named: ImageIdentifiers.defaultFavicon)
-        heroImage.tintColor = UIColor.theme.etpMenu.defaultImageTints
-        if let favIconURL = viewModel.favIcon {
-            ImageLoadingHandler.shared.getImageFromCacheOrDownload(with: favIconURL,
-                                                                   limit: ImageLoadingConstants.NoLimitImageSize) {
-                [weak self] image, error in
-                guard error == nil, let image = image else { return }
-                self?.heroImage.image = image
-            }
-        }
+        favicon.setFavicon(FaviconImageViewModel(siteURLString: viewModel.url.absoluteString,
+                                                 faviconCornerRadius: ETPMenuUX.UX.faviconCornerRadius))
 
         siteDomainLabel.text = viewModel.websiteTitle
-
         connectionLabel.text = viewModel.connectionStatusString
-        connectionImage.image = viewModel.connectionStatusImage
-
         toggleSwitch.isOn = viewModel.isSiteETPEnabled
         toggleLabel.text = .TrackingProtectionEnableTitle
         toggleStatusLabel.text = toggleSwitch.isOn ? .ETPOn : .ETPOff
@@ -363,39 +361,39 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
 
     // MARK: - Button actions
 
-    @objc func closeButtonTapped() {
-        self.dismiss(animated: true, completion: nil)
+    @objc
+    func closeButtonTapped() {
+        enhancedTrackingProtectionMenuDelegate?.didFinish()
     }
 
-    @objc func connectionDetailsTapped() {
-        let detailsVC = EnhancedTrackingProtectionDetailsVC(with: viewModel.getDetailsViewModel(withCachedImage: heroImage.image))
+    @objc
+    func connectionDetailsTapped() {
+        let detailsVC = EnhancedTrackingProtectionDetailsVC(with: viewModel.getDetailsViewModel())
         detailsVC.modalPresentationStyle = .pageSheet
         self.present(detailsVC, animated: true)
     }
 
-    @objc func trackingProtectionToggleTapped() {
+    @objc
+    func trackingProtectionToggleTapped() {
         // site is safelisted if site ETP is disabled
         viewModel.toggleSiteSafelistStatus()
-        switch viewModel.isSiteETPEnabled {
-        case true: toggleStatusLabel.text = .ETPOn
-        case false: toggleStatusLabel.text = .ETPOff
-        }
+        toggleStatusLabel.text = toggleSwitch.isOn ? .ETPOn : .ETPOff
     }
 
-    @objc func protectionSettingsTapped() {
-        self.dismiss(animated: true) {
-            self.viewModel.onOpenSettingsTapped?()
-        }
-}
+    @objc
+    func protectionSettingsTapped() {
+        enhancedTrackingProtectionMenuDelegate?.settingsOpenPage(settings: .contentBlocker)
+    }
 
-// MARK: - Gesture Recognizer
+    // MARK: - Gesture Recognizer
 
     private func addGestureRecognizer() {
         let panGesture = UIPanGestureRecognizer(target: self, action: #selector(panGestureRecognizerAction))
         view.addGestureRecognizer(panGesture)
     }
 
-    @objc func panGestureRecognizerAction(sender: UIPanGestureRecognizer) {
+    @objc
+    func panGestureRecognizerAction(sender: UIPanGestureRecognizer) {
         let translation = sender.translation(in: view)
         let originalYPosition = self.view.frame.origin.y
         let originalXPosition = self.view.frame.origin.x
@@ -411,7 +409,7 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
         if sender.state == .ended {
             let dragVelocity = sender.velocity(in: view)
             if dragVelocity.y >= 1300 {
-                self.dismiss(animated: true, completion: nil)
+                enhancedTrackingProtectionMenuDelegate?.didFinish()
             } else {
                 // Set back to original position of the view controller
                 UIView.animate(withDuration: 0.3) {
@@ -422,29 +420,30 @@ class EnhancedTrackingProtectionMenuVC: UIViewController {
     }
 }
 
-extension EnhancedTrackingProtectionMenuVC: PresentingModalViewControllerDelegate {
-    func dismissPresentedModalViewController(_ modalViewController: UIViewController, animated: Bool) {
-        self.dismiss(animated: true, completion: nil)
+// MARK: - Themable
+extension EnhancedTrackingProtectionMenuVC {
+    func applyTheme() {
+        let theme = themeManager.currentTheme
+        overrideUserInterfaceStyle = theme.type.getInterfaceStyle()
+        view.backgroundColor = theme.colors.layer1
+        closeButton.backgroundColor = theme.colors.layer2
+        let buttonImage = UIImage(named: StandardImageIdentifiers.Medium.cross)?
+            .tinted(withColor: theme.colors.iconSecondary)
+        closeButton.setImage(buttonImage, for: .normal)
+        connectionView.backgroundColor = theme.colors.layer2
+        connectionDetailArrow.tintColor = theme.colors.iconSecondary
+        connectionImage.image = viewModel.getConnectionStatusImage(themeType: theme.type)
+        headerContainer.tintColor = theme.colors.iconPrimary
+        if viewModel.connectionSecure {
+            connectionImage.tintColor = theme.colors.iconPrimary
+        }
+        toggleView.backgroundColor = theme.colors.layer2
+        toggleSwitch.tintColor = theme.colors.actionPrimary
+        toggleSwitch.onTintColor = theme.colors.actionPrimary
+        toggleStatusLabel.textColor = theme.colors.textSecondary
+        protectionView.backgroundColor = theme.colors.layer2
+        protectionButton.setTitleColor(theme.colors.textAccent, for: .normal)
+        horizontalLine.backgroundColor = theme.colors.borderPrimary
+        setNeedsStatusBarAppearanceUpdate()
     }
 }
-
-extension EnhancedTrackingProtectionMenuVC: NotificationThemeable {
-    @objc func applyTheme() {
-        overrideUserInterfaceStyle =  LegacyThemeManager.instance.userInterfaceStyle
-        view.backgroundColor = UIColor.theme.etpMenu.background
-        closeButton.backgroundColor = UIColor.theme.etpMenu.closeButtonColor
-        connectionView.backgroundColor = UIColor.theme.etpMenu.sectionColor
-        connectionImage.image = viewModel.connectionStatusImage
-        connectionDetailArrow.tintColor = UIColor.theme.etpMenu.defaultImageTints
-        if viewModel.connectionSecure {
-            connectionImage.tintColor = UIColor.theme.etpMenu.defaultImageTints
-        }
-        toggleView.backgroundColor = UIColor.theme.etpMenu.sectionColor
-        toggleSwitch.tintColor = UIColor.theme.etpMenu.switchAndButtonTint
-        toggleSwitch.onTintColor = UIColor.theme.etpMenu.switchAndButtonTint
-        toggleStatusLabel.textColor = UIColor.theme.etpMenu.subtextColor
-        protectionView.backgroundColor = UIColor.theme.etpMenu.sectionColor
-        protectionButton.setTitleColor(UIColor.theme.etpMenu.switchAndButtonTint, for: .normal)
-        setNeedsStatusBarAppearanceUpdate()
-     }
- }

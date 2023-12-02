@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Storage
@@ -8,7 +8,9 @@ import Storage
 extension BrowserViewController: UIDropInteractionDelegate {
     func dropInteraction(_ interaction: UIDropInteraction, canHandle session: UIDropSession) -> Bool {
         // Prevent tabs from being dragged and dropped into the address bar.
-        if let localDragSession = session.localDragSession, let item = localDragSession.items.first, let _ = item.localObject {
+        if let localDragSession = session.localDragSession,
+           let item = localDragSession.items.first,
+           item.localObject != nil {
             return false
         }
 

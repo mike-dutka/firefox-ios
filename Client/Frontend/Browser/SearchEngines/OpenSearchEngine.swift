@@ -4,7 +4,8 @@
 
 import UIKit
 
-class OpenSearchEngine: NSObject, NSCoding {
+class OpenSearchEngine: NSObject, NSSecureCoding {
+    static var supportsSecureCoding = true
 
     struct UX {
         static let preferredIconSize = 30
@@ -20,6 +21,15 @@ class OpenSearchEngine: NSObject, NSCoding {
     private let searchTermComponent = "{searchTerms}"
     private let localeTermComponent = "{moz:locale}"
     private lazy var searchQueryComponentKey: String? = self.getQueryArgFromTemplate()
+    private let googleEngineID = "google-b-1-m"
+
+    var headerSearchTitle: String {
+        guard engineID != googleEngineID else {
+            return .Search.GoogleEngineSectionTitle
+        }
+
+        return String(format: .Search.EngineSectionTitle, shortName)
+    }
 
     enum CodingKeys: String, CodingKey {
         case isCustomEngine
@@ -46,7 +56,7 @@ class OpenSearchEngine: NSObject, NSCoding {
     // MARK: - NSCoding
 
     required init?(coder aDecoder: NSCoder) {
-        let isCustomEngine = aDecoder.decodeAsBool(forKey: CodingKeys.isCustomEngine.rawValue)
+        let isCustomEngine = aDecoder.decodeBool(forKey: CodingKeys.isCustomEngine.rawValue)
         guard let searchTemplate = aDecoder.decodeObject(forKey: CodingKeys.searchTemplate.rawValue) as? String,
               let shortName = aDecoder.decodeObject(forKey: CodingKeys.shortName.rawValue) as? String,
               let image = aDecoder.decodeObject(forKey: CodingKeys.image.rawValue) as? UIImage else {
@@ -134,7 +144,8 @@ class OpenSearchEngine: NSObject, NSCoding {
     private func isSearchURLForEngine(_ url: URL?) -> Bool {
         guard let urlHost = url?.shortDisplayString,
               let queryEndIndex = searchTemplate.range(of: "?")?.lowerBound,
-              let templateURL = URL(string: String(searchTemplate[..<queryEndIndex])) else { return false }
+              let templateURL = URL(string: String(searchTemplate[..<queryEndIndex]), invalidCharacters: false)
+        else { return false }
         return urlHost == templateURL.shortDisplayString
     }
 
@@ -152,7 +163,7 @@ class OpenSearchEngine: NSObject, NSCoding {
                 let urlString = encodedSearchTemplate
                     .replacingOccurrences(of: searchTermComponent, with: escapedQuery, options: .literal, range: nil)
                     .replacingOccurrences(of: localeTermComponent, with: localeString, options: .literal, range: nil)
-                return URL(string: urlString)
+                return URL(string: urlString, invalidCharacters: false)
             }
         }
 

@@ -1,18 +1,23 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
+import Common
 import Shared
 @_exported import MozillaAppServices
-
-private let log = Logger.syncLogger
 
 public protocol BookmarksHandler {
     func getRecentBookmarks(limit: UInt, completion: @escaping ([BookmarkItemData]) -> Void)
 }
 
-public class RustPlaces: BookmarksHandler {
+public protocol HistoryMetadataObserver {
+    func noteHistoryMetadataObservation(key: HistoryMetadataKey,
+                                        observation: HistoryMetadataObservation,
+                                        completion: @escaping () -> Void)
+}
+
+public class RustPlaces: BookmarksHandler, HistoryMetadataObserver {
     let databasePath: String
 
     let writerQueue: DispatchQueue
@@ -23,15 +28,18 @@ public class RustPlaces: BookmarksHandler {
     public var writer: PlacesWriteConnection?
     public var reader: PlacesReadConnection?
 
-    public fileprivate(set) var isOpen: Bool = false
+    public fileprivate(set) var isOpen = false
 
     private var didAttemptToMoveToBackup = false
     private var notificationCenter: NotificationCenter
+    private var logger: Logger
 
     public init(databasePath: String,
-                notificationCenter: NotificationCenter = NotificationCenter.default) {
+                notificationCenter: NotificationCenter = NotificationCenter.default,
+                logger: Logger = DefaultLogger.shared) {
         self.databasePath = databasePath
         self.notificationCenter = notificationCenter
+        self.logger = logger
         self.writerQueue = DispatchQueue(label: "RustPlaces writer queue: \(databasePath)", attributes: [])
         self.readerQueue = DispatchQueue(label: "RustPlaces reader queue: \(databasePath)", attributes: [])
     }
@@ -43,18 +51,16 @@ public class RustPlaces: BookmarksHandler {
             notificationCenter.post(name: .RustPlacesOpened, object: nil)
             return nil
         } catch let err as NSError {
-            if let placesError = err as? PlacesError {
-                SentryIntegration.shared.sendWithStacktrace(
-                    message: "Places error when opening Rust Places database",
-                    tag: SentryTag.rustPlaces,
-                    severity: .error,
-                    description: placesError.localizedDescription)
+            if let placesError = err as? PlacesApiError {
+                logger.log("Places error when opening Rust Places database",
+                           level: .warning,
+                           category: .storage,
+                           description: placesError.localizedDescription)
             } else {
-                SentryIntegration.shared.sendWithStacktrace(
-                    message: "Unknown error when opening Rust Places database",
-                    tag: SentryTag.rustPlaces,
-                    severity: .error,
-                    description: err.localizedDescription)
+                logger.log("Unknown error when opening Rust Places database",
+                           level: .warning,
+                           category: .storage,
+                           description: err.localizedDescription)
             }
 
             return err
@@ -74,7 +80,7 @@ public class RustPlaces: BookmarksHandler {
 
         writerQueue.async {
             guard self.isOpen else {
-                deferred.fill(Maybe(failure: PlacesApiError.connUseAfterApiClosed as MaybeErrorType))
+                deferred.fill(Maybe(failure: PlacesConnectionError.connUseAfterApiClosed as MaybeErrorType))
                 return
             }
 
@@ -90,7 +96,7 @@ public class RustPlaces: BookmarksHandler {
                     deferred.fill(Maybe(failure: error as MaybeErrorType))
                 }
             } else {
-                deferred.fill(Maybe(failure: PlacesApiError.connUseAfterApiClosed as MaybeErrorType))
+                deferred.fill(Maybe(failure: PlacesConnectionError.connUseAfterApiClosed as MaybeErrorType))
             }
         }
 
@@ -102,7 +108,7 @@ public class RustPlaces: BookmarksHandler {
 
         readerQueue.async {
             guard self.isOpen else {
-                deferred.fill(Maybe(failure: PlacesApiError.connUseAfterApiClosed as MaybeErrorType))
+                deferred.fill(Maybe(failure: PlacesConnectionError.connUseAfterApiClosed as MaybeErrorType))
                 return
             }
 
@@ -122,44 +128,11 @@ public class RustPlaces: BookmarksHandler {
                     deferred.fill(Maybe(failure: error as MaybeErrorType))
                 }
             } else {
-                deferred.fill(Maybe(failure: PlacesApiError.connUseAfterApiClosed as MaybeErrorType))
+                deferred.fill(Maybe(failure: PlacesConnectionError.connUseAfterApiClosed as MaybeErrorType))
             }
         }
 
         return deferred
-    }
-
-    public func migrateBookmarksIfNeeded(fromBrowserDB browserDB: BrowserDB) {
-        // Since we use the existence of places.db as an indication that we've
-        // already migrated bookmarks, assert that places.db is not open here.
-        assert(!isOpen, "Shouldn't attempt to migrate bookmarks after opening Rust places.db")
-
-        // We only need to migrate bookmarks here if the old browser.db file
-        // already exists AND the new Rust places.db file does NOT exist yet.
-        // This is to ensure that we only ever run this migration ONCE. In
-        // addition, it is the caller's (Profile.swift) responsibility to NOT
-        // use this migration API for users signed into a Firefox Account.
-        // Those users will automatically get all their bookmarks on next Sync.
-        guard FileManager.default.fileExists(atPath: browserDB.databasePath),
-            !FileManager.default.fileExists(atPath: databasePath) else {
-            return
-        }
-
-        // Ensure that the old BrowserDB schema is up-to-date before migrating.
-        _ = browserDB.touch().value
-
-        // Open the Rust places.db now for the first time.
-        _ = reopenIfClosed()
-
-        do {
-            try api?.migrateBookmarksFromBrowserDb(path: browserDB.databasePath)
-        } catch let err as NSError {
-            SentryIntegration.shared.sendWithStacktrace(
-                message: "Error encountered while migrating bookmarks from BrowserDB",
-                tag: SentryTag.rustPlaces,
-                severity: .error,
-                description: err.localizedDescription)
-        }
     }
 
     public func getBookmarksTree(rootGUID: GUID, recursive: Bool) -> Deferred<Maybe<BookmarkNodeData?>> {
@@ -226,18 +199,23 @@ public class RustPlaces: BookmarksHandler {
         reader?.interrupt()
     }
 
-    public func runMaintenance() {
+    public func runMaintenance(dbSizeLimit: UInt32) {
         _ = withWriter { connection in
-            try connection.runMaintenance()
+            try connection.runMaintenance(dbSizeLimit: dbSizeLimit)
         }
     }
 
     public func deleteBookmarkNode(guid: GUID) -> Success {
         return withWriter { connection in
             let result = try connection.deleteBookmarkNode(guid: guid)
-            if !result {
-                log.debug("Bookmark with GUID \(guid) does not exist.")
+            guard result else {
+                self.logger.log("Bookmark with GUID \(guid) does not exist.",
+                                level: .debug,
+                                category: .storage)
+                return
             }
+
+            self.notificationCenter.post(name: .BookmarksUpdated, object: self)
         }
     }
 
@@ -311,58 +289,10 @@ public class RustPlaces: BookmarksHandler {
         return error
     }
 
-    public func syncBookmarks(unlockInfo: SyncUnlockInfo) -> Success {
-        let deferred = Success()
-
-        writerQueue.async {
-            guard self.isOpen else {
-                deferred.fill(Maybe(failure: PlacesApiError.connUseAfterApiClosed as MaybeErrorType))
-                return
-            }
-
-            do {
-                try _ = self.api?.syncBookmarks(unlockInfo: unlockInfo)
-                deferred.fill(Maybe(success: ()))
-            } catch let err as NSError {
-                if let placesError = err as? PlacesError {
-                    SentryIntegration.shared.sendWithStacktrace(
-                        message: "Places error when syncing Places database",
-                        tag: SentryTag.rustPlaces,
-                        severity: .error,
-                        description: placesError.localizedDescription)
-                } else {
-                    SentryIntegration.shared.sendWithStacktrace(
-                        message: "Unknown error when opening Rust Places database",
-                        tag: SentryTag.rustPlaces,
-                        severity: .error,
-                        description: err.localizedDescription)
-                }
-
-                deferred.fill(Maybe(failure: err))
-            }
+    public func registerWithSyncManager() {
+        writerQueue.async { [unowned self] in
+            self.api?.registerWithSyncManager()
         }
-
-        return deferred
-    }
-
-    public func resetBookmarksMetadata() -> Success {
-        let deferred = Success()
-
-        writerQueue.async {
-            guard self.isOpen else {
-                deferred.fill(Maybe(failure: PlacesApiError.connUseAfterApiClosed as MaybeErrorType))
-                return
-            }
-
-            do {
-                try self.api?.resetBookmarkSyncMetadata()
-                deferred.fill(Maybe(success: ()))
-            } catch let error {
-                deferred.fill(Maybe(failure: error as MaybeErrorType))
-            }
-        }
-
-        return deferred
     }
 
     public func getHistoryMetadataSince(since: Int64) -> Deferred<Maybe<[HistoryMetadata]>> {
@@ -380,6 +310,18 @@ public class RustPlaces: BookmarksHandler {
     public func queryHistoryMetadata(query: String, limit: Int32) -> Deferred<Maybe<[HistoryMetadata]>> {
         return withReader { connection in
             return try connection.queryHistoryMetadata(query: query, limit: limit)
+        }
+    }
+
+    public func noteHistoryMetadataObservation(key: HistoryMetadataKey,
+                                               observation: HistoryMetadataObservation,
+                                               completion: @escaping () -> Void) {
+        let deferredResponse = withReader { connection in
+            return self.noteHistoryMetadataObservation(key: key, observation: observation)
+        }
+
+        deferredResponse.upon { result in
+            completion()
         }
     }
 
@@ -461,5 +403,151 @@ public class RustPlaces: BookmarksHandler {
         return withWriter { connection in
             return try connection.deleteVisitsFor(url: url)
         }
+    }
+}
+
+// MARK: History APIs
+
+// WKWebView has these:
+/*
+WKNavigationTypeLinkActivated,
+WKNavigationTypeFormSubmitted,
+WKNavigationTypeBackForward,
+WKNavigationTypeReload,
+WKNavigationTypeFormResubmitted,
+WKNavigationTypeOther = -1,
+*/
+
+// Enums in Swift aren't implicitly defaulted to Int, and Uniffi doesn't 
+// provide an easy way to define the enum type we should remove this once
+// https://github.com/mozilla/uniffi-rs/issues/1792 is implemented
+extension VisitType {
+    public static func fromRawValue(rawValue: Int?) -> Self {
+        switch rawValue {
+        case 1: return .link
+        case 2: return .typed
+        case 3: return .bookmark
+        case 4: return .embed
+        case 5: return .redirectPermanent
+        case 6: return .redirectTemporary
+        case 7: return .download
+        case 8: return .framedLink
+        case 9: return .reload
+        case 10: return .updatePlace
+        // .unknown and .recentlyClosed used to just == .link
+        default: return .link
+        }
+    }
+
+    public var rawValue: Int? {
+        switch self {
+        case .link:              return 1
+        case .typed:             return 2
+        case .bookmark:          return 3
+        case .embed:             return 4
+        case .redirectPermanent: return 5
+        case .redirectTemporary: return 6
+        case .download:          return 7
+        case .framedLink:        return 8
+        case .reload:            return 9
+        case .updatePlace:       return 10
+        }
+    }
+}
+
+extension RustPlaces {
+    public func applyObservation(visitObservation: VisitObservation) -> Success {
+        return withWriter { connection in
+            return try connection.applyObservation(visitObservation: visitObservation)
+        }.map { result in
+            self.notificationCenter.post(name: .TopSitesUpdated, object: nil)
+            return result
+        }
+    }
+
+    public func deleteEverythingHistory() -> Success {
+        return withWriter { connection in
+            return try connection.deleteEverythingHistory()
+        }
+    }
+
+    public func deleteVisitsFor(_ url: String) -> Success {
+        return withWriter { connection in
+            return try connection.deleteVisitsFor(url: url)
+        }
+    }
+
+    public func deleteVisitsBetween(_ date: Date) -> Success {
+        return withWriter { connection in
+            return try connection.deleteVisitsBetween(start: PlacesTimestamp(date.toMillisecondsSince1970()),
+                                                      end: PlacesTimestamp(Date().toMillisecondsSince1970()))
+        }
+    }
+
+    public func queryAutocomplete(matchingSearchQuery filter: String, limit: Int) -> Deferred<Maybe<[SearchResult]>> {
+        return withReader { connection in
+            return try connection.queryAutocomplete(search: filter, limit: Int32(limit))
+        }
+    }
+
+    public func getVisitPageWithBound(limit: Int, offset: Int, excludedTypes: VisitTransitionSet) -> Deferred<Maybe<HistoryVisitInfosWithBound>> {
+        return withReader { connection in
+            return try connection.getVisitPageWithBound(bound: Int64(Date().toMillisecondsSince1970()),
+                                                        offset: Int64(offset),
+                                                        count: Int64(limit),
+                                                        excludedTypes: excludedTypes)
+        }
+    }
+
+    public func getTopFrecentSiteInfos(limit: Int, thresholdOption: FrecencyThresholdOption) -> Deferred<Maybe<[Site]>> {
+        let deferred: Deferred<Maybe<[TopFrecentSiteInfo]>> = withReader { connection in
+            return try connection.getTopFrecentSiteInfos(numItems: Int32(limit), thresholdOption: thresholdOption)
+        }
+
+        let returnValue = Deferred<Maybe<[Site]>>()
+        deferred.upon { result in
+            guard let result = result.successValue else {
+                returnValue.fill(Maybe(failure: result.failureValue ?? "Unknown Error"))
+                return
+            }
+            returnValue.fill(Maybe(success: result.map { info in
+                var title: String
+                if let actualTitle = info.title, !actualTitle.isEmpty {
+                    title = actualTitle
+                } else {
+                    // In case there is no title, we use the url
+                    // as the title
+                    title = info.url
+                }
+                return Site(url: info.url, title: title)
+            }))
+        }
+        return returnValue
+    }
+
+    public func getSitesWithBound(limit: Int, offset: Int, excludedTypes: VisitTransitionSet) -> Deferred<Maybe<Cursor<Site>>> {
+        let deferred = getVisitPageWithBound(limit: limit, offset: offset, excludedTypes: excludedTypes)
+        let result = Deferred<Maybe<Cursor<Site>>>()
+        deferred.upon { visitInfos in
+            guard let visitInfos = visitInfos.successValue else {
+                result.fill(Maybe(failure: visitInfos.failureValue ?? "Unknown Error"))
+                return
+            }
+            let sites = visitInfos.infos.map { info -> Site in
+                var title: String
+                if let actualTitle = info.title, !actualTitle.isEmpty {
+                    title = actualTitle
+                } else {
+                    // In case there is no title, we use the url
+                    // as the title
+                    title = info.url
+                }
+                let site = Site(url: info.url, title: title)
+                site.latestVisit = Visit(date: UInt64(info.timestamp) * 1000, type: info.visitType)
+                return site
+            }.uniqued()
+            result.fill(Maybe(success: ArrayCursor(data: sites)))
+        }
+        return result
     }
 }

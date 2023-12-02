@@ -3,15 +3,21 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
+import Shared
 
 class ToolbarTextField: AutocompleteTextField {
-
     // MARK: - Variables
     @objc dynamic var clearButtonTintColor: UIColor? {
         didSet {
             // Clear previous tinted image that's cache and ask for a relayout
             tintedClearImage = nil
             setNeedsLayout()
+        }
+    }
+
+    override var textColor: UIColor? {
+        didSet {
+            clearButtonTintColor = textColor
         }
     }
 
@@ -60,18 +66,21 @@ class ToolbarTextField: AutocompleteTextField {
     }
 }
 
-// MARK: - Theme protocols
+// MARK: - Key commands
 
-extension ToolbarTextField: NotificationThemeable {
-    func applyTheme() {
-        backgroundColor = UIColor.theme.textField.backgroundInOverlay
-        textColor = UIColor.theme.textField.textAndTint
-        clearButtonTintColor = textColor
-        tintColor = AutocompleteTextField.textSelectionColor.textFieldMode
+extension ToolbarTextField {
+    override var keyCommands: [UIKeyCommand]? {
+        let commands = [
+            UIKeyCommand(action: #selector(handleKeyboardArrowKey(sender:)),
+                         input: UIKeyCommand.inputRightArrow),
+            UIKeyCommand(action: #selector(handleKeyboardArrowKey(sender:)),
+                         input: UIKeyCommand.inputLeftArrow),
+        ]
+        return commands
     }
 
-    // ToolbarTextField is created on-demand, so the textSelectionColor is a static prop for use when created
-    static func applyUIMode(isPrivate: Bool) {
-       textSelectionColor = UIColor.theme.urlbar.textSelectionHighlight(isPrivate)
+    @objc
+    private func handleKeyboardArrowKey(sender: UIKeyCommand) {
+        self.selectedTextRange = nil
     }
 }

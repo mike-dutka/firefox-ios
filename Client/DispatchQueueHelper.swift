@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 
@@ -12,6 +12,16 @@ public func ensureMainThread(execute work: @escaping @convention(block) () -> Sw
     } else {
         DispatchQueue.main.async {
             work()
+        }
+    }
+}
+
+public func ensureMainThread<T>(execute work: @escaping () -> T) {
+    if Thread.isMainThread {
+        _ = work()
+    } else {
+        DispatchQueue.main.async {
+            _ = work()
         }
     }
 }

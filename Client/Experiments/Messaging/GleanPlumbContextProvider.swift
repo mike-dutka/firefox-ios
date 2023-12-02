@@ -3,15 +3,24 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
+import Common
 import Shared
 import Storage
 
 class GleanPlumbContextProvider {
-
     enum ContextKey: String {
         case todayDate = "date_string"
         case isDefaultBrowser = "is_default_browser"
+        case isInactiveNewUser = "is_inactive_new_user"
+        case allowedTipsNotifications = "allowed_tips_notifications"
     }
+
+    struct Constant {
+        static let activityReferencePeriod = UInt64(60 * 60 * 48 * 1000) // 48 hours in milliseconds
+        static let inactivityPeriod = UInt64(60 * 60 * 24 * 1000) // 24 hours in milliseconds
+    }
+
+    var userDefaults: UserDefaultsInterface = UserDefaults.standard
 
     private var todaysDate: String {
         let dateFormatter = DateFormatter()
@@ -20,7 +29,29 @@ class GleanPlumbContextProvider {
     }
 
     private var isDefaultBrowser: Bool {
-        return UserDefaults.standard.bool(forKey: RatingPromptManager.UserDefaultsKey.keyIsBrowserDefault.rawValue)
+        return userDefaults.bool(forKey: RatingPromptManager.UserDefaultsKey.keyIsBrowserDefault.rawValue)
+    }
+
+    var isInactiveNewUser: Bool {
+        // existing users don't have firstAppUse set
+        guard let firstAppUse = userDefaults.object(forKey: PrefsKeys.Session.FirstAppUse) as? UInt64,
+              let lastSession = userDefaults.object(forKey: PrefsKeys.Session.Last) as? UInt64
+        else { return false }
+
+        // We check that it's 48 hours after first use and that the user only used the app in the first 24 hours
+        // It doesn't matter how often the user is active in the first 24 hours of the 48 hour period.
+        // If they are not active in the second 24 hours after first use they are considered inactive.
+        let now = Date()
+        let lastSessionDate = Date.fromTimestamp(lastSession)
+        let isAfter48Hours = now >= Date.fromTimestamp(firstAppUse + Constant.activityReferencePeriod)
+        let usedInTheFirst24Hours = lastSessionDate <= Date.fromTimestamp(firstAppUse + Constant.inactivityPeriod)
+
+        return isAfter48Hours && usedInTheFirst24Hours
+    }
+
+    private var allowedTipsNotifications: Bool {
+        let userPreference = userDefaults.bool(forKey: PrefsKeys.Notifications.TipsAndFeaturesNotifications)
+        return userPreference
     }
 
     /// JEXLs are more accurately evaluated when given certain details about the app on device.
@@ -29,6 +60,8 @@ class GleanPlumbContextProvider {
     /// We should pass as much device context as possible.
     func createAdditionalDeviceContext() -> [String: Any] {
         return [ContextKey.todayDate.rawValue: todaysDate,
-                ContextKey.isDefaultBrowser.rawValue: isDefaultBrowser]
+                ContextKey.isDefaultBrowser.rawValue: isDefaultBrowser,
+                ContextKey.isInactiveNewUser.rawValue: isInactiveNewUser,
+                ContextKey.allowedTipsNotifications.rawValue: allowedTipsNotifications]
     }
 }

@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import MozillaAppServices
@@ -36,7 +36,8 @@ class ExperimentsSettingsViewController: UIViewController {
         updateState()
     }
 
-    @objc private func updateState() {
+    @objc
+    private func updateState() {
         experimentsView.reloadButton.isEnabled = !(experimentsView.customRemoteSettingsTextField.text?.isEmpty ?? true)
         experimentsView.customExperimentDataTextView.text = localExperimentsData
         experimentsView.usePreviewToggle.setOn(Experiments.usePreviewCollection(), animated: false)
@@ -45,7 +46,8 @@ class ExperimentsSettingsViewController: UIViewController {
         experimentsView.updateButton.setTitle(dataDidChange ? "Update" : "Reset", for: .normal)
     }
 
-    @objc private func tappedUpdate(sender: AnyObject) {
+    @objc
+    private func tappedUpdate(sender: AnyObject) {
         let dataDidChange = experimentsView.customExperimentDataTextView.text != localExperimentsData
 
         if !dataDidChange {
@@ -63,10 +65,11 @@ class ExperimentsSettingsViewController: UIViewController {
         applyPendingExperiments()
     }
 
-    @objc private func loadRemoteExperiments(sender: AnyObject) {
+    @objc
+    private func loadRemoteExperiments(sender: AnyObject) {
         guard
             let text = experimentsView.customRemoteSettingsTextField.text,
-            let url = URL(string: text),
+            let url = URL(string: text, invalidCharacters: false),
             let data = try? String(contentsOf: url)
             else { return }
 
@@ -77,7 +80,8 @@ class ExperimentsSettingsViewController: UIViewController {
         updateState()
     }
 
-    @objc private func usePreviewToggleTapped(sender: UISwitch) {
+    @objc
+    private func usePreviewToggleTapped(sender: UISwitch) {
         Experiments.setUsePreviewCollection(enabled: sender.isOn)
     }
 
@@ -85,7 +89,7 @@ class ExperimentsSettingsViewController: UIViewController {
     // to the experiments screen.
     private func applyPendingExperiments() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            self.experiments.applyPendingExperiments()
+            _ = self.experiments.applyPendingExperiments()
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 NotificationCenter.default.post(name: .nimbusExperimentsApplied, object: nil)
             }

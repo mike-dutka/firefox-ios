@@ -6,7 +6,6 @@ import Foundation
 import QuickLook
 
 class OpenQLPreviewHelper: NSObject, QLPreviewControllerDataSource {
-
     private var previewItem = NSURL()
     private let presenter: Presenter
     private let previewController: QLPreviewController
@@ -20,6 +19,7 @@ class OpenQLPreviewHelper: NSObject, QLPreviewControllerDataSource {
     static func shouldOpenPreviewHelper(response: URLResponse,
                                         forceDownload: Bool) -> Bool {
         guard let mimeType = response.mimeType else { return false }
+
         return (mimeType == MIMEType.USDZ || mimeType == MIMEType.Reality) && !forceDownload
     }
 

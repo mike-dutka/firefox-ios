@@ -11,25 +11,15 @@ struct TopSitesSectionDimension {
 
 struct TopSitesUIInterface {
     var isLandscape: Bool = UIWindow.isLandscape
-    var isIphone: Bool = UIDevice.current.userInterfaceIdiom == .phone
-    var horizontalSizeClass: UIUserInterfaceSizeClass
-
-    init(trait: UITraitCollection) {
-        horizontalSizeClass = trait.horizontalSizeClass
-    }
-
-    init(isLandscape: Bool, isIphone: Bool, trait: UITraitCollection) {
-        self.isLandscape = isLandscape
-        self.isIphone = isIphone
-        horizontalSizeClass = trait.horizontalSizeClass
-    }
+    var interfaceIdiom: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom
+    var trait: UITraitCollection
+    var availableWidth: CGFloat
 }
 
 /// Top sites dimension are subject to change depending on the user's number of rows,
 /// on which device it's showing, if it's landscape or portrait. The dimension should also
 /// excludes empty rows from showing. TopSitesDimension support those calculation.
 protocol TopSitesDimension {
-
     /// Get the top sites section dimension to show in the homepage
     /// - Parameters:
     ///   - sites: The top sites that we need to show
@@ -43,11 +33,6 @@ protocol TopSitesDimension {
 }
 
 class TopSitesDimensionImplementation: TopSitesDimension {
-
-    struct UX {
-        static let numberOfItemsPerRowForSizeClassIpad = UXSizeClasses(compact: 3, regular: 4, other: 2)
-    }
-
     func getSectionDimension(for sites: [TopSite],
                              numberOfRows: Int,
                              interface: TopSitesUIInterface
@@ -81,16 +66,16 @@ class TopSitesDimensionImplementation: TopSitesDimension {
     /// - Parameter interface: Tile number is based on layout, this param contains the parameters needed to computer the tile number
     /// - Returns: The number of tiles per row the user will see
     private func getNumberOfTilesPerRow(for interface: TopSitesUIInterface) -> Int {
-        if interface.isIphone {
-            return interface.isLandscape ? 8 : 4
+        let cellWidth = TopSitesViewModel.UX.cellEstimatedSize.width
+        let leadingInset = HomepageViewModel.UX.leadingInset(traitCollection: interface.trait,
+                                                             interfaceIdiom: interface.interfaceIdiom)
+        var availableWidth = interface.availableWidth - leadingInset * 2
+        var numberOfTiles = 0
 
-        } else {
-            // The number of items in a row is equal to the number of top sites in a row * 2
-            var numItems = Int(UX.numberOfItemsPerRowForSizeClassIpad[interface.horizontalSizeClass])
-            if !interface.isLandscape || (interface.horizontalSizeClass == .compact && interface.isLandscape) {
-                numItems = numItems - 1
-            }
-            return numItems * 2
+        while availableWidth > cellWidth {
+            numberOfTiles += 1
+            availableWidth = availableWidth - cellWidth - TopSitesViewModel.UX.cardSpacing
         }
+        return numberOfTiles < TopSitesViewModel.UX.minCards ? TopSitesViewModel.UX.minCards : numberOfTiles
     }
 }

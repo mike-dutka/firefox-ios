@@ -3,9 +3,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
+import Common
+import ComponentLibrary
+import Shared
 
-class WallpaperSelectorViewController: WallpaperBaseViewController, Loggable {
-
+class WallpaperSelectorViewController: WallpaperBaseViewController, Themeable {
     private struct UX {
         static let cardWidth: CGFloat = UIDevice().isTinyFormFactor ? 88 : 97
         static let cardHeight: CGFloat = UIDevice().isTinyFormFactor ? 80 : 88
@@ -14,27 +16,29 @@ class WallpaperSelectorViewController: WallpaperBaseViewController, Loggable {
     }
 
     private var viewModel: WallpaperSelectorViewModel
-    internal var notificationCenter: NotificationProtocol
+    var notificationCenter: NotificationProtocol
+    var themeManager: ThemeManager
+    var themeObserver: NSObjectProtocol?
 
     // Views
     private lazy var contentView: UIView = .build { _ in }
     private var collectionViewHeightConstraint: NSLayoutConstraint!
 
     private lazy var headerLabel: UILabel = .build { label in
-        label.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .headline,
-                                                                   size: 17)
+        label.font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .headline,
+                                                            size: 17)
         label.adjustsFontForContentSizeCategory = true
-        label.text = .Onboarding.WallpaperSelectorTitle
+        label.text = .Onboarding.Wallpaper.SelectorTitle
         label.textAlignment = .center
         label.numberOfLines = 0
         label.accessibilityIdentifier = AccessibilityIdentifiers.Onboarding.Wallpaper.title
     }
 
     private lazy var instructionLabel: UILabel = .build { label in
-        label.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .body,
-                                                                   size: 12)
+        label.font = DefaultDynamicFontHelper.preferredFont(withTextStyle: .body,
+                                                            size: 12)
         label.adjustsFontForContentSizeCategory = true
-        label.text = .Onboarding.WallpaperSelectorDescription
+        label.text = .Onboarding.Wallpaper.SelectorDescription
         label.textAlignment = .center
         label.numberOfLines = 0
         label.accessibilityIdentifier = AccessibilityIdentifiers.Onboarding.Wallpaper.description
@@ -55,19 +59,13 @@ class WallpaperSelectorViewController: WallpaperBaseViewController, Loggable {
         return collectionView
     }()
 
-    private lazy var settingsButton: ResizableButton = .build { button in
-        button.titleLabel?.font = DynamicFontHelper.defaultHelper.preferredFont(withTextStyle: .body,
-                                                                                size: 16)
-        button.titleLabel?.textAlignment = .center
-        button.setTitle(.Onboarding.WallpaperSelectorAction, for: .normal)
-        button.accessibilityIdentifier = AccessibilityIdentifiers.Onboarding.Wallpaper.settingsButton
-    }
-
     // MARK: - Initializers
     init(viewModel: WallpaperSelectorViewModel,
-         notificationCenter: NotificationProtocol = NotificationCenter.default) {
+         notificationCenter: NotificationProtocol = NotificationCenter.default,
+         themeManager: ThemeManager = AppContainer.shared.resolve()) {
         self.viewModel = viewModel
         self.notificationCenter = notificationCenter
+        self.themeManager = themeManager
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -78,10 +76,8 @@ class WallpaperSelectorViewController: WallpaperBaseViewController, Loggable {
     // MARK: - View setup & lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
+        listenForThemeChange(view)
         setupView()
-        applyTheme()
-        setupNotifications(forObserver: self, observing: [.DisplayThemeChanged])
-        settingsButton.addTarget(self, action: #selector(self.settingsButtonTapped), for: .touchUpInside)
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -102,11 +98,17 @@ class WallpaperSelectorViewController: WallpaperBaseViewController, Loggable {
     override func updateOnRotation() {
         configureCollectionView()
     }
+
+    func applyTheme() {
+        let theme = themeManager.currentTheme
+        contentView.backgroundColor = theme.colors.layer1
+        headerLabel.textColor = theme.colors.textPrimary
+        instructionLabel.textColor = theme.colors.textPrimary
+    }
 }
 
 // MARK: - CollectionView Data Source
 extension WallpaperSelectorViewController: UICollectionViewDelegate, UICollectionViewDataSource {
-
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
         return viewModel.numberOfWallpapers
     }
@@ -118,6 +120,7 @@ extension WallpaperSelectorViewController: UICollectionViewDelegate, UICollectio
         else { return UICollectionViewCell() }
 
         cell.viewModel = cellViewModel
+        cell.applyTheme(theme: themeManager.currentTheme)
         return cell
     }
 
@@ -128,11 +131,10 @@ extension WallpaperSelectorViewController: UICollectionViewDelegate, UICollectio
 
 // MARK: - Private
 private extension WallpaperSelectorViewController {
-
     func setupView() {
         configureCollectionView()
 
-        contentView.addSubviews(headerLabel, instructionLabel, collectionView, settingsButton)
+        contentView.addSubviews(headerLabel, instructionLabel, collectionView)
         view.addSubview(contentView)
 
         collectionViewHeightConstraint = collectionView.heightAnchor.constraint(equalToConstant: 300)
@@ -154,13 +156,9 @@ private extension WallpaperSelectorViewController {
             instructionLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -34),
 
             collectionView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
-            collectionView.bottomAnchor.constraint(equalTo: settingsButton.topAnchor, constant: -14),
+            collectionView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -43),
             collectionView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            collectionViewHeightConstraint,
-
-            settingsButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 34),
-            settingsButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -43),
-            settingsButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -34),
+            collectionViewHeightConstraint
         ])
     }
 
@@ -221,38 +219,6 @@ private extension WallpaperSelectorViewController {
                     self?.downloadAndSetWallpaper(at: indexPath)
                 }
             }
-        }
-    }
-
-    /// Settings button tapped
-    @objc func settingsButtonTapped(_ sender: UIButton) {
-        viewModel.openSettingsAction()
-    }
-}
-
-// MARK: - Themable & Notifiable
-extension WallpaperSelectorViewController: NotificationThemeable, Notifiable {
-
-    func handleNotifications(_ notification: Notification) {
-        switch notification.name {
-        case .DisplayThemeChanged:
-            applyTheme()
-        default: break
-        }
-    }
-
-    func applyTheme() {
-        let theme = BuiltinThemeName(rawValue: LegacyThemeManager.instance.current.name) ?? .normal
-        if theme == .dark {
-            contentView.backgroundColor = UIColor.Photon.DarkGrey40
-            headerLabel.textColor = UIColor.Photon.LightGrey05
-            instructionLabel.textColor = UIColor.Photon.LightGrey05
-            settingsButton.setTitleColor(UIColor.Photon.LightGrey05, for: .normal)
-        } else {
-            contentView.backgroundColor = UIColor.Photon.LightGrey10
-            headerLabel.textColor = UIColor.Photon.Ink80
-            instructionLabel.textColor = UIColor.Photon.DarkGrey05
-            settingsButton.setTitleColor(UIColor.Photon.Blue50, for: .normal)
         }
     }
 }

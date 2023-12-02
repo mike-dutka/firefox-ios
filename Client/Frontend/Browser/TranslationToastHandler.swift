@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Shared
 import Storage
@@ -75,9 +75,9 @@ class TranslationToastHandler: TabEventHandler {
 
         let service = setting.useTranslationService
         let translationURL = String(format: service.urlTemplate,
-                             pageLanguage,
-                             myLanguage,
-                             urlQueryParam)
+                                    pageLanguage,
+                                    myLanguage,
+                                    urlQueryParam)
 
         if let newURL = URL(string: translationURL) {
             tab.loadRequest(URLRequest(url: newURL))

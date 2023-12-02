@@ -1,6 +1,6 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
- * License, v. 2.0. If a copy of the MPL was not distributed with this
- * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import WebKit
@@ -11,7 +11,6 @@ import Deferred
 import Sync
 
 class FaviconManager: TabContentScript {
-
     let profile: Profile!
     weak var tab: Tab?
 
@@ -107,8 +106,9 @@ class FaviconManager: TabContentScript {
             var favicons = [Favicon]()
             if let icons = message.body as? [String: Int] {
                 for icon in icons {
-                    if let _ = URL(string: icon.0), let iconType = IconType(rawValue: icon.1) {
-                        let favicon = Favicon(url: icon.0, date: Date(), type: iconType)
+                    if let iconURL = URL(string: icon.0),
+                       let iconType = IconType(rawValue: icon.1) {
+                        let favicon = Favicon(url: iconURL, date: Date(), type: iconType)
                         favicons.append(favicon)
                     }
                 }

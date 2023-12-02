@@ -1,11 +1,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import SwiftUI
 import WidgetKit
 import UIKit
 import Combine
+import SiteImageView
 
 // Tab provider for Widgets
 struct TabProvider: TimelineProvider {
@@ -17,32 +18,32 @@ struct TabProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (OpenTabsEntry) -> Void) {
-        let allOpenTabs = SimpleTab.getSimpleTabs()
-
-        let openTabs = allOpenTabs.values.filter {
+        let openTabs = SimpleTab.getSimpleTabs().values.filter {
             !$0.isPrivate
         }
 
-        var tabFaviconDictionary = [String: Image]()
         let simpleTabs = SimpleTab.getSimpleTabs()
-        for (_, tab) in simpleTabs {
-            guard !tab.imageKey.isEmpty else { continue }
-            let fetchedImage = FaviconFetcher.getFaviconFromDiskCache(imageKey: tab.imageKey)
-            let bundledFavicon = getBundledFavicon(siteUrl: tab.url)
-            let letterFavicon = FaviconFetcher.letter(forUrl: tab.url ?? URL(string: "about:blank")!)
-            let image = bundledFavicon ?? fetchedImage ?? letterFavicon
-            tabFaviconDictionary[tab.imageKey] = Image(uiImage: image)
+        let siteImageFetcher = DefaultSiteImageHandler.factory()
+
+        Task {
+            let tabFaviconDictionary = await withTaskGroup(of: (String, SiteImageModel).self,
+                                                           returning: [String: Image].self) { group in
+                for (_, tab) in simpleTabs {
+                    let siteImageModel = SiteImageModel(id: UUID(),
+                                                        expectedImageType: .favicon,
+                                                        siteURLString: tab.url?.absoluteString ?? "")
+                    group.addTask {
+                        await (tab.imageKey,
+                               siteImageFetcher.getImage(site: siteImageModel))
+                    }
+                }
+
+                return await group.reduce(into: [:]) { $0[$1.0] = Image(uiImage: $1.1.faviconImage ?? UIImage()) }
+            }
+
+            let openTabsEntry = OpenTabsEntry(date: Date(), favicons: tabFaviconDictionary, tabs: openTabs)
+            completion(openTabsEntry)
         }
-
-        let openTabsEntry = OpenTabsEntry(date: Date(), favicons: tabFaviconDictionary, tabs: openTabs)
-        completion(openTabsEntry)
-    }
-
-    func getBundledFavicon(siteUrl: URL?) -> UIImage? {
-        guard let url = siteUrl else { return nil }
-        // Get the bundled favicon if available
-        guard let bundled = FaviconFetcher.getBundledIcon(forUrl: url), let image = UIImage(contentsOfFile: bundled.filePath) else { return nil }
-        return image
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<OpenTabsEntry>) -> Void) {

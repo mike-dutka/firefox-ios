@@ -1,11 +1,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Storage
 import Shared
 import UIKit
+import Common
 
 extension PhotonActionSheet: Notifiable {
     func handleNotifications(_ notification: Notification) {
@@ -20,46 +21,37 @@ extension PhotonActionSheet: Notifiable {
 }
 
 // This file is main table view used for the action sheet
-class PhotonActionSheet: UIViewController {
-
+class PhotonActionSheet: UIViewController, Themeable {
     struct UX {
-        static let MaxWidth: CGFloat = 414
-        static let Padding: CGFloat = 6
-        static let RowHeight: CGFloat = 44
-        static let BorderWidth: CGFloat = 0.5
-        static let BorderColor = UIColor.Photon.Grey30
-        static let CornerRadius: CGFloat = 10
-        static let SiteImageViewSize = 52
-        static let IconSize = CGSize(width: 24, height: 24)
-        static let SiteHeaderName  = "PhotonActionSheetSiteHeaderView"
-        static let TitleHeaderName = "PhotonActionSheetTitleHeaderView"
-        static let CellName = "PhotonActionSheetCell"
-        static let LineSeparatorSectionHeader = "LineSeparatorSectionHeader"
-        static let SeparatorSectionHeader = "SeparatorSectionHeader"
-        static let EmptyHeader = "EmptyHeader"
-        static let CloseButtonHeight: CGFloat  = 56
-        static let TablePadding: CGFloat = 6
-        static let SeparatorRowHeight: CGFloat = 8
-        static let TitleHeaderSectionHeight: CGFloat = 40
-        static let TitleHeaderSectionHeightWithSite: CGFloat = 70
-        static let BigSpacing: CGFloat = 32
-        static let Spacing: CGFloat = 16
-        static let SmallSpacing: CGFloat = 8
+        static let maxWidth: CGFloat = 414
+        static let padding: CGFloat = 6
+        static let rowHeight: CGFloat = 44
+        static let cornerRadius: CGFloat = 10
+        static let iconSize = CGSize(width: 24, height: 24)
+        static let closeButtonHeight: CGFloat  = 56
+        static let tablePadding: CGFloat = 6
+        static let separatorRowHeight: CGFloat = 8
+        static let titleHeaderSectionHeight: CGFloat = 40
+        static let bigSpacing: CGFloat = 32
+        static let spacing: CGFloat = 16
+        static let smallSpacing: CGFloat = 8
     }
 
     // MARK: - Variables
     private var tableView = UITableView(frame: .zero, style: .grouped)
+    private var backgroundBlurView: UIVisualEffectView?
     let viewModel: PhotonActionSheetViewModel
     private var constraints = [NSLayoutConstraint]()
-    var notificationCenter: NotificationProtocol = NotificationCenter.default
+    var notificationCenter: NotificationProtocol
+    var themeManager: ThemeManager
+    var themeObserver: NSObjectProtocol?
 
     private lazy var closeButton: UIButton = .build { button in
         button.setTitle(.CloseButtonTitle, for: .normal)
-        button.setTitleColor(UIConstants.SystemBlueColor, for: .normal)
-        button.layer.cornerRadius = UX.CornerRadius
-        button.titleLabel?.font = DynamicFontHelper.defaultHelper.DeviceFontExtraLargeBold
+        button.layer.cornerRadius = UX.cornerRadius
+        button.titleLabel?.font = DefaultDynamicFontHelper.preferredBoldFont(withTextStyle: .body, size: 19)
         button.addTarget(self, action: #selector(self.dismiss), for: .touchUpInside)
-        button.accessibilityIdentifier = "PhotonMenu.close"
+        button.accessibilityIdentifier = AccessibilityIdentifiers.Photon.closeButton
     }
 
     var photonTransitionDelegate: UIViewControllerTransitioningDelegate? {
@@ -70,14 +62,18 @@ class PhotonActionSheet: UIViewController {
 
     // MARK: - Init
 
-    init(viewModel: PhotonActionSheetViewModel) {
+    init(viewModel: PhotonActionSheetViewModel,
+         themeManager: ThemeManager = AppContainer.shared.resolve(),
+         notificationCenter: NotificationProtocol = NotificationCenter.default) {
         self.viewModel = viewModel
+        self.themeManager = themeManager
+        self.notificationCenter = notificationCenter
         super.init(nibName: nil, bundle: nil)
 
         title = viewModel.title
         modalPresentationStyle = viewModel.modalStyle
         closeButton.setTitle(viewModel.closeButtonTitle, for: .normal)
-        tableView.estimatedRowHeight = UX.RowHeight
+        tableView.estimatedRowHeight = UX.rowHeight
     }
 
     required init?(coder aDecoder: NSCoder) {
@@ -87,6 +83,7 @@ class PhotonActionSheet: UIViewController {
     deinit {
         tableView.dataSource = nil
         tableView.delegate = nil
+        tableView.removeFromSuperview()
         notificationCenter.removeObserver(self)
     }
 
@@ -94,30 +91,14 @@ class PhotonActionSheet: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        listenForThemeChange(view)
         view.addSubview(tableView)
-        view.accessibilityIdentifier = "Action Sheet"
+        view.accessibilityIdentifier = AccessibilityIdentifiers.Photon.view
 
         tableView.backgroundColor = .clear
         tableView.addObserver(self, forKeyPath: "contentSize", options: .new, context: nil)
-        // In a popover the popover provides the blur background
-        // Not using a background color allows the view to style correctly with the popover arrow
-        if self.popoverPresentationController == nil {
-            let blurEffect = UIBlurEffect(style: UIColor.theme.actionMenu.iPhoneBackgroundBlurStyle)
-            let blurEffectView = UIVisualEffectView(effect: blurEffect)
-            tableView.backgroundView = blurEffectView
-        }
 
-        if viewModel.presentationStyle == .bottom {
-            setupBottomStyle()
-        } else if viewModel.presentationStyle == .popover {
-            setupPopoverStyle()
-        } else {
-            setupCenteredStyle()
-        }
-
-        tableViewHeightConstraint = tableView.heightAnchor.constraint(equalToConstant: 0)
-        tableViewHeightConstraint?.isActive = true
-        NSLayoutConstraint.activate(constraints)
+        setupLayout()
 
         setupNotifications(forObserver: self, observing: [.ProfileDidFinishSyncing,
                                                           .ProfileDidStartSyncing,
@@ -138,16 +119,20 @@ class PhotonActionSheet: UIViewController {
         tableView.delegate = self
         tableView.dataSource = self
         tableView.keyboardDismissMode = .onDrag
-        tableView.register(PhotonActionSheetContainerCell.self, forCellReuseIdentifier: UX.CellName)
-        tableView.register(PhotonActionSheetSiteHeaderView.self, forHeaderFooterViewReuseIdentifier: UX.SiteHeaderName)
-        tableView.register(PhotonActionSheetTitleHeaderView.self, forHeaderFooterViewReuseIdentifier: UX.TitleHeaderName)
-        tableView.register(PhotonActionSheetSeparator.self, forHeaderFooterViewReuseIdentifier: UX.SeparatorSectionHeader)
-        tableView.register(PhotonActionSheetLineSeparator.self, forHeaderFooterViewReuseIdentifier: UX.LineSeparatorSectionHeader)
-        tableView.register(UITableViewHeaderFooterView.self, forHeaderFooterViewReuseIdentifier: UX.EmptyHeader)
+        tableView.register(PhotonActionSheetSeparator.self,
+                           forHeaderFooterViewReuseIdentifier: PhotonActionSheetSeparator.cellIdentifier)
+        tableView.register(PhotonActionSheetSiteHeaderView.self,
+                           forHeaderFooterViewReuseIdentifier: PhotonActionSheetSiteHeaderView.cellIdentifier)
+        tableView.register(PhotonActionSheetTitleHeaderView.self,
+                           forHeaderFooterViewReuseIdentifier: PhotonActionSheetTitleHeaderView.cellIdentifier)
+        tableView.register(PhotonActionSheetLineSeparator.self,
+                           forHeaderFooterViewReuseIdentifier: PhotonActionSheetLineSeparator.cellIdentifier)
+        tableView.register(PhotonActionSheetContainerCell.self,
+                           forCellReuseIdentifier: PhotonActionSheetContainerCell.cellIdentifier)
 
         tableView.isScrollEnabled = true
         tableView.showsVerticalScrollIndicator = false
-        tableView.layer.cornerRadius = UX.CornerRadius
+        tableView.layer.cornerRadius = UX.cornerRadius
         // Don't show separators on ETP menu
         if viewModel.title != nil {
             tableView.separatorStyle = .none
@@ -155,7 +140,7 @@ class PhotonActionSheet: UIViewController {
         tableView.separatorColor = UIColor.clear
         tableView.separatorInset = .zero
         tableView.cellLayoutMarginsFollowReadableWidth = false
-        tableView.accessibilityIdentifier = "Context Menu"
+        tableView.accessibilityIdentifier = AccessibilityIdentifiers.Photon.tableView
         tableView.translatesAutoresizingMaskIntoConstraints = false
 
         if viewModel.isMainMenuInverted {
@@ -164,8 +149,8 @@ class PhotonActionSheet: UIViewController {
         tableView.reloadData()
 
         DispatchQueue.main.async {
-            // Pick up the correct/final tableview.contentsize in order to set the height.
-            // Without async dispatch, the contentsize is wrong.
+            // Pick up the correct/final tableview.content size in order to set the height.
+            // Without async dispatch, the content size is wrong.
             self.view.setNeedsLayout()
             self.view.layoutIfNeeded()
         }
@@ -187,17 +172,31 @@ class PhotonActionSheet: UIViewController {
 
     // MARK: - Setup
 
+    private func setupLayout() {
+        if viewModel.presentationStyle == .bottom {
+            setupBottomStyle()
+        } else if viewModel.presentationStyle == .popover {
+            setupPopoverStyle()
+        } else {
+            setupCenteredStyle()
+        }
+
+        tableViewHeightConstraint = tableView.heightAnchor.constraint(equalToConstant: 0)
+        tableViewHeightConstraint?.isActive = true
+        NSLayoutConstraint.activate(constraints)
+    }
+
     private func setupBottomStyle() {
         self.view.addSubview(closeButton)
 
         let bottomConstraints = [
             closeButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             closeButton.widthAnchor.constraint(equalToConstant: centeredAndBottomWidth),
-            closeButton.heightAnchor.constraint(equalToConstant: UX.CloseButtonHeight),
-            closeButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -UX.Padding),
+            closeButton.heightAnchor.constraint(equalToConstant: UX.closeButtonHeight),
+            closeButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -UX.padding),
 
             tableView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            tableView.bottomAnchor.constraint(equalTo: closeButton.topAnchor, constant: -UX.Padding),
+            tableView.bottomAnchor.constraint(equalTo: closeButton.topAnchor, constant: -UX.padding),
             tableView.widthAnchor.constraint(equalToConstant: centeredAndBottomWidth),
         ]
         constraints.append(contentsOf: bottomConstraints)
@@ -230,40 +229,78 @@ class PhotonActionSheet: UIViewController {
             tableView.widthAnchor.constraint(equalToConstant: centeredAndBottomWidth),
         ]
         constraints.append(contentsOf: tableViewConstraints)
+    }
 
-        applyBackgroundBlur()
-        viewModel.tintColor = UIConstants.SystemBlueColor
+    private func setupBackgroundBlur() {
+        guard backgroundBlurView == nil else { return }
+
+        let blur = UIBlurEffect(style: .systemMaterialDark)
+        let backgroundBlurView = IntensityVisualEffectView(effect: blur, intensity: 0.2)
+        view.insertSubview(backgroundBlurView, belowSubview: tableView)
+        backgroundBlurView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            backgroundBlurView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backgroundBlurView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backgroundBlurView.topAnchor.constraint(equalTo: view.topAnchor),
+            backgroundBlurView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        self.backgroundBlurView = backgroundBlurView
     }
 
     // The width used for the .centered and .bottom style
     private var centeredAndBottomWidth: CGFloat {
-        let minimumWidth = min(view.frame.size.width, UX.MaxWidth)
-        return minimumWidth - (UX.Padding * 2)
+        let minimumWidth = min(view.frame.size.width, UX.maxWidth)
+        return minimumWidth - (UX.padding * 2)
     }
 
     // MARK: - Theme
 
-    @objc func reduceTransparencyChanged() {
+    @objc
+    func reduceTransparencyChanged() {
         // If the user toggles transparency settings, re-apply the theme to also toggle the blur effect.
         applyTheme()
     }
 
-    private func applyBackgroundBlur() {
-        guard let appDelegate = UIApplication.shared.delegate as? AppDelegate,
-              let screenshot = appDelegate.window?.screenshot() else { return }
+    func applyTheme() {
+        let theme = themeManager.currentTheme
 
-        let blurredImage = screenshot.applyBlur(withRadius: 5,
-                                                blurType: BOXFILTER,
-                                                tintColor: UIColor.black.withAlphaComponent(0.2),
-                                                saturationDeltaFactor: 1.8,
-                                                maskImage: nil)
-        let imageView = UIImageView(image: blurredImage)
-        view.insertSubview(imageView, belowSubview: tableView)
+        if viewModel.presentationStyle == .centered {
+            setupBackgroundBlur()
+        }
+
+        // In a popover the popover provides the blur background
+        if viewModel.presentationStyle == .popover {
+            view.backgroundColor = theme.colors.layer1
+        } else if UIAccessibility.isReduceTransparencyEnabled {
+            backgroundBlurView?.alpha = 0.0
+
+            // Remove the visual effect and the background alpha
+            (tableView.backgroundView as? UIVisualEffectView)?.effect = nil
+            tableView.backgroundView?.backgroundColor = theme.colors.layer1
+            tableView.backgroundColor = theme.colors.layer1
+        } else {
+            backgroundBlurView?.alpha = 1.0
+
+            tableView.backgroundColor = .clear
+            let blurEffect = UIBlurEffect(style: .regular)
+
+            if let visualEffectView = tableView.backgroundView as? UIVisualEffectView {
+                visualEffectView.effect = blurEffect
+            } else {
+                let blurEffectView = UIVisualEffectView(effect: blurEffect)
+                tableView.backgroundView = blurEffectView
+            }
+            tableView.backgroundView?.backgroundColor = theme.colors.layer1.withAlphaComponent(0.9)
+        }
+
+        closeButton.backgroundColor = theme.colors.layer1
+        closeButton.setTitleColor(theme.colors.actionPrimary, for: .normal)
     }
 
     // MARK: - Actions
 
-    @objc private func stopRotateSyncIcon() {
+    @objc
+    private func stopRotateSyncIcon() {
         ensureMainThread {
             self.tableView.reloadData()
         }
@@ -273,10 +310,10 @@ class PhotonActionSheet: UIViewController {
                                of object: Any?,
                                change: [NSKeyValueChangeKey: Any]?,
                                context: UnsafeMutableRawPointer?) {
-        if viewModel.presentationStyle == .popover && !wasHeightOverriden {
+        if viewModel.presentationStyle == .popover && !wasHeightOverridden {
             if #available(iOS 15.4, *) {
                 var size = tableView.contentSize
-                size.height = tableView.contentSize.height - UX.Spacing - UX.TablePadding
+                size.height = tableView.contentSize.height - UX.spacing - UX.tablePadding
                 preferredContentSize = size
             } else {
                 preferredContentSize = tableView.contentSize
@@ -284,7 +321,8 @@ class PhotonActionSheet: UIViewController {
         }
     }
 
-    @objc private func dismiss(_ gestureRecognizer: UIGestureRecognizer?) {
+    @objc
+    private func dismiss(_ gestureRecognizer: UIGestureRecognizer?) {
         dismissVC()
     }
 
@@ -310,19 +348,19 @@ class PhotonActionSheet: UIViewController {
     }
 
     // Needed to override the preferredContentSize, so key value observer doesn't get called
-    private var wasHeightOverriden = false
+    private var wasHeightOverridden = false
 
     /// Main menu table view height is calculated so if there's not enough space for the menu to be shown completely,
     /// we make sure that the last cell shown is half shown. This indicates to the user that the menu can be scrolled.
     private func setMainMenuTableViewHeight() {
         let visibleCellsHeight = getViewsHeightSum(views: tableView.visibleCells)
-        let headerCellsHeight = getViewsHeightSum(views: tableView.visibleHeaders)
+        let headerCellsHeight = getViewsHeightSum(views: visibleTableViewHeaders)
 
         let totalCellsHeight = visibleCellsHeight + headerCellsHeight
         let availableHeight = viewModel.availableMainMenuHeight
         let needsHeightAdjustment = availableHeight - totalCellsHeight < 0
 
-        if needsHeightAdjustment && totalCellsHeight != 0 && !wasHeightOverriden {
+        if needsHeightAdjustment && totalCellsHeight != 0 && !wasHeightOverridden {
             let newHeight: CGFloat
             if viewModel.isAtTopMainMenu {
                 let halfCellHeight = (tableView.visibleCells.last?.frame.height ?? 0) / 2
@@ -333,7 +371,7 @@ class PhotonActionSheet: UIViewController {
                 newHeight = totalCellsHeight - aCellAndAHalfHeight
             }
 
-            wasHeightOverriden = true
+            wasHeightOverridden = true
             tableViewHeightConstraint?.constant = newHeight
             tableViewHeightConstraint?.priority = .required
 
@@ -348,7 +386,7 @@ class PhotonActionSheet: UIViewController {
 
     private func setDefaultStyleTableViewHeight() {
         let frameHeight = view.safeAreaLayoutGuide.layoutFrame.size.height
-        let buttonHeight = viewModel.presentationStyle == .bottom ? UX.CloseButtonHeight : 0
+        let buttonHeight = viewModel.presentationStyle == .bottom ? UX.closeButtonHeight : 0
         let maxHeight = frameHeight - buttonHeight
 
         // The height of the menu should be no more than 90 percent of the screen
@@ -359,11 +397,39 @@ class PhotonActionSheet: UIViewController {
     private func getViewsHeightSum(views: [UIView]) -> CGFloat {
         return views.map { $0.frame.height }.reduce(0, +)
     }
+
+    private var visibleTableViewHeaders: [UITableViewHeaderFooterView] {
+        var visibleHeaders = [UITableViewHeaderFooterView]()
+        for sectionIndex in indexesOfVisibleHeaderSections {
+            guard let sectionHeader = tableView.headerView(forSection: sectionIndex) else { continue }
+            visibleHeaders.append(sectionHeader)
+        }
+
+        return visibleHeaders
+    }
+
+    private var indexesOfVisibleHeaderSections: [Int] {
+        var visibleSectionIndexes = [Int]()
+
+        (0..<tableView.numberOfSections).forEach { index in
+            let headerRect = tableView.rect(forSection: index)
+
+            // The "visible part" of the tableView is based on the content offset and the tableView's size.
+            let visiblePartOfTableView = CGRect(x: tableView.contentOffset.x,
+                                                y: tableView.contentOffset.y,
+                                                width: tableView.bounds.size.width,
+                                                height: tableView.bounds.size.height)
+
+            if visiblePartOfTableView.intersects(headerRect) {
+                visibleSectionIndexes.append(index)
+            }
+        }
+        return visibleSectionIndexes
+    }
 }
 
 // MARK: - UITableViewDataSource, UITableViewDelegate
 extension PhotonActionSheet: UITableViewDataSource, UITableViewDelegate {
-
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
         guard let section = viewModel.actions[safe: indexPath.section],
               let action = section[safe: indexPath.row],
@@ -387,20 +453,22 @@ extension PhotonActionSheet: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
-        guard let cell = tableView.dequeueReusableCell(withIdentifier: UX.CellName, for: indexPath) as? PhotonActionSheetContainerCell else { return UITableViewCell() }
+        guard let cell = tableView.dequeueReusableCell(
+            withIdentifier: PhotonActionSheetContainerCell.cellIdentifier,
+            for: indexPath) as? PhotonActionSheetContainerCell
+        else { return UITableViewCell() }
+
         let actions = viewModel.actions[indexPath.section][indexPath.row]
-        cell.configure(actions: actions, viewModel: viewModel)
+        cell.configure(actions: actions, viewModel: viewModel, theme: themeManager.currentTheme)
         cell.delegate = self
 
         if viewModel.isMainMenuInverted {
             let rowIsLastInSection = indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1
             cell.hideBottomBorder(isHidden: rowIsLastInSection)
-
         } else {
             let isLastRow = indexPath.row == tableView.numberOfRows(inSection: indexPath.section) - 1
             cell.hideBottomBorder(isHidden: isLastRow)
         }
-
         return cell
     }
 
@@ -417,7 +485,9 @@ extension PhotonActionSheet: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, viewForHeaderInSection section: Int) -> UIView? {
-        return viewModel.getViewHeader(tableView: tableView, section: section)
+        let header = viewModel.getViewHeader(tableView: tableView, section: section)
+        (header as? ThemeApplicable)?.applyTheme(theme: themeManager.currentTheme)
+        return header
     }
 }
 
@@ -425,69 +495,5 @@ extension PhotonActionSheet: UITableViewDataSource, UITableViewDelegate {
 extension PhotonActionSheet: PhotonActionSheetContainerCellDelegate {
     func didClick(item: SingleActionViewModel?) {
         dismissVC()
-    }
-
-    func layoutChanged(item: SingleActionViewModel) {
-        tableView.reloadData()
-    }
-}
-
-// MARK: - Visible Headers
-extension UITableView {
-
-    var visibleHeaders: [UITableViewHeaderFooterView] {
-        var visibleHeaders = [UITableViewHeaderFooterView]()
-        for sectionIndex in indexesOfVisibleHeaderSections {
-            guard let sectionHeader = headerView(forSection: sectionIndex) else { continue }
-            visibleHeaders.append(sectionHeader)
-        }
-
-        return visibleHeaders
-    }
-
-    private var indexesOfVisibleHeaderSections: [Int] {
-        var visibleSectionIndexes = [Int]()
-
-        (0..<numberOfSections).forEach { index in
-            let headerRect = rect(forSection: index)
-
-            // The "visible part" of the tableView is based on the content offset and the tableView's size.
-            let visiblePartOfTableView = CGRect(x: contentOffset.x,
-                                                y: contentOffset.y,
-                                                width: bounds.size.width,
-                                                height: bounds.size.height)
-
-            if visiblePartOfTableView.intersects(headerRect) {
-                visibleSectionIndexes.append(index)
-            }
-        }
-        return visibleSectionIndexes
-    }
-}
-
-// MARK: - NotificationThemeable
-extension PhotonActionSheet: NotificationThemeable {
-
-    func applyTheme() {
-        if viewModel.presentationStyle == .popover {
-            view.backgroundColor = UIColor.theme.browser.background.withAlphaComponent(0.7)
-        } else {
-            tableView.backgroundView?.backgroundColor = UIColor.theme.actionMenu.iPhoneBackground
-        }
-
-        // Apply or remove the background blur effect
-        if let visualEffectView = tableView.backgroundView as? UIVisualEffectView {
-            if UIAccessibility.isReduceTransparencyEnabled {
-                // Remove the visual effect and the background alpha
-                visualEffectView.effect = nil
-                tableView.backgroundView?.backgroundColor = UIColor.theme.actionMenu.iPhoneBackground.withAlphaComponent(1.0)
-            } else {
-                visualEffectView.effect = UIBlurEffect(style: UIColor.theme.actionMenu.iPhoneBackgroundBlurStyle)
-            }
-        }
-
-        viewModel.tintColor = UIColor.theme.actionMenu.foreground
-        closeButton.backgroundColor = UIColor.theme.actionMenu.closeButtonBackground
-        tableView.headerView(forSection: 0)?.backgroundColor = UIColor.Photon.DarkGrey05
     }
 }

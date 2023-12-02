@@ -1,14 +1,15 @@
-/* This Source Code Form is subject to the terms of the Mozilla Public
-* License, v. 2.0. If a copy of the MPL was not distributed with this
-* file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import WebKit
 import Foundation
 import Account
 import MozillaAppServices
 import Shared
+import Common
 
-enum FxAPageType {
+enum FxAPageType: Equatable {
     case emailLoginFlow
     case qrCode(url: String)
     case settingsPage
@@ -30,18 +31,21 @@ private enum RemoteCommand: String {
 class FxAWebViewModel {
     fileprivate let pageType: FxAPageType
     fileprivate let profile: Profile
-    fileprivate var deepLinkParams: FxALaunchParams?
+    fileprivate var deepLinkParams: FxALaunchParams
     fileprivate(set) var baseURL: URL?
     let fxAWebViewTelemetry = FxAWebViewTelemetry()
-
+    private var shouldAskForNotificationPermission: Bool
+    private let logger: Logger
     // This is not shown full-screen, use mobile UA
     static let mobileUserAgent = UserAgent.mobileUserAgent()
+
+    var userDefaults: UserDefaultsInterface = UserDefaults.standard
 
     func setupUserScript(for controller: WKUserContentController) {
         guard let path = Bundle.main.path(forResource: "FxASignIn", ofType: "js"),
               let source = try? String(contentsOfFile: path, encoding: .utf8)
         else {
-            assert(false)
+            assertionFailure("Error unwrapping contents of file to set up user script")
             return
         }
 
@@ -50,19 +54,22 @@ class FxAWebViewModel {
     }
 
     /**
-    init() FxAWebViewModel.
-    - parameter pageType: Specify login flow or settings page if already logged in.
-    - parameter profile: a Profile.
-    - parameter deepLinkParams: url parameters that originate from a deep link
-    */
-    required init(pageType: FxAPageType, profile: Profile, deepLinkParams: FxALaunchParams?) {
+     init() FxAWebViewModel.
+     - parameter pageType: Specify login flow or settings page if already logged in.
+     - parameter profile: a Profile.
+     - parameter deepLinkParams: url parameters that originate from a deep link
+     - parameter shouldAskForNotificationPermission: indicator if notification permissions should be requested from the user upon login.
+     */
+    required init(pageType: FxAPageType,
+                  profile: Profile,
+                  deepLinkParams: FxALaunchParams,
+                  shouldAskForNotificationPermission: Bool = true,
+                  logger: Logger = DefaultLogger.shared) {
         self.pageType = pageType
         self.profile = profile
         self.deepLinkParams = deepLinkParams
-
-        // If accountMigrationFailed then the app menu has a caution icon,
-        // and at this point the user has taken sufficient action to clear the caution.
-        profile.rustFxA.accountMigrationFailed = false
+        self.shouldAskForNotificationPermission = shouldAskForNotificationPermission
+        self.logger = logger
     }
 
     var onDismissController: (() -> Void)?
@@ -72,14 +79,15 @@ class FxAWebViewModel {
     }
 
     func setupFirstPage(completion: @escaping (URLRequest, TelemetryWrapper.EventMethod?) -> Void) {
-        profile.rustFxA.accountManager.uponQueue(.main) { accountManager in
-            accountManager.getManageAccountURL(entrypoint: "ios_settings_manage") { [weak self] result in
+        if let accountManager = profile.rustFxA.accountManager {
+            let entrypoint = self.deepLinkParams.entrypoint.rawValue
+            accountManager.getManageAccountURL(entrypoint: "ios_settings_\(entrypoint)") { [weak self] result in
                 guard let self = self else { return }
 
                 // Handle authentication with either the QR code login flow, email login flow, or settings page flow
                 switch self.pageType {
                 case .emailLoginFlow:
-                    accountManager.beginAuthentication(entrypoint: "emailLoginFlow") { [weak self] result in
+                    accountManager.beginAuthentication(entrypoint: "email_\(entrypoint)") { [weak self] result in
                         guard let self = self else { return }
 
                         if case .success(let url) = result {
@@ -88,7 +96,7 @@ class FxAWebViewModel {
                         }
                     }
                 case let .qrCode(url):
-                    accountManager.beginPairingAuthentication(pairingUrl: url, entrypoint: "qrCode") { [weak self] result in
+                    accountManager.beginPairingAuthentication(pairingUrl: url, entrypoint: "pairing_\(entrypoint)") { [weak self] result in
                         guard let self = self else { return }
 
                         if case .success(let url) = result {
@@ -107,16 +115,14 @@ class FxAWebViewModel {
     }
 
     private func makeRequest(_ url: URL) -> URLRequest {
-        if let query = deepLinkParams?.query {
-            let args = query.filter { $0.key.starts(with: "utm_") }.map {
-                return URLQueryItem(name: $0.key, value: $0.value)
-            }
+        let args = deepLinkParams.query.filter { $0.key.starts(with: "utm_") }.map {
+            return URLQueryItem(name: $0.key, value: $0.value)
+        }
 
-            var comp = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            comp?.queryItems?.append(contentsOf: args)
-            if let url = comp?.url {
-                return URLRequest(url: url)
-            }
+        var comp = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        comp?.queryItems?.append(contentsOf: args)
+        if let url = comp?.url {
+            return URLRequest(url: url)
         }
 
         return URLRequest(url: url)
@@ -132,7 +138,9 @@ extension FxAWebViewModel {
 
         let origin = message.frameInfo.securityOrigin
         guard origin.`protocol` == url.scheme && origin.host == url.host && origin.port == (url.port ?? 0) else {
-            print("Ignoring message - \(origin) does not match expected origin: \(url.origin ?? "nil")")
+            logger.log("Ignoring message - \(origin) does not match expected origin: \(url.origin ?? "nil")",
+                       level: .warning,
+                       category: .sync)
             return
         }
 
@@ -154,6 +162,8 @@ extension FxAWebViewModel {
             case .login:
                 if let data = data {
                     onLogin(data: data, webView: webView)
+                } else {
+                    onDismissController?()
                 }
             case .changePassword:
                 if let data = data {
@@ -167,7 +177,7 @@ extension FxAWebViewModel {
                 profile.removeAccount()
                 onDismissController?()
             case .profileChanged:
-                profile.rustFxA.accountManager.peek()?.refreshProfile(ignoreCache: true)
+                profile.rustFxA.accountManager?.refreshProfile(ignoreCache: true)
                 // dismiss keyboard after changing profile in order to see notification view
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
             }
@@ -195,17 +205,17 @@ extension FxAWebViewModel {
     /// user info (for settings), or by passing CWTS setup info (in case the user is
     /// signing up for an account). This latter case is also used for the sign-in state.
     private func onSessionStatus(id: Int, webView: WKWebView) {
-        guard let fxa = profile.rustFxA.accountManager.peek() else { return }
+        guard let fxa = profile.rustFxA.accountManager else { return }
         let cmd = "fxaccounts:fxa_status"
         let typeId = "account_updates"
         let data: String
         switch pageType {
-            case .settingsPage:
-                // Both email and uid are required at this time to properly link the FxA settings session
-                let email = fxa.accountProfile()?.email ?? ""
-                let uid = fxa.accountProfile()?.uid ?? ""
-                let token = (try? fxa.getSessionToken().get()) ?? ""
-                data = """
+        case .settingsPage:
+            // Both email and uid are required at this time to properly link the FxA settings session
+            let email = fxa.accountProfile()?.email ?? ""
+            let uid = fxa.accountProfile()?.uid ?? ""
+            let token = (try? fxa.getSessionToken().get()) ?? ""
+            data = """
                 {
                     capabilities: {},
                     signedInUser: {
@@ -216,8 +226,8 @@ extension FxAWebViewModel {
                     }
                 }
                 """
-            case .emailLoginFlow, .qrCode:
-                data = """
+        case .emailLoginFlow, .qrCode:
+            data = """
                     { capabilities:
                         { choose_what_to_sync: true, engines: ["bookmarks", "history", "tabs", "passwords"] },
                     }
@@ -239,15 +249,22 @@ extension FxAWebViewModel {
         }
 
         let auth = FxaAuthData(code: code, state: state, actionQueryParam: "signin")
-        profile.rustFxA.accountManager.peek()?.finishAuthentication(authData: auth) { _ in
+        profile.rustFxA.accountManager?.finishAuthentication(authData: auth) { _ in
             self.profile.syncManager.onAddedAccount()
 
-            // ask for push notification
+            // only ask for notification permission if it's not onboarding related (e.g. settings) or if the onboarding flow is missing the notifications card
+            guard self.shouldAskForNotificationPermission else { return }
+
             MZKeychainWrapper.sharedClientAppContainerKeychain.removeObject(forKey: KeychainKey.apnsToken, withAccessibility: MZKeychainItemAccessibility.afterFirstUnlock)
-            let center = UNUserNotificationCenter.current()
-            center.requestAuthorization(options: [.alert, .badge, .sound]) { (granted, error) in
+            NotificationManager().requestAuthorization { granted, error in
                 guard error == nil else { return }
                 if granted {
+                    if self.userDefaults.object(forKey: PrefsKeys.Notifications.SyncNotifications) == nil {
+                        self.userDefaults.set(granted, forKey: PrefsKeys.Notifications.SyncNotifications)
+                    }
+                    if self.userDefaults.object(forKey: PrefsKeys.Notifications.TipsAndFeaturesNotifications) == nil {
+                        self.userDefaults.set(granted, forKey: PrefsKeys.Notifications.TipsAndFeaturesNotifications)
+                    }
                     NotificationCenter.default.post(name: .RegisterForPushNotifications, object: nil)
                 }
             }
@@ -262,7 +279,7 @@ extension FxAWebViewModel {
               let sessionToken = data["sessionToken"] as? String
         else { return }
 
-        profile.rustFxA.accountManager.peek()?.handlePasswordChanged(newSessionToken: sessionToken) {
+        profile.rustFxA.accountManager?.handlePasswordChanged(newSessionToken: sessionToken) {
             NotificationCenter.default.post(name: .RegisterForPushNotifications, object: nil)
         }
     }
@@ -272,7 +289,7 @@ extension FxAWebViewModel {
         // The app handles this event fully in native UI.
         let redirectUrl = RustFirefoxAccounts.redirectURL
         if let navigationURL = navigationURL {
-            let expectedRedirectURL = URL(string: redirectUrl)!
+            let expectedRedirectURL = URL(string: redirectUrl, invalidCharacters: false)!
             if navigationURL.scheme == expectedRedirectURL.scheme && navigationURL.host == expectedRedirectURL.host && navigationURL.path == expectedRedirectURL.path {
                 return .cancel
             }

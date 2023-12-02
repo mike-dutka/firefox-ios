@@ -1,20 +1,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-// ADAPTED FROM:
-//
-//  GradientProgressBar.swift
-//  GradientProgressBar
-//
-//  Created by Felix Mau on 01.03.17.
-//  Copyright © 2017 Felix Mau. All rights reserved.
-//
+// ADAPTED FROM: work by Felix Mau on 01.03.17.
 
 import UIKit
 
 open class GradientProgressBar: UIProgressView {
-
     private struct DefaultValues {
         static let backgroundColor = UIColor.clear
         static let animationDuration = 0.2 // CALayer default animation duration
@@ -65,7 +57,7 @@ open class GradientProgressBar: UIProgressView {
         commonInit()
     }
 
-    required public init?(coder aDecoder: NSCoder) {
+    public required init?(coder aDecoder: NSCoder) {
         super.init(coder: aDecoder)
         commonInit()
     }

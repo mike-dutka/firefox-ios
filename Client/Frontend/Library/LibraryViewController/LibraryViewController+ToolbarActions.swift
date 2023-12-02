@@ -6,16 +6,18 @@ import Foundation
 
 // MARK: - Toolbar Button Actions
 extension LibraryViewController {
-
-    @objc func topLeftButtonAction() {
+    @objc
+    func topLeftButtonAction() {
         guard let navController = children.first as? UINavigationController else { return }
 
         navController.popViewController(animated: true)
-        viewModel.currentPanel?.handleLeftTopButton()
+        var panel = getCurrentPanel()
+        panel?.handleLeftTopButton()
     }
 
-    @objc func topRightButtonAction() {
-        guard let panel = viewModel.currentPanel else { return }
+    @objc
+    func topRightButtonAction() {
+        guard let panel = getCurrentPanel() else { return }
 
         if panel.shouldDismissOnDone() {
             dismiss(animated: true, completion: nil)

@@ -1,12 +1,14 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Shared
 import UIKit
 
 extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
     func tabToolbarDidPressHome(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
+        updateZoomPageBarVisibility(visible: false)
         userHasPressedHomeButton = true
         let page = NewTabAccessors.getHomePage(self.profile.prefs)
         if page == .homePage, let homePageURL = HomeButtonHomePageAccessors.getHomePage(self.profile.prefs) {
@@ -44,6 +46,7 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
     }
 
     func tabToolbarDidPressBack(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
+        updateZoomPageBarVisibility(visible: false)
         tabManager.selectedTab?.goBack()
     }
 
@@ -54,6 +57,7 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
     }
 
     func tabToolbarDidPressForward(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
+        updateZoomPageBarVisibility(visible: false)
         tabManager.selectedTab?.goForward()
     }
 
@@ -64,31 +68,34 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
     }
 
     func tabToolbarDidPressBookmarks(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
-        if let libraryDrawerViewController = self.libraryDrawerViewController, libraryDrawerViewController.isOpen {
-            libraryDrawerViewController.close()
-        } else {
-            showLibrary(panel: .bookmarks)
-        }
+        showLibrary(panel: .bookmarks)
     }
 
     func tabToolbarDidPressAddNewTab(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
         let isPrivate = tabManager.selectedTab?.isPrivate ?? false
         tabManager.selectTab(tabManager.addTab(nil, isPrivate: isPrivate))
         focusLocationTextField(forTab: tabManager.selectedTab)
+        overlayManager.openNewTab(url: nil,
+                                  newTabSettings: NewTabAccessors.getNewTabPage(profile.prefs))
     }
 
     func tabToolbarDidPressMenu(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
         // Ensure that any keyboards or spinners are dismissed before presenting the menu
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        libraryDrawerViewController?.close(immediately: true)
 
+        // Logs homePageMenu or siteMenu depending if HomePage is open or not
+        let isHomePage = tabManager.selectedTab?.isFxHomeTab ?? false
+        let eventObject: TelemetryWrapper.EventObject = isHomePage ? .homePageMenu : .siteMenu
+        TelemetryWrapper.recordEvent(category: .action, method: .tap, object: eventObject)
         let menuHelper = MainMenuActionHelper(profile: profile,
                                               tabManager: tabManager,
                                               buttonView: button,
-                                              showFXASyncAction: presentSignInViewController)
+                                              toastContainer: contentContainer)
         menuHelper.delegate = self
-        menuHelper.menuActionDelegate = self
+        menuHelper.sendToDeviceDelegate = self
+        menuHelper.navigationHandler = navigationHandler
 
+        updateZoomPageBarVisibility(visible: false)
         menuHelper.getToolbarActions(navigationController: navigationController) { actions in
             let shouldInverse = PhotonActionSheetViewModel.hasInvertedMainMenu(trait: self.traitCollection, isBottomSearchBar: self.isBottomSearchBar)
             let viewModel = PhotonActionSheetViewModel(actions: actions, modalStyle: .popover, isMainMenu: true, isMainMenuInverted: shouldInverse)
@@ -97,6 +104,7 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
     }
 
     func tabToolbarDidPressTabs(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
+        updateZoomPageBarVisibility(visible: false)
         showTabTray()
         TelemetryWrapper.recordEvent(category: .action, method: .press, object: .tabToolbar, value: .tabView)
     }
@@ -109,7 +117,7 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
 
         func action() {
             let result = tabManager.switchPrivacyMode()
-            if result == .createdNewTab, NewTabAccessors.getNewTabPage(self.profile.prefs) == .blankPage {
+            if result == .createdNewTab, self.newTabSettings == .blankPage {
                 focusLocationTextField(forTab: tabManager.selectedTab)
             }
         }
@@ -135,17 +143,26 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
     }
 
     func getMoreTabToolbarLongPressActions() -> [PhotonRowActions] {
-        let newTab = SingleActionViewModel(title: .KeyboardShortcuts.NewTab, iconString: ImageIdentifiers.newTab, iconType: .Image) { _ in
-            let shouldFocusLocationField = NewTabAccessors.getNewTabPage(self.profile.prefs) == .blankPage
+        let newTab = SingleActionViewModel(title: .KeyboardShortcuts.NewTab,
+                                           iconString: StandardImageIdentifiers.Large.plus,
+                                           iconType: .Image) { _ in
+            let shouldFocusLocationField = self.newTabSettings == .blankPage
+            self.overlayManager.openNewTab(url: nil, newTabSettings: self.newTabSettings)
             self.openBlankNewTab(focusLocationField: shouldFocusLocationField, isPrivate: false)
         }.items
 
-        let newPrivateTab = SingleActionViewModel(title: .KeyboardShortcuts.NewPrivateTab, iconString: ImageIdentifiers.newTab, iconType: .Image) { _ in
-            let shouldFocusLocationField = NewTabAccessors.getNewTabPage(self.profile.prefs) == .blankPage
+        let newPrivateTab = SingleActionViewModel(title: .KeyboardShortcuts.NewPrivateTab,
+                                                  iconString: StandardImageIdentifiers.Large.plus,
+                                                  iconType: .Image) { _ in
+            let shouldFocusLocationField = self.newTabSettings == .blankPage
+            self.overlayManager.openNewTab(url: nil, newTabSettings: self.newTabSettings)
             self.openBlankNewTab(focusLocationField: shouldFocusLocationField, isPrivate: true)
+            TelemetryWrapper.recordEvent(category: .action, method: .tap, object: .newPrivateTab, value: .tabTray)
         }.items
 
-        let closeTab = SingleActionViewModel(title: .KeyboardShortcuts.CloseCurrentTab, iconString: "tab_close", iconType: .Image) { _ in
+        let closeTab = SingleActionViewModel(title: .KeyboardShortcuts.CloseCurrentTab,
+                                             iconString: StandardImageIdentifiers.Large.cross,
+                                             iconType: .Image) { _ in
             if let tab = self.tabManager.selectedTab {
                 self.tabManager.removeTab(tab)
                 self.updateTabCountUsingTabManager(self.tabManager)
@@ -189,7 +206,6 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
 
 // MARK: - ToolbarActionMenuDelegate
 extension BrowserViewController: ToolBarActionMenuDelegate {
-
     func updateToolbarState() {
         updateToolbarStateForTraitCollection(view.traitCollection)
     }
@@ -198,20 +214,23 @@ extension BrowserViewController: ToolBarActionMenuDelegate {
         presentWithModalDismissIfNeeded(viewController, animated: true)
     }
 
-    func showToast(message: String, toastAction: MenuButtonToastAction, url: String?) {
+    func showToast(message: String, toastAction: MenuButtonToastAction) {
         switch toastAction {
         case .removeBookmark:
-            let toast = ButtonToast(labelText: message, buttonText: .UndoString, textAlignment: .left) { isButtonTapped in
-                isButtonTapped ? self.addBookmark(url: url ?? "") : nil
+            let viewModel = ButtonToastViewModel(labelText: message,
+                                                 buttonText: .UndoString,
+                                                 textAlignment: .left)
+            let toast = ButtonToast(viewModel: viewModel,
+                                    theme: themeManager.currentTheme) { [weak self] isButtonTapped in
+                guard let strongSelf = self, let currentTab = strongSelf.tabManager.selectedTab else { return }
+                isButtonTapped ? strongSelf.addBookmark(url: currentTab.url?.absoluteString ?? "", title: currentTab.title) : nil
             }
             show(toast: toast)
         default:
-            SimpleToast().showAlertWithText(message, bottomContainer: webViewContainer)
+            SimpleToast().showAlertWithText(message,
+                                            bottomContainer: contentContainer,
+                                            theme: themeManager.currentTheme)
         }
-    }
-
-    func showMenuPresenter(url: URL, tab: Tab, view: UIView) {
-        presentActivityViewController(url, tab: tab, sourceView: view, sourceRect: view.bounds, arrowDirection: .up)
     }
 
     func showFindInPage() {
@@ -219,10 +238,24 @@ extension BrowserViewController: ToolBarActionMenuDelegate {
     }
 
     func showCustomizeHomePage() {
-        showSettingsWithDeeplink(to: .customizeHomepage)
+        navigationHandler?.show(settings: .homePage)
     }
 
     func showWallpaperSettings() {
-        showSettingsWithDeeplink(to: .wallpaper)
+        navigationHandler?.show(settings: .wallpaper)
+    }
+
+    func showCreditCardSettings() {
+        navigationHandler?.show(settings: .creditCard)
+    }
+
+    func showZoomPage(tab: Tab) {
+        updateZoomPageBarVisibility(visible: true)
+    }
+
+    func showSignInView(fxaParameters: FxASignInViewParameters) {
+        presentSignInViewController(fxaParameters.launchParameters,
+                                    flowType: fxaParameters.flowType,
+                                    referringPage: fxaParameters.referringPage)
     }
 }

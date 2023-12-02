@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 
@@ -29,7 +29,8 @@ public struct DateGroupedTableData<T: Equatable> {
 
     public init() {}
 
-    @discardableResult mutating public func add(_ item: T, timestamp: TimeInterval) -> IndexPath {
+    @discardableResult
+    public mutating func add(_ item: T, timestamp: TimeInterval) -> IndexPath {
         if timestamp > todayTimestamp {
             today.append((item, timestamp))
             return IndexPath(row: today.count - 1, section: 0)
@@ -48,7 +49,7 @@ public struct DateGroupedTableData<T: Equatable> {
         }
     }
 
-    mutating public func remove(_ item: T) {
+    public mutating func remove(_ item: T) {
         if let index = today.firstIndex(where: { item == $0.item }) {
             today.remove(at: index)
         } else if let index = yesterday.firstIndex(where: { item == $0.item }) {

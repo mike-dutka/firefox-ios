@@ -1,11 +1,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 // This code is loosely based on https://github.com/Antol/APAutocompleteTextField
 
 import UIKit
 import Shared
+import Common
 
 /// Delegate for the text field events. Since AutocompleteTextField owns the UITextFieldDelegate,
 /// callers must use this instead.
@@ -23,9 +24,11 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
     // The textfields "text" property only contains the entered text, while this label holds the autocomplete text
     // This makes sure that the autocomplete doesnt mess with keyboard suggestions provided by third party keyboards.
     private var autocompleteTextLabel: UILabel?
-    private var hideCursor: Bool = false
+    private var hideCursor = false
 
     private let copyShortcutKey = "c"
+    private var isPrivateMode = false
+    var theme: Theme?
 
     var isSelectionActive: Bool {
         return autocompleteTextLabel != nil
@@ -37,10 +40,8 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
     // Thus, we update shouldApplyCompletion in touchesBegin() to reflect whether
     // the highlight is active and then the text field is updated accordingly
     // in touchesEnd() (eg. applyCompletion() is called or not)
-    fileprivate var notifyTextChanged: (() -> Void)?
+    private var notifyTextChanged: (() -> Void)?
     private var lastReplacement: String?
-
-    static var textSelectionColor = URLBarColor.TextSelectionHighlight(labelMode: UIColor(), textFieldMode: nil)
 
     override var text: String? {
         didSet {
@@ -68,7 +69,7 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
         commonInit()
     }
 
-    fileprivate func commonInit() {
+    private func commonInit() {
         super.delegate = self
         super.addTarget(self, action: #selector(AutocompleteTextField.textDidChange), for: .editingChanged)
         notifyTextChanged = debounce(0.1, action: {
@@ -76,6 +77,17 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
                 self.autocompleteDelegate?.autocompleteTextField(self, didEnterText: self.normalizeString(self.text ?? ""))
             }
         })
+
+        font = UIFont.preferredFont(forTextStyle: .body)
+        adjustsFontForContentSizeCategory = true
+        clipsToBounds = true
+        translatesAutoresizingMaskIntoConstraints = false
+        keyboardType = .webSearch
+        autocorrectionType = .no
+        autocapitalizationType = .none
+        returnKeyType = .go
+        clearButtonMode = .whileEditing
+        textAlignment = .left
     }
 
     override var keyCommands: [UIKeyCommand]? {
@@ -97,7 +109,8 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
         return arrowKeysCommands + commands
     }
 
-    @objc func handleKeyCommand(sender: UIKeyCommand) {
+    @objc
+    func handleKeyCommand(sender: UIKeyCommand) {
         guard let input = sender.input else { return }
         switch input {
         case UIKeyCommand.inputLeftArrow:
@@ -152,13 +165,12 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
         }
     }
 
-    fileprivate func normalizeString(_ string: String) -> String {
+    private func normalizeString(_ string: String) -> String {
         return string.lowercased().stringByTrimmingLeadingCharactersInSet(CharacterSet.whitespaces)
     }
 
     /// Commits the completion by setting the text and removing the highlight.
-    fileprivate func applyCompletion() {
-
+    private func applyCompletion() {
         // Clear the current completion, then set the text without the attributed style.
         let text = (self.text ?? "") + (self.autocompleteTextLabel?.text ?? "")
         let didRemoveCompletion = removeCompletion()
@@ -171,14 +183,17 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
     }
 
     /// Removes the autocomplete-highlighted. Returns true if a completion was actually removed
-    @objc @discardableResult fileprivate func removeCompletion() -> Bool {
+    @objc
+    @discardableResult
+    private func removeCompletion() -> Bool {
         let hasActiveCompletion = isSelectionActive
         autocompleteTextLabel?.removeFromSuperview()
         autocompleteTextLabel = nil
         return hasActiveCompletion
     }
 
-    @objc fileprivate func clear() {
+    @objc
+    private func clear() {
         text = ""
         removeCompletion()
         autocompleteDelegate?.autocompleteTextField(self, didEnterText: "")
@@ -218,11 +233,17 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
         let suggestionText = String(suggestion[suggestion.index(suggestion.startIndex, offsetBy: normalized.count)...])
         let autocompleteText = NSMutableAttributedString(string: suggestionText)
 
-        let color = AutocompleteTextField.textSelectionColor.labelMode
-        autocompleteText.addAttribute(NSAttributedString.Key.backgroundColor, value: color, range: NSRange(location: 0, length: suggestionText.count))
+        autocompleteTextLabel?.removeFromSuperview()
+        autocompleteTextLabel = nil
 
-        autocompleteTextLabel?.removeFromSuperview() // should be nil. But just in case
-        autocompleteTextLabel = createAutocompleteLabelWith(autocompleteText)
+        if let theme {
+            let color = isPrivateMode ? theme.colors.layerAccentPrivateNonOpaque : theme.colors.layerAccentNonOpaque
+            autocompleteText.addAttribute(NSAttributedString.Key.backgroundColor,
+                                          value: color,
+                                          range: NSRange(location: 0, length: suggestionText.count))
+            autocompleteTextLabel = createAutocompleteLabelWith(autocompleteText)
+        }
+
         if let label = autocompleteTextLabel {
             addSubview(label)
             // Only call forceResetCursor() if `hideCursor` changes.
@@ -285,7 +306,8 @@ class AutocompleteTextField: UITextField, UITextFieldDelegate {
         removeCompletion()
     }
 
-   @objc func textDidChange(_ textField: UITextField) {
+    @objc
+    func textDidChange(_ textField: UITextField) {
         hideCursor = autocompleteTextLabel != nil
         removeCompletion()
 
@@ -333,5 +355,39 @@ extension AutocompleteTextField: MenuHelperInterface {
 
     func menuHelperPasteAndGo() {
         autocompleteDelegate?.autocompletePasteAndGo(self)
+    }
+}
+
+extension AutocompleteTextField: ThemeApplicable, PrivateModeUI {
+    func applyUIMode(isPrivate: Bool, theme: Theme) {
+        isPrivateMode = isPrivate
+
+        if autocompleteTextLabel?.attributedText != nil {
+            let autocompleteText = NSMutableAttributedString(string: self.autocompleteTextLabel?.attributedText?.string ?? "")
+            let color = isPrivateMode ? theme.colors.layerAccentPrivateNonOpaque : theme.colors.layerAccentNonOpaque
+            autocompleteText.addAttribute(NSAttributedString.Key.backgroundColor,
+                                          value: color,
+                                          range: NSRange(location: 0, length: autocompleteText.length))
+            self.autocompleteTextLabel?.attributedText = autocompleteText
+        }
+
+        applyTheme(theme: theme)
+    }
+
+    func applyTheme(theme: Theme) {
+        self.theme = theme
+        let attributes = [NSAttributedString.Key.foregroundColor: theme.colors.textSecondary]
+        attributedPlaceholder = NSAttributedString(string: .TabLocationURLPlaceholder,
+                                                   attributes: attributes)
+
+        backgroundColor = theme.colors.layer3
+        textColor = theme.colors.textPrimary
+        tintColor = theme.colors.actionPrimary
+
+        // Only refresh if an autocomplete label is presented to the user
+        if autocompleteTextLabel?.attributedText != nil {
+            autocompleteTextLabel?.backgroundColor = theme.colors.layer3
+            autocompleteTextLabel?.textColor = theme.colors.textPrimary
+        }
     }
 }

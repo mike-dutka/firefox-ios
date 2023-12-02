@@ -1,14 +1,13 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 
 class SelectPasswordCell: UITableViewCell {
-
     static let identifier = "selectPasswordCell"
 
-    lazy private var selectLabel: UILabel = .build { label in
+    private lazy var selectLabel: UILabel = .build { label in
         label.text = .LoginsListSelectPasswordTitle.uppercased()
         label.font = UIFont.systemFont(ofSize: 13)
         label.textColor = .systemGray

@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 /// Describes the main views of the Library Panel using an enum with
 /// an associated value as each main state may have different substates.
@@ -46,6 +46,7 @@ enum LibraryPanelSubState {
     case inFolder
     case inFolderEditMode
     case itemEditMode
+    case itemEditModeInvalidField
     case search
 
     // The following two functions enable checking that substate moves are legal.
@@ -59,7 +60,7 @@ enum LibraryPanelSubState {
         case .inFolder:
             if oldState == .inFolderEditMode { return true }
         case .inFolderEditMode:
-            if oldState == .itemEditMode { return true }
+            if oldState == .itemEditMode || oldState == .itemEditModeInvalidField { return true }
         default:
             return false
         }
@@ -72,7 +73,7 @@ enum LibraryPanelSubState {
             if oldState == .mainView { return true }
         case .inFolderEditMode:
             if oldState == .inFolder { return true }
-        case .itemEditMode:
+        case .itemEditMode, .itemEditModeInvalidField:
             if oldState == .inFolderEditMode { return true }
         default:
             return false
@@ -104,7 +105,6 @@ class LibraryPanelViewState {
         let changingPanels = state.panelIsDifferentFrom(newState)
         storeCurrentState()
         switch newState {
-
         // All cases where we have substates must use the `updateStateVariables`
         // function in order to check if it's a legal update
         case .bookmarks(let newSubviewState):

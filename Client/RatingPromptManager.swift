@@ -6,16 +6,17 @@ import Foundation
 import StoreKit
 import Shared
 import Storage
+import Common
 
 // The `RatingPromptManager` handles app store review requests and the internal logic of when they can be presented to a user.
 final class RatingPromptManager {
-
     private let profile: Profile
     private let daysOfUseCounter: CumulativeDaysOfUseCounter
 
     private var hasMinimumMobileBookmarksCount = false
     private let minimumMobileBookmarksCount = 5
-    private let sentry: SentryProtocol?
+    private let logger: Logger
+    private let group: DispatchGroupInterface
 
     private let dataQueue = DispatchQueue(label: "com.moz.ratingPromptManager.queue")
 
@@ -30,13 +31,15 @@ final class RatingPromptManager {
     /// - Parameters:
     ///   - profile: User's profile data
     ///   - daysOfUseCounter: Counter for the cumulative days of use of the application by the user
-    ///   - sentry: Sentry protocol to override in Unit test
+    ///   - logger: Logger protocol to override in Unit test
     init(profile: Profile,
          daysOfUseCounter: CumulativeDaysOfUseCounter = CumulativeDaysOfUseCounter(),
-         sentry: SentryProtocol = SentryIntegration.shared) {
+         logger: Logger = DefaultLogger.shared,
+         group: DispatchGroupInterface = DispatchGroup()) {
         self.profile = profile
         self.daysOfUseCounter = daysOfUseCounter
-        self.sentry = sentry
+        self.logger = logger
+        self.group = group
     }
 
     /// Show the in-app rating prompt if needed
@@ -44,6 +47,7 @@ final class RatingPromptManager {
     func showRatingPromptIfNeeded(at date: Date = Date()) {
         if shouldShowPrompt {
             requestRatingPrompt(at: date)
+            UserDefaults.standard.set(false, forKey: PrefsKeys.ForceShowAppReviewPromptOverride)
         }
     }
 
@@ -52,7 +56,6 @@ final class RatingPromptManager {
     func updateData(dataLoadingCompletion: (() -> Void)? = nil) {
         daysOfUseCounter.updateCounter()
 
-        let group = DispatchGroup()
         updateBookmarksCount(group: group)
 
         group.notify(queue: dataQueue) {
@@ -93,15 +96,19 @@ final class RatingPromptManager {
     // MARK: Private
 
     private var shouldShowPrompt: Bool {
+        if UserDefaults.standard.bool(forKey: PrefsKeys.ForceShowAppReviewPromptOverride) {
+            return true
+        }
+
         // Required: 5th launch or more
-        let currentSessionCount = profile.prefs.intForKey(PrefsKeys.SessionCount) ?? 0
+        let currentSessionCount = profile.prefs.intForKey(PrefsKeys.Session.Count) ?? 0
         guard currentSessionCount >= 5 else { return false }
 
         // Required: 5 consecutive days of use in the last 7 days
         guard daysOfUseCounter.hasRequiredCumulativeDaysOfUse else { return false }
 
         // Required: has not crashed in the last session
-        guard let sentry = sentry, !sentry.crashedLastLaunch else { return false }
+        guard !logger.crashedLastLaunch else { return false }
 
         // One of the following
         let isBrowserDefault = RatingPromptManager.isBrowserDefault
@@ -118,19 +125,23 @@ final class RatingPromptManager {
         // Because of this, Firefox will currently limit its request to show the ratings prompt to one time, given
         // that the triggers are fulfilled. As such, requirements and attempts to further show the ratings prompt
         // will be implemented later in the future.
-        guard requestCount < 1 else { return false }
-
-        return true
+        return requestCount < 1
     }
 
     private func requestRatingPrompt(at date: Date) {
         lastRequestDate = date
         requestCount += 1
 
-        SKStoreReviewController.requestReview()
+        guard let scene = UIApplication.shared.connectedScenes.first(where: {
+            $0.activationState == .foregroundActive
+        }) as? UIWindowScene else { return }
+
+        DispatchQueue.main.async {
+            SKStoreReviewController.requestReview(in: scene)
+        }
     }
 
-    private func updateBookmarksCount(group: DispatchGroup) {
+    private func updateBookmarksCount(group: DispatchGroupInterface) {
         group.enter()
         profile.places.getBookmarksTree(rootGUID: BookmarkRoots.MobileFolderGUID, recursive: false).uponQueue(.main) { [weak self] result in
             guard let strongSelf = self,

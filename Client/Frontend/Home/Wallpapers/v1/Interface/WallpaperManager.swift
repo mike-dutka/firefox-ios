@@ -2,6 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import UIKit
 import Shared
@@ -21,11 +22,10 @@ protocol WallpaperManagerInterface {
     func fetchAssetsFor(_ wallpaper: Wallpaper, completion: @escaping (Result<Void, Error>) -> Void)
     func removeUnusedAssets()
     func checkForUpdates()
-    func migrateLegacyAssets()
 }
 
 /// The primary interface for the wallpaper feature.
-class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable, Loggable {
+class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable {
     enum ThumbnailFilter {
         case none
         case thumbnailsAvailable
@@ -34,14 +34,17 @@ class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable, Loggable {
     // MARK: - Properties
     private var networkingModule: WallpaperNetworking
     private var userDefaults: UserDefaultsInterface
+    private var logger: Logger
 
     // MARK: - Initializers
     init(
         with networkingModule: WallpaperNetworking = WallpaperNetworkingModule(),
-        userDefaults: UserDefaultsInterface = UserDefaults.standard
+        userDefaults: UserDefaultsInterface = UserDefaults.standard,
+        logger: Logger = DefaultLogger.shared
     ) {
         self.networkingModule = networkingModule
         self.userDefaults = userDefaults
+        self.logger = logger
     }
 
     // MARK: Public Interface
@@ -59,8 +62,9 @@ class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable, Loggable {
     }
 
     /// Determines whether the wallpaper onboarding can be shown
+    /// Doesn't need overlayState to check for CFR because the state was previously check
     func canOnboardingBeShown(using profile: Profile) -> Bool {
-        let cfrHintUtility = ContextualHintEligibilityUtility(with: profile)
+        let cfrHintUtility = ContextualHintEligibilityUtility(with: profile, overlayState: nil)
         let toolbarCFRShown = !cfrHintUtility.canPresent(.toolbarLocation)
         let jumpBackInCFRShown = !cfrHintUtility.canPresent(.jumpBackIn)
         let cfrsHaveBeenShown = toolbarCFRShown && jumpBackInCFRShown
@@ -94,8 +98,9 @@ class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable, Loggable {
         return true
     }
 
-    /// Returns true if the feature is enabled for the build
-    private var featureAvailable: Bool {
+    /// Returns true if the feature is enabled for the build and the version matches the
+    /// current shipped version.
+    public var featureAvailable: Bool {
         guard let wallpaperVersion: WallpaperVersion = featureFlags.getCustomState(for: .wallpaperVersion),
               wallpaperVersion == .v1
         else { return false }
@@ -116,9 +121,10 @@ class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable, Loggable {
 
             NotificationCenter.default.post(name: .WallpaperDidChange, object: nil)
             completion(.success(()))
-
         } catch {
-            browserLog.error("Failed to set wallpaper: \(error.localizedDescription)")
+            logger.log("Failed to set wallpaper: \(error.localizedDescription)",
+                       level: .warning,
+                       category: .homepage)
             completion(.failure(WallpaperManagerError.other(error)))
         }
     }
@@ -155,7 +161,9 @@ class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable, Loggable {
 
                 completion(.success(()))
             } catch {
-                browserLog.error("Error fetching wallpaper resources: \(error.localizedDescription)")
+                logger.log("Error fetching wallpaper resources: \(error.localizedDescription)",
+                           level: .warning,
+                           category: .homepage)
                 completion(.failure(WallpaperManagerError.downloadFailed(error)))
             }
         }
@@ -187,11 +195,6 @@ class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable, Loggable {
         }
     }
 
-    public func migrateLegacyAssets() {
-        let migrationUtility = WallpaperMigrationUtility()
-        migrationUtility.migrateExistingAssetWithoutMetadata()
-    }
-
     // MARK: - Helper functions
     private func getAvailableCollections(filtering filter: ThumbnailFilter) -> [WallpaperCollection] {
         guard let metadata = getMetadata() else { return addDefaultWallpaper(to: []) }
@@ -211,7 +214,6 @@ class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable, Loggable {
     }
 
     private func addDefaultWallpaper(to availableCollections: [WallpaperCollection]) -> [WallpaperCollection] {
-
         let defaultWallpaper = [Wallpaper(id: "fxDefault",
                                           textColor: nil,
                                           cardColor: nil,
@@ -225,7 +227,6 @@ class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable, Loggable {
                                         wallpapers: defaultWallpaper,
                                         description: nil,
                                         heading: nil)]
-
         } else if let classicCollection = availableCollections.first(where: { $0.type == .classic }) {
             let newWallpapers = defaultWallpaper + classicCollection.wallpapers
             let newClassic = WallpaperCollection(id: classicCollection.id,
@@ -237,7 +238,6 @@ class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable, Loggable {
                                                  heading: classicCollection.heading)
 
             return [newClassic] + availableCollections.filter { $0.type != .classic }
-
         } else {
             return availableCollections
         }
@@ -250,7 +250,9 @@ class WallpaperManager: WallpaperManagerInterface, FeatureFlaggable, Loggable {
 
             return metadata
         } catch {
-            browserLog.error("Error getting stored metadata: \(error.localizedDescription)")
+            logger.log("Error getting stored metadata: \(error.localizedDescription)",
+                       level: .warning,
+                       category: .homepage)
             return nil
         }
     }

@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
+import Common
 import Shared
 import Storage
 import SwiftUI
@@ -13,8 +14,7 @@ private class FetchInProgressError: MaybeErrorType {
     }
 }
 
-class HistoryPanelViewModel: Loggable, FeatureFlaggable {
-
+class HistoryPanelViewModel: FeatureFlaggable {
     enum Sections: Int, CaseIterable {
         case additionalHistoryActions
         case today
@@ -45,6 +45,7 @@ class HistoryPanelViewModel: Loggable, FeatureFlaggable {
     // MARK: - Properties
 
     private let profile: Profile
+    private var logger: Logger
     // Request limit and offset
     private let queryFetchLimit = 100
     // Is not intended to be use in prod code, only on test
@@ -65,6 +66,7 @@ class HistoryPanelViewModel: Loggable, FeatureFlaggable {
     var groupedSites = DateGroupedTableData<Site>()
     var isFetchInProgress = false
     var shouldResetHistory = false
+    // Collapsible sections
     var hiddenSections: [Sections] = []
 
     var hasRecentlyClosed: Bool {
@@ -83,19 +85,16 @@ class HistoryPanelViewModel: Loggable, FeatureFlaggable {
 
     // MARK: - Inits
 
-    init(profile: Profile) {
+    init(profile: Profile,
+         logger: Logger = DefaultLogger.shared) {
         self.profile = profile
-    }
-
-    deinit {
-        browserLog.debug("HistoryPanelViewModel Deinitialized.")
+        self.logger = logger
     }
 
     /// Begin the process of fetching history data, and creating ASGroups from them. A prefetch also triggers this.
     func reloadData(completion: @escaping (Bool) -> Void) {
         // Can be called while app backgrounded and the db closed, don't try to reload the data source in this case
         guard !profile.isShutdown, !isFetchInProgress else {
-            browserLog.debug("HistoryPanel tableView data could NOT be reloaded! Either the profile wasn't shut down, or there's a fetch in progress.")
             completion(false)
             return
         }
@@ -104,29 +103,32 @@ class HistoryPanelViewModel: Loggable, FeatureFlaggable {
             resetHistory()
         }
 
-        fetchData().uponQueue(.global(qos: .userInteractive)) { result in
-            guard let fetchedSites = result.successValue?.asArray(), !fetchedSites.isEmpty else {
-                completion(false)
-                return
-            }
+        fetchData { [weak self] fetchedSites in
+            DispatchQueue.global().async {
+                guard let self = self,
+                      !fetchedSites.isEmpty else {
+                    completion(false)
+                    return
+                }
 
-            self.currentFetchOffset += self.queryFetchLimit
-            if self.featureFlags.isFeatureEnabled(.historyGroups, checking: .buildOnly) {
-                self.populateASGroups(fetchedSites: fetchedSites) { groups, items in
-                    guard let groups = groups else {
-                        completion(false)
-                        return
+                self.currentFetchOffset += self.queryFetchLimit
+                if self.featureFlags.isFeatureEnabled(.historyGroups, checking: .buildOnly) {
+                    self.populateASGroups(fetchedSites: fetchedSites) { groups, items in
+                        guard let groups = groups else {
+                            completion(false)
+                            return
+                        }
+
+                        self.searchTermGroups.append(contentsOf: groups)
+                        self.createGroupedSites(sites: items)
+                        self.buildGroupsVisibleSections()
+                        completion(true)
                     }
-
-                    self.searchTermGroups.append(contentsOf: groups)
-                    self.createGroupedSites(sites: items)
-                    self.buildGroupsVisibleSections()
+                } else {
+                    self.populateHistorySites(fetchedSites: fetchedSites)
+                    self.buildVisibleSections()
                     completion(true)
                 }
-            } else {
-                self.populateHistorySites(fetchedSites: fetchedSites)
-                self.buildVisibleSections()
-                completion(true)
             }
         }
     }
@@ -142,12 +144,22 @@ class HistoryPanelViewModel: Loggable, FeatureFlaggable {
     func performSearch(term: String, completion: @escaping (Bool) -> Void) {
         isFetchInProgress = true
 
-        profile.history.getHistory(matching: term,
-                                   limit: searchQueryFetchLimit,
-                                   offset: searchCurrentFetchOffset) { results in
+        profile.places.interruptReader()
+        profile.places.queryAutocomplete(matchingSearchQuery: term, limit: searchQueryFetchLimit).uponQueue(.main) { result in
             self.isFetchInProgress = false
-            self.searchResultSites = results
-            completion(!results.isEmpty)
+
+            guard result.isSuccess else {
+                self.logger.log("Error searching history panel",
+                                level: .warning,
+                                category: .sync,
+                                description: result.failureValue?.localizedDescription ?? "Unkown error searching history")
+                completion(false)
+                return
+            }
+            if let result = result.successValue {
+                self.searchResultSites = result.map { Site(url: $0.url, title: $0.title) }
+                completion(!result.isEmpty)
+            }
         }
     }
 
@@ -170,7 +182,7 @@ class HistoryPanelViewModel: Loggable, FeatureFlaggable {
     }
 
     func removeAllData() {
-        /// Since we remove all data, we reset our fetchOffset back to the start.
+        // Since we remove all data, we reset our fetchOffset back to the start.
         currentFetchOffset = 0
 
         searchTermGroups.removeAll()
@@ -259,23 +271,30 @@ class HistoryPanelViewModel: Loggable, FeatureFlaggable {
 
     // MARK: - Private helpers
 
-    private func fetchData() -> Deferred<Maybe<Cursor<Site>>> {
+    private func fetchData(completion: @escaping (([Site]) -> Void)) {
         guard !isFetchInProgress else {
-            return deferMaybe(FetchInProgressError())
+            completion([])
+            return
         }
 
         isFetchInProgress = true
 
-        return profile.history.getSitesByLastVisit(limit: queryFetchLimit, offset: currentFetchOffset) >>== { result in
+        profile.places.getSitesWithBound(
+            limit: queryFetchLimit,
+            offset: currentFetchOffset,
+            excludedTypes: VisitTransitionSet(0)
+        ).upon { [weak self] result in
+            completion(result.successValue?.asArray() ?? [])
+
             // Force 100ms delay between resolution of the last batch of results
             // and the next time `fetchData()` can be called.
             DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(100)) {
+                guard let self = self else { return }
                 self.isFetchInProgress = false
-
-                self.browserLog.debug("currentFetchOffset is: \(self.currentFetchOffset)")
+                self.logger.log("currentFetchOffset is: \(self.currentFetchOffset)",
+                                level: .debug,
+                                category: .library)
             }
-
-            return deferMaybe(result)
         }
     }
 
@@ -318,7 +337,9 @@ class HistoryPanelViewModel: Loggable, FeatureFlaggable {
 
     private func deleteSingle(site: Site) {
         groupedSites.remove(site)
-        profile.history.removeHistoryForURL(site.url)
+        self.profile.places.deleteVisitsFor(url: site.url).uponQueue(.main) { _ in
+            NotificationCenter.default.post(name: .TopSitesUpdated, object: nil)
+        }
 
         if isSearchInProgress, let indexToRemove = searchResultSites.firstIndex(of: site) {
             searchResultSites.remove(at: indexToRemove)
@@ -326,7 +347,6 @@ class HistoryPanelViewModel: Loggable, FeatureFlaggable {
     }
 
     private func getDeletableSection(for dateOption: HistoryDeletionUtilityDateOptions) -> [Sections]? {
-
         switch dateOption {
         case .today:
             return [.today]

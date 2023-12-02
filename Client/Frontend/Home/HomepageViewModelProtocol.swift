@@ -2,15 +2,16 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
+import Shared
 
 // Protocol for each section view model in Firefox Home page view controller
 protocol HomepageViewModelProtocol {
-
     var sectionType: HomepageSectionType { get }
 
     // Layout section so FirefoxHomeViewController view controller can setup the section
-    func section(for traitCollection: UITraitCollection) -> NSCollectionLayoutSection
+    func section(for traitCollection: UITraitCollection, size: CGSize) -> NSCollectionLayoutSection
 
     func numberOfItemsInSection() -> Int
 
@@ -28,6 +29,7 @@ protocol HomepageViewModelProtocol {
 
     // Refresh data from adaptor to ensure it refresh the right state before laying itself out
     func refreshData(for traitCollection: UITraitCollection,
+                     size: CGSize,
                      isPortrait: Bool,
                      device: UIUserInterfaceIdiom)
 
@@ -36,6 +38,10 @@ protocol HomepageViewModelProtocol {
 
     // Called anytime the screen is shown
     func screenWasShown()
+
+    // Theme management
+    var theme: Theme { get set }
+    func setTheme(theme: Theme)
 }
 
 extension HomepageViewModelProtocol {
@@ -48,10 +54,9 @@ extension HomepageViewModelProtocol {
     func updatePrivacyConcernedSection(isPrivate: Bool) {}
 
     func refreshData(for traitCollection: UITraitCollection,
-                     isPortrait: Bool = UIWindow.isPortrait,
-                     device: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom) {
-        refreshData(for: traitCollection, isPortrait: isPortrait, device: device)
-    }
+                     size: CGSize,
+                     isPortrait: Bool,
+                     device: UIUserInterfaceIdiom) {}
 
     func screenWasShown() {}
 }

@@ -5,6 +5,7 @@
 import Foundation
 import Shared
 @_exported import MozillaAppServices
+import Common
 
 public class RustRemoteTabs {
     let databasePath: String
@@ -15,9 +16,12 @@ public class RustRemoteTabs {
     private(set) var isOpen = false
 
     private var didAttemptToMoveToBackup = false
+    private let logger: Logger
 
-    public init(databasePath: String) {
+    public init(databasePath: String,
+                logger: Logger = DefaultLogger.shared) {
         self.databasePath = databasePath
+        self.logger = logger
 
         queue = DispatchQueue(label: "RustRemoteTabs queue: \(databasePath)", attributes: [])
     }
@@ -58,62 +62,6 @@ public class RustRemoteTabs {
         return error
     }
 
-    public func sync(unlockInfo: SyncUnlockInfo) -> Success {
-        let deferred = Success()
-
-        queue.async {
-            guard self.isOpen else {
-                let error = TabsError.OpenDatabaseError(message: "Database is closed")
-                deferred.fill(Maybe(failure: error as MaybeErrorType))
-                return
-            }
-
-            do {
-                try _ = self.storage?.sync(unlockInfo: unlockInfo)
-                deferred.fill(Maybe(success: ()))
-            } catch let err as NSError {
-                if let tabsError = err as? TabsError {
-                    SentryIntegration.shared.sendWithStacktrace(
-                        message: "Tabs error when syncing Tabs database",
-                        tag: SentryTag.rustRemoteTabs,
-                        severity: .error,
-                        description: tabsError.localizedDescription)
-                } else {
-                    SentryIntegration.shared.sendWithStacktrace(
-                        message: "Unknown error when opening Rust Tabs database",
-                        tag: SentryTag.rustRemoteTabs,
-                        severity: .error,
-                        description: err.localizedDescription)
-                }
-
-                deferred.fill(Maybe(failure: err))
-            }
-        }
-
-        return deferred
-    }
-
-    public func resetSync() -> Success {
-        let deferred = Success()
-
-        queue.async {
-            guard self.isOpen else {
-                let error = TabsError.OpenDatabaseError(message: "Database is closed")
-                deferred.fill(Maybe(failure: error as MaybeErrorType))
-                return
-            }
-
-            do {
-                try self.storage?.reset()
-                deferred.fill(Maybe(success: ()))
-            } catch let err as NSError {
-                deferred.fill(Maybe(failure: err))
-            }
-        }
-
-        return deferred
-    }
-
     public func setLocalTabs(localTabs: [RemoteTab]) -> Deferred<Maybe<Int>> {
         let deferred = Deferred<Maybe<Int>>()
 
@@ -124,7 +72,7 @@ public class RustRemoteTabs {
                 storage.setLocalTabs(remoteTabs: tabs)
                 deferred.fill(Maybe(success: tabs.count))
             } else {
-                let error = TabsError.OpenDatabaseError(message: "Unknown error when setting local Rust Tabs")
+                let error = TabsApiError.UnexpectedTabsError(reason: "Unknown error when setting local Rust Tabs")
                 deferred.fill(Maybe(failure: error as MaybeErrorType))
             }
         }
@@ -140,7 +88,7 @@ public class RustRemoteTabs {
 
         queue.async {
             guard self.isOpen else {
-                let error = TabsError.OpenDatabaseError(message: "Database is closed")
+                let error = TabsApiError.UnexpectedTabsError(reason: "Database is closed")
                 deferred.fill(Maybe(failure: error as MaybeErrorType))
                 return
             }
@@ -149,19 +97,76 @@ public class RustRemoteTabs {
                 let records = storage.getAll()
                 deferred.fill(Maybe(success: records))
             } else {
-                deferred.fill(Maybe(failure: TabsError.OpenDatabaseError(message: "Unknown error when getting all Rust Tabs") as MaybeErrorType))
+                deferred.fill(Maybe(failure: TabsApiError.UnexpectedTabsError(reason: "Unknown error when getting all Rust Tabs") as MaybeErrorType))
             }
         }
 
         return deferred
     }
 
+    public func getClient(fxaDeviceId: String) -> Deferred<Maybe<RemoteClient?>> {
+        return self.getAll().bind { result in
+            if let failureValue = result.failureValue {
+                return deferMaybe(failureValue)
+            }
+
+            guard let records = result.successValue else {
+                return deferMaybe(nil)
+            }
+
+            let client = records.first(where: { $0.clientId == fxaDeviceId })?.toRemoteClient()
+            return deferMaybe(client)
+        }
+    }
+
+    public func getClientGUIDs(completion: @escaping (Set<GUID>?, Error?) -> Void) {
+        self.getAll().upon { result in
+            if let failureValue = result.failureValue {
+                completion(nil, failureValue)
+                return
+            }
+            guard let records = result.successValue else {
+                completion(Set<GUID>(), nil)
+                return
+            }
+
+            let guids = records.map({ $0.clientId })
+            completion(Set(guids), nil)
+        }
+    }
+
+    public func getRemoteClients(remoteDeviceIds: [String]) -> Deferred<Maybe<[ClientAndTabs]>> {
+        return self.getAll().bind { result in
+            if let failureValue = result.failureValue {
+                return deferMaybe(failureValue)
+            }
+            guard let rustClientAndTabs = result.successValue else {
+                return deferMaybe([])
+            }
+
+            let clientAndTabs = rustClientAndTabs
+                .map { $0.toClientAndTabs() }
+                .filter({ record in
+                    remoteDeviceIds.contains { deviceId in
+                        return record.client.fxaDeviceId != nil &&
+                            record.client.fxaDeviceId! == deviceId
+                    }
+                })
+            return deferMaybe(clientAndTabs)
+        }
+    }
+
+    public func registerWithSyncManager() {
+        queue.async { [unowned self] in
+           self.storage?.registerWithSyncManager()
+        }
+    }
 }
 
 public extension RemoteTabRecord {
     func toRemoteTab(client: RemoteClient) -> RemoteTab? {
-        guard let url = Foundation.URL(string: self.urlHistory[0]) else { return nil }
-        let history = self.urlHistory[1...].map { url in Foundation.URL(string: url) }.compactMap { $0 }
+        guard let url = Foundation.URL(string: self.urlHistory[0], invalidCharacters: false) else { return nil }
+        let history = self.urlHistory[1...].map { url in Foundation.URL(string: url, invalidCharacters: false) }.compactMap { $0 }
         let icon = self.icon != nil ? Foundation.URL(fileURLWithPath: self.icon ?? "") : nil
 
         return RemoteTab(clientGUID: client.guid, URL: url, title: self.title, history: history, lastUsed: Timestamp(self.lastUsed), icon: icon)
@@ -171,5 +176,25 @@ public extension RemoteTabRecord {
 public extension ClientRemoteTabs {
     func toClientAndTabs(client: RemoteClient) -> ClientAndTabs {
         return ClientAndTabs(client: client, tabs: self.remoteTabs.map { $0.toRemoteTab(client: client)}.compactMap { $0 })
+    }
+
+    func toClientAndTabs() -> ClientAndTabs {
+        let client = self.toRemoteClient()
+        let tabs = self.remoteTabs.map { $0.toRemoteTab(client: client)}.compactMap { $0 }
+
+        let clientAndTabs = ClientAndTabs(client: client, tabs: tabs)
+        return clientAndTabs
+    }
+
+    func toRemoteClient() -> RemoteClient {
+        let remoteClient = RemoteClient(guid: self.clientId,
+                                        name: self.clientName,
+                                        modified: UInt64(self.lastModified),
+                                        type: "\(self.deviceType)",
+                                        formfactor: nil,
+                                        os: nil,
+                                        version: nil,
+                                        fxaDeviceId: self.clientId)
+        return remoteClient
     }
 }

@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import WebKit
@@ -50,13 +50,14 @@ class SessionRestoreHandler: InternalSchemeResponse {
 
         // From here on, handle 'history=' query param
         let response = InternalSchemeHandler.response(forUrl: url.url)
-        guard let sessionRestorePath = Bundle.main.path(forResource: "SessionRestore", ofType: "html"),
+        guard let sessionRestorePath = Bundle.main.path(forResource: "SessionRestore",
+                                                        ofType: "html"),
               let html = try? String(contentsOfFile: sessionRestorePath).replacingOccurrences(
                 of: "%INSERT_UUID_VALUE%",
                 with: InternalURL.uuid),
               let data = html.data(using: .utf8)
         else {
-            assert(false)
+            assertionFailure()
             return nil
         }
 

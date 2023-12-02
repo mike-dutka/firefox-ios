@@ -1,20 +1,20 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
 
-public struct ClipboardBarToastUX {
-    static let ToastDelay = DispatchTimeInterval.milliseconds(4000)
-}
-
 protocol ClipboardBarDisplayHandlerDelegate: AnyObject {
-    func shouldDisplay(clipboardBar bar: ButtonToast)
+    func shouldDisplay(clipBoardURL url: URL)
 }
 
 class ClipboardBarDisplayHandler: NSObject, URLChangeDelegate {
-    weak var delegate: (ClipboardBarDisplayHandlerDelegate & SettingsDelegate)?
+    public struct UX {
+        static let toastDelay = DispatchTimeInterval.milliseconds(10000)
+    }
+
+    weak var delegate: ClipboardBarDisplayHandlerDelegate?
     weak var settingsDelegate: SettingsDelegate?
     weak var tabManager: TabManager?
     private var sessionStarted = true
@@ -35,24 +35,27 @@ class ClipboardBarDisplayHandler: NSObject, URLChangeDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(appWillEnterForegroundNotification), name: UIApplication.willEnterForegroundNotification, object: nil)
     }
 
-    @objc private func UIPasteboardChanged() {
+    @objc
+    private func UIPasteboardChanged() {
         // UIPasteboardChanged gets triggered when calling UIPasteboard.general.
         NotificationCenter.default.removeObserver(self, name: UIPasteboard.changedNotification, object: nil)
 
-        UIPasteboard.general.asyncURL().uponQueue(.main) { res in
-            defer {
-                NotificationCenter.default.addObserver(self, selector: #selector(self.UIPasteboardChanged), name: UIPasteboard.changedNotification, object: nil)
-            }
+        UIPasteboard.general.asyncURL { url in
+            ensureMainThread {
+                defer {
+                    NotificationCenter.default.addObserver(self, selector: #selector(self.UIPasteboardChanged), name: UIPasteboard.changedNotification, object: nil)
+                }
 
-            guard let copiedURL: URL? = res.successValue,
-                let url = copiedURL else {
+                guard let url = url else {
                     return
+                }
+                self.lastDisplayedURL = url.absoluteString
             }
-            self.lastDisplayedURL = url.absoluteString
         }
     }
 
-    @objc private func appWillEnterForegroundNotification() {
+    @objc
+    private func appWillEnterForegroundNotification() {
         sessionStarted = true
         checkIfShouldDisplayBar()
     }
@@ -98,7 +101,7 @@ class ClipboardBarDisplayHandler: NSObject, URLChangeDelegate {
             !sessionRestored ||
             !firstTabLoaded ||
             isClipboardURLAlreadyDisplayed(copiedURL) ||
-            self.prefs.intForKey(PrefsKeys.IntroSeen) == nil {
+            IntroScreenManager(prefs: prefs).shouldShowIntroScreen {
             return false
         }
         sessionStarted = false
@@ -112,10 +115,11 @@ class ClipboardBarDisplayHandler: NSObject, URLChangeDelegate {
             return true
         }
 
-        if let url = URL(string: clipboardURL),
-            let _ = tabManager?.getTabFor(url) {
+        if let url = URL(string: clipboardURL, invalidCharacters: false),
+           tabManager?.getTabFor(url) != nil {
             return true
         }
+
         return false
     }
 
@@ -127,21 +131,7 @@ class ClipboardBarDisplayHandler: NSObject, URLChangeDelegate {
               let url = UIPasteboard.general.url,
               shouldDisplayBar(url.absoluteString) else { return }
 
-        self.lastDisplayedURL = url.absoluteString
-
-        self.clipboardToast =
-        ButtonToast(
-            labelText: .GoToCopiedLink,
-            descriptionText: url.absoluteDisplayString,
-            buttonText: .GoButtonTittle,
-            completion: { buttonPressed in
-                if buttonPressed {
-                    self.delegate?.settingsOpenURLInNewTab(url)
-                }
-            })
-
-        if let toast = self.clipboardToast {
-            delegate?.shouldDisplay(clipboardBar: toast)
-        }
+        lastDisplayedURL = url.absoluteString
+        delegate?.shouldDisplay(clipBoardURL: url)
     }
 }

@@ -1,11 +1,10 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import WebKit
 
-class UserScriptManager {
-
+class UserScriptManager: FeatureFlaggable {
     // Scripts can use this to verify the *app* (not JS on the web) is calling into them.
     public static let appIdToken = UUID().uuidString
 
@@ -44,6 +43,22 @@ class UserScriptManager {
                 let userScript = WKUserScript.createInDefaultContentWorld(source: wrappedSource, injectionTime: injectionTime, forMainFrameOnly: mainFrameOnly)
                 compiledUserScripts[name] = userScript
             }
+
+            // Autofill scripts
+            let autofillName = "Autofill\(name)"
+            if let autofillScriptCompatPath = Bundle.main.path(
+                forResource: autofillName, ofType: "js"),
+                let source = try? NSString(
+                    contentsOfFile: autofillScriptCompatPath,
+                    encoding: String.Encoding.utf8.rawValue) as String {
+                let wrappedSource = "(function() { const APP_ID_TOKEN = '\(UserScriptManager.appIdToken)'; \(source) })()"
+                let userScript = WKUserScript.createInDefaultContentWorld(
+                    source: wrappedSource,
+                    injectionTime: injectionTime,
+                    forMainFrameOnly: mainFrameOnly)
+                compiledUserScripts[autofillName] = userScript
+            }
+
             let webcompatName = "Webcompat\(name)"
             if let webCompatPath = Bundle.main.path(forResource: webcompatName, ofType: "js"),
                 let source = try? NSString(contentsOfFile: webCompatPath, encoding: String.Encoding.utf8.rawValue) as String {
@@ -51,16 +66,15 @@ class UserScriptManager {
                 let userScript = WKUserScript.createInPageContentWorld(source: wrappedSource, injectionTime: injectionTime, forMainFrameOnly: mainFrameOnly)
                 compiledUserScripts[webcompatName] = userScript
             }
-
         }
 
         self.compiledUserScripts = compiledUserScripts
     }
 
-    public func injectUserScriptsIntoTab(_ tab: Tab, nightMode: Bool, noImageMode: Bool) {
+    public func injectUserScriptsIntoWebView(_ webView: WKWebView?, nightMode: Bool, noImageMode: Bool) {
         // Start off by ensuring that any previously-added user scripts are
         // removed to prevent the same script from being injected twice.
-        tab.webView?.configuration.userContentController.removeAllUserScripts()
+        webView?.configuration.userContentController.removeAllUserScripts()
 
         // Inject all pre-compiled user scripts.
         [(WKUserScriptInjectionTime.atDocumentStart, mainFrameOnly: false),
@@ -70,24 +84,30 @@ class UserScriptManager {
             let (injectionTime, mainFrameOnly) = arg
             let name = (mainFrameOnly ? "MainFrame" : "AllFrames") + "AtDocument" + (injectionTime == .atDocumentStart ? "Start" : "End")
             if let userScript = compiledUserScripts[name] {
-                tab.webView?.configuration.userContentController.addUserScript(userScript)
+                webView?.configuration.userContentController.addUserScript(userScript)
             }
+
+            let autofillName = "Autofill\(name)"
+            if let autofillScript = compiledUserScripts[autofillName] {
+                webView?.configuration.userContentController.addUserScript(autofillScript)
+            }
+
             let webcompatName = "Webcompat\(name)"
             if let webcompatUserScript = compiledUserScripts[webcompatName] {
-                tab.webView?.configuration.userContentController.addUserScript(webcompatUserScript)
+                webView?.configuration.userContentController.addUserScript(webcompatUserScript)
             }
         }
         // Inject the Print Helper. This needs to be in the `page` content world in order to hook `window.print()`.
-        tab.webView?.configuration.userContentController.addUserScript(printHelperUserScript)
+        webView?.configuration.userContentController.addUserScript(printHelperUserScript)
         // If Night Mode is enabled, inject a small user script to ensure
         // that it gets enabled immediately when the DOM loads.
         if nightMode {
-            tab.webView?.configuration.userContentController.addUserScript(nightModeUserScript)
+            webView?.configuration.userContentController.addUserScript(nightModeUserScript)
         }
         // If No Image Mode is enabled, inject a small user script to ensure
         // that it gets enabled immediately when the DOM loads.
         if noImageMode {
-            tab.webView?.configuration.userContentController.addUserScript(noImageModeUserScript)
+            webView?.configuration.userContentController.addUserScript(noImageModeUserScript)
         }
     }
 }

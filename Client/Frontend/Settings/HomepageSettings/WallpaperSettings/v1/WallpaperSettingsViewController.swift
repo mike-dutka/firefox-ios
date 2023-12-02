@@ -2,10 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import UIKit
+import Shared
 
-class WallpaperSettingsViewController: WallpaperBaseViewController, Loggable {
-
+class WallpaperSettingsViewController: WallpaperBaseViewController, Themeable {
     private struct UX {
         static let cardWidth: CGFloat = UIDevice().isTinyFormFactor ? 88 : 97
         static let cardHeight: CGFloat = UIDevice().isTinyFormFactor ? 80 : 88
@@ -16,6 +17,10 @@ class WallpaperSettingsViewController: WallpaperBaseViewController, Loggable {
 
     private var viewModel: WallpaperSettingsViewModel
     var notificationCenter: NotificationProtocol
+    var themeManager: ThemeManager
+    var themeObserver: NSObjectProtocol?
+    private var logger: Logger
+    weak var settingsDelegate: SettingsDelegate?
 
     // Views
     private lazy var contentView: UIView = .build { _ in }
@@ -40,9 +45,13 @@ class WallpaperSettingsViewController: WallpaperBaseViewController, Loggable {
 
     // MARK: - Initializers
     init(viewModel: WallpaperSettingsViewModel,
-         notificationCenter: NotificationProtocol = NotificationCenter.default) {
+         notificationCenter: NotificationProtocol = NotificationCenter.default,
+         themeManager: ThemeManager = AppContainer.shared.resolve(),
+         logger: Logger = DefaultLogger.shared) {
         self.viewModel = viewModel
         self.notificationCenter = notificationCenter
+        self.themeManager = themeManager
+        self.logger = logger
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -56,7 +65,8 @@ class WallpaperSettingsViewController: WallpaperBaseViewController, Loggable {
         setupView()
         applyTheme()
         setupNotifications(forObserver: self,
-                           observing: [.DisplayThemeChanged, UIContentSizeCategory.didChangeNotification])
+                           observing: [UIContentSizeCategory.didChangeNotification])
+        listenForThemeChange(view)
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -81,11 +91,14 @@ class WallpaperSettingsViewController: WallpaperBaseViewController, Loggable {
     override func updateOnRotation() {
         configureCollectionView()
     }
+
+    func applyTheme() {
+        contentView.backgroundColor = themeManager.currentTheme.colors.layer5
+    }
 }
 
 // MARK: - CollectionView Data Source
 extension WallpaperSettingsViewController: UICollectionViewDelegate, UICollectionViewDataSource {
-
     func numberOfSections(in collectionView: UICollectionView) -> Int {
         return viewModel.numberOfSections
     }
@@ -122,6 +135,7 @@ extension WallpaperSettingsViewController: UICollectionViewDelegate, UICollectio
         else { return UICollectionViewCell() }
 
         cell.viewModel = cellViewModel
+        cell.applyTheme(theme: themeManager.currentTheme)
         return cell
     }
 
@@ -132,7 +146,6 @@ extension WallpaperSettingsViewController: UICollectionViewDelegate, UICollectio
 
 // MARK: - Private
 private extension WallpaperSettingsViewController {
-
     func setupView() {
         configureCollectionView()
 
@@ -204,17 +217,18 @@ private extension WallpaperSettingsViewController {
     }
 
     func showToast() {
+        let viewModel = ButtonToastViewModel(labelText: WallpaperSettingsViewModel.Constants.Strings.Toast.label,
+                                             buttonText: WallpaperSettingsViewModel.Constants.Strings.Toast.button)
         let toast = ButtonToast(
-            labelText: WallpaperSettingsViewModel.Constants.Strings.Toast.label,
-            buttonText: WallpaperSettingsViewModel.Constants.Strings.Toast.button,
+            viewModel: viewModel,
+            theme: themeManager.currentTheme,
             completion: { buttonPressed in
-
-            if buttonPressed { self.dismissView() }
-        })
+                if buttonPressed { self.dismissView() }
+            })
 
         toast.showToast(viewController: self,
-                        delay: SimpleToastUX.ToastDelayBefore,
-                        duration: SimpleToastUX.ToastDismissAfter) { toast in
+                        delay: Toast.UX.toastDelayBefore,
+                        duration: Toast.UX.toastDismissAfter) { toast in
             [
                 toast.leadingAnchor.constraint(equalTo: self.view.leadingAnchor),
                 toast.trailingAnchor.constraint(equalTo: self.view.trailingAnchor),
@@ -224,10 +238,8 @@ private extension WallpaperSettingsViewController {
     }
 
     func dismissView() {
-        guard let navigationController = self.navigationController as? ThemedNavigationController else { return }
-
+        settingsDelegate?.didFinish()
         viewModel.selectHomepageTab()
-        navigationController.done()
     }
 
     func preferredContentSizeChanged(_ notification: Notification) {
@@ -247,7 +259,9 @@ private extension WallpaperSettingsViewController {
                 case .success:
                     self?.showToast()
                 case .failure(let error):
-                    self?.browserLog.info(error.localizedDescription)
+                    self?.logger.log("Could not download and set wallpaper: \(error.localizedDescription)",
+                                     level: .warning,
+                                     category: .homepage)
                     self?.showError(error) { _ in
                         self?.downloadAndSetWallpaper(at: indexPath)
                     }
@@ -258,25 +272,13 @@ private extension WallpaperSettingsViewController {
     }
 }
 
-// MARK: - Themable & Notifiable
-extension WallpaperSettingsViewController: NotificationThemeable, Notifiable {
-
+// MARK: - Notifiable
+extension WallpaperSettingsViewController: Notifiable {
     func handleNotifications(_ notification: Notification) {
         switch notification.name {
-        case .DisplayThemeChanged:
-            applyTheme()
         case UIContentSizeCategory.didChangeNotification:
             preferredContentSizeChanged(notification)
         default: break
-        }
-    }
-
-    func applyTheme() {
-        let theme = BuiltinThemeName(rawValue: LegacyThemeManager.instance.current.name) ?? .normal
-        if theme == .dark {
-            contentView.backgroundColor = UIColor.Photon.DarkGrey40
-        } else {
-            contentView.backgroundColor = UIColor.Photon.LightGrey10
         }
     }
 }

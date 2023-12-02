@@ -1,7 +1,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
 import Storage
@@ -10,16 +11,15 @@ import UIKit
 protocol PhotonActionSheetProtocol {
     var tabManager: TabManager { get }
     var profile: Profile { get }
+    var themeManager: ThemeManager { get }
 }
 
 extension PhotonActionSheetProtocol {
     typealias PresentableVC = UIViewController & UIPopoverPresentationControllerDelegate
-    typealias MenuActionsDelegate = QRCodeViewControllerDelegate & SettingsDelegate & PresentingModalViewControllerDelegate & UIViewController
 
     func presentSheetWith(viewModel: PhotonActionSheetViewModel,
                           on viewController: PresentableVC,
                           from view: UIView) {
-
         let sheet = PhotonActionSheet(viewModel: viewModel)
         sheet.modalPresentationStyle = viewModel.modalStyle
         sheet.photonTransitionDelegate = PhotonActionSheetAnimator()
@@ -39,31 +39,37 @@ extension PhotonActionSheetProtocol {
         viewController.present(sheet, animated: true, completion: nil)
     }
 
-    func getLongPressLocationBarActions(with urlBar: URLBarView, webViewContainer: UIView) -> [PhotonRowActions] {
-        let pasteGoAction = SingleActionViewModel(title: .PasteAndGoTitle, iconString: ImageIdentifiers.pasteAndGo) { _ in
+    func getLongPressLocationBarActions(with urlBar: URLBarView, alertContainer: UIView) -> [PhotonRowActions] {
+        let pasteGoAction = SingleActionViewModel(title: .PasteAndGoTitle,
+                                                  iconString: StandardImageIdentifiers.Large.clipboard) { _ in
             if let pasteboardContents = UIPasteboard.general.string {
                 urlBar.delegate?.urlBar(urlBar, didSubmitText: pasteboardContents)
             }
-        }.items
+        }
+        pasteGoAction.accessibilityId = AccessibilityIdentifiers.Photon.pasteAndGoAction
 
-        let pasteAction = SingleActionViewModel(title: .PasteTitle, iconString: ImageIdentifiers.paste) { _ in
+        let pasteAction = SingleActionViewModel(title: .PasteTitle,
+                                                iconString: StandardImageIdentifiers.Large.clipboard) { _ in
             if let pasteboardContents = UIPasteboard.general.string {
                 urlBar.enterOverlayMode(pasteboardContents, pasted: true, search: true)
             }
-        }.items
+        }
+        pasteAction.accessibilityId = AccessibilityIdentifiers.Photon.pasteAction
 
-        let copyAddressAction = SingleActionViewModel(title: .CopyAddressTitle, iconString: ImageIdentifiers.copyLink) { _ in
+        let copyAddressAction = SingleActionViewModel(title: .CopyAddressTitle,
+                                                      iconString: StandardImageIdentifiers.Large.link) { _ in
             if let url = tabManager.selectedTab?.canonicalURL?.displayURL ?? urlBar.currentURL {
                 UIPasteboard.general.url = url
                 SimpleToast().showAlertWithText(.AppMenu.AppMenuCopyURLConfirmMessage,
-                                                bottomContainer: webViewContainer)
+                                                bottomContainer: alertContainer,
+                                                theme: themeManager.currentTheme)
             }
-        }.items
+        }
 
         if UIPasteboard.general.string != nil {
-            return [pasteGoAction, pasteAction, copyAddressAction]
+            return [pasteGoAction.items, pasteAction.items, copyAddressAction.items]
         } else {
-            return [copyAddressAction]
+            return [copyAddressAction.items]
         }
     }
 
@@ -79,8 +85,8 @@ extension PhotonActionSheetProtocol {
         } else {
             toggleActionTitle = tab.changedUserAgent ? .AppMenu.AppMenuViewMobileSiteTitleString : .AppMenu.AppMenuViewDesktopSiteTitleString
         }
-        let toggleDesktopSite = SingleActionViewModel(title: toggleActionTitle, iconString: ImageIdentifiers.requestDesktopSite) { _ in
-
+        let toggleDesktopSite = SingleActionViewModel(title: toggleActionTitle,
+                                                      iconString: StandardImageIdentifiers.Large.deviceDesktop) { _ in
             if let url = tab.url {
                 tab.toggleChangeUserAgent()
                 Tab.ChangeUserAgent.updateDomainList(forUrl: url, isChangedUA: tab.changedUserAgent, isPrivate: tab.isPrivate)
@@ -102,5 +108,4 @@ extension PhotonActionSheetProtocol {
             return [toggleDesktopSite]
         }
     }
-
 }

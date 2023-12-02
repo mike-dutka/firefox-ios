@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import SwiftUI
 import WidgetKit
@@ -23,7 +23,8 @@ struct OpenTabsWidget: Widget {
 struct OpenTabsView: View {
     let entry: OpenTabsEntry
 
-    @Environment(\.widgetFamily) var widgetFamily
+    @Environment(\.widgetFamily)
+    var widgetFamily
 
     @ViewBuilder
     func lineItemForTab(_ tab: SimpleTab) -> some View {
@@ -34,7 +35,7 @@ struct OpenTabsView: View {
                     if entry.favicons[tab.imageKey] != nil {
                         (entry.favicons[tab.imageKey])!.resizable().frame(width: 16, height: 16)
                     } else {
-                        Image("placeholderFavicon")
+                        Image("globeLarge")
                             .foregroundColor(Color.white)
                             .frame(width: 16, height: 16)
                     }
@@ -109,6 +110,6 @@ struct OpenTabsView: View {
 
     private func linkToContainingApp(_ urlSuffix: String = "", query: String) -> URL {
         let urlString = "\(scheme)://\(query)\(urlSuffix)"
-        return URL(string: urlString)!
+        return URL(string: urlString, invalidCharacters: false)!
     }
 }

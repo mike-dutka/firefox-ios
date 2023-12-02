@@ -1,16 +1,14 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import UIKit
 import Shared
 import Storage
 import Sync
-import XCGLogger
 import UserNotifications
 import Account
 import MozillaAppServices
-
-private let log = Logger.browserLogger
 
 /**
  * This exists because the Sync code is extension-safe, and thus doesn't get
@@ -20,27 +18,26 @@ private let log = Logger.browserLogger
 enum SentTabAction: String {
     case view = "TabSendViewAction"
 
-    static let TabSendURLKey = "TabSendURL"
-    static let TabSendTitleKey = "TabSendTitle"
-    static let TabSendCategory = "TabSendCategory"
-
-    static func registerActions() {
-        let viewAction = UNNotificationAction(identifier: SentTabAction.view.rawValue, title: .SentTabViewActionTitle, options: .foreground)
+    static var notificationCategory: UNNotificationCategory {
+        let viewAction = UNNotificationAction(identifier: SentTabAction.view.rawValue,
+                                              title: .SentTabViewActionTitle,
+                                              options: .foreground)
 
         // Register ourselves to handle the notification category set by NotificationService for APNS notifications
-        let sentTabCategory = UNNotificationCategory(
-            identifier: "org.mozilla.ios.SentTab.placeholder",
+        return UNNotificationCategory(
+            identifier: "mdutka.ios.SentTab.placeholder",
             actions: [viewAction],
             intentIdentifiers: [],
             options: UNNotificationCategoryOptions(rawValue: 0))
-        UNUserNotificationCenter.current().setNotificationCategories([sentTabCategory])
     }
 }
 
 extension AppDelegate {
     func pushNotificationSetup() {
-       UNUserNotificationCenter.current().delegate = self
-       SentTabAction.registerActions()
+        UNUserNotificationCenter.current().delegate = self
+        let categories: Set<UNNotificationCategory> = [SentTabAction.notificationCategory,
+                                                       NotificationSurfaceManager.notificationCategory]
+        UNUserNotificationCenter.current().setNotificationCategories(categories)
 
         NotificationCenter.default.addObserver(forName: .RegisterForPushNotifications, object: nil, queue: .main) { _ in
             UNUserNotificationCenter.current().getNotificationSettings { settings in
@@ -58,6 +55,8 @@ extension AppDelegate {
                 if newState.localDevice?.pushEndpointExpired ?? false {
                     MZKeychainWrapper.sharedClientAppContainerKeychain.removeObject(forKey: KeychainKey.apnsToken, withAccessibility: MZKeychainItemAccessibility.afterFirstUnlock)
                     NotificationCenter.default.post(name: .RegisterForPushNotifications, object: nil)
+                    // Our endpoint expired, we should check for missed messages
+                    self.profile.pollCommands(forcePoll: true)
                 }
             }
         }
@@ -66,32 +65,32 @@ extension AppDelegate {
         // The notification service extension can clear this token if there is an error, and the main app can detect this and re-register.
         NotificationCenter.default.addObserver(forName: .ProfileDidStartSyncing, object: nil, queue: .main) { _ in
             let kc = MZKeychainWrapper.sharedClientAppContainerKeychain
-            if kc.object(forKey: KeychainKey.apnsToken, withAccessibility: MZKeychainItemAccessibility.afterFirstUnlock) == nil {
+            if kc.string(forKey: KeychainKey.apnsToken, withAccessibility: MZKeychainItemAccessibility.afterFirstUnlock) == nil {
                 NotificationCenter.default.post(name: .RegisterForPushNotifications, object: nil)
             }
-        }
-    }
-
-    private func openURLsInNewTabs(_ notification: UNNotification) {
-        guard let urls = notification.request.content.userInfo["sentTabs"] as? [NSDictionary]  else { return }
-        for sentURL in urls {
-            if let urlString = sentURL.value(forKey: "url") as? String, let url = URL(string: urlString) {
-                receivedURLs.append(url)
-            }
-        }
-
-        // Check if the app is foregrounded, _also_ verify the BVC is initialized. Most BVC functions depend on viewDidLoad() having run –if not, they will crash.
-        if UIApplication.shared.applicationState == .active && browserViewController.isViewLoaded {
-            browserViewController.loadQueuedTabs(receivedURLs: receivedURLs)
-            receivedURLs.removeAll()
         }
     }
 }
 
 extension AppDelegate: UNUserNotificationCenterDelegate {
-    // Called when the user taps on a sent-tab notification from the background.
-    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-        openURLsInNewTabs(response.notification)
+    // Called when the user taps on a notification from the background.
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                                didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        let content = response.notification.request.content
+
+        if content.categoryIdentifier == NotificationSurfaceManager.Constant.notificationCategoryId {
+           switch response.actionIdentifier {
+           case UNNotificationDismissActionIdentifier:
+               notificationSurfaceManager.didDismissNotification(content.userInfo)
+           default:
+               notificationSurfaceManager.didTapNotification(content.userInfo)
+           }
+        }
+        // We don't poll for commands here because we do that once the application wakes up
+        // The notification service ensures that when the application wakes up, the application will check
+        // for commands
+        completionHandler()
     }
 
     // Called when the user receives a tab (or any other notification) while in foreground.
@@ -100,25 +99,50 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-
         if profile.prefs.boolForKey(PendingAccountDisconnectedKey) ?? false {
             profile.removeAccount()
 
             // show the notification
-            completionHandler([.alert, .sound])
+            completionHandler([.list, .banner, .sound])
         } else {
-            openURLsInNewTabs(notification)
+            profile.pollCommands(forcePoll: true)
         }
     }
 }
 
 extension AppDelegate {
-    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        RustFirefoxAccounts.shared.pushNotifications.didRegister(withDeviceToken: deviceToken)
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        var notificationAllowed = true
+        if UserDefaults.standard.object(forKey: PrefsKeys.Notifications.SyncNotifications) != nil {
+            notificationAllowed = UserDefaults.standard.bool(forKey: PrefsKeys.Notifications.SyncNotifications)
+        }
+
+        guard notificationAllowed else {
+            RustFirefoxAccounts.shared.pushNotifications.disableNotifications()
+            return
+        }
+
+        Task {
+            do {
+                let autopush = try await Autopush(files: profile.files)
+                try await autopush.updateToken(withDeviceToken: deviceToken)
+                let fxaSubscription = try await autopush.subscribe(scope: RustFirefoxAccounts.pushScope)
+                RustFirefoxAccounts.shared.pushNotifications.updatePushRegistration(subscriptionResponse: fxaSubscription)
+            } catch let error {
+                logger.log(
+                    "Failed to update push registration",
+                    level: .warning,
+                    category: .setup,
+                    description: error.localizedDescription
+                )
+            }
+        }
     }
 
     func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        print("failed to register. \(error)")
-        SentryIntegration.shared.send(message: "Failed to register for APNS")
+        logger.log("Failed to register for APNS",
+                   level: .info,
+                   category: .setup)
     }
 }

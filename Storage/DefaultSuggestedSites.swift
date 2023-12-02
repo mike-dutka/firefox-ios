@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 
@@ -86,7 +86,7 @@ open class DefaultSuggestedSites {
                 title: "火狐社区"
             ),
             SuggestedSiteData(
-                url: "https://m.baidu.com/?from=1000969c",
+                url: "https://m.baidu.com/",
                 bgColor: "0x00479d",
                 imageUrl: "asset://suggestedsites_baidu",
                 faviconUrl: "asset://baiduLogo",

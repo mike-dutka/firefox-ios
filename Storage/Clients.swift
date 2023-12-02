@@ -1,9 +1,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Shared
-import SwiftyJSON
 
 public struct RemoteClient: Equatable {
     public let guid: GUID?
@@ -21,23 +20,6 @@ public struct RemoteClient: Equatable {
     let application: String?
     let formfactor: String?
     let device: String?
-
-    // Requires a valid ClientPayload (: CleartextPayloadJSON: JSON).
-    public init(json: JSON, modified: Timestamp) {
-        self.guid = json["id"].string
-        self.modified = modified
-        self.name = json["name"].stringValue
-        self.type = json["type"].string
-
-        self.version = json["version"].string
-        self.protocols = jsonsToStrings(json["protocols"].array)
-        self.os = json["os"].string
-        self.appPackage = json["appPackage"].string
-        self.application = json["application"].string
-        self.formfactor = json["formfactor"].string
-        self.device = json["device"].string
-        self.fxaDeviceId = json["fxaDeviceId"].string
-    }
 
     public init(guid: GUID?, name: String, modified: Timestamp, type: String?, formfactor: String?, os: String?, version: String?, fxaDeviceId: String?) {
         self.guid = guid
@@ -66,14 +48,4 @@ public func == (lhs: RemoteClient, rhs: RemoteClient) -> Bool {
         lhs.os == rhs.os &&
         lhs.version == rhs.version &&
         lhs.fxaDeviceId == rhs.fxaDeviceId
-}
-
-extension RemoteClient: CustomStringConvertible {
-    public var description: String {
-        return """
-<RemoteClient GUID: \(guid ?? "nil"), name: \(name), modified: \(modified), \
-type: \(type ?? "nil"), formfactor: \(formfactor ?? "nil"), OS: \(os ?? "nil"), \
-version: \(version ?? "nil"), fxaDeviceId: \(fxaDeviceId ?? "nil")>
-"""
-    }
 }

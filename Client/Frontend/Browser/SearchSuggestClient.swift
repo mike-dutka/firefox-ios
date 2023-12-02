@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
@@ -20,7 +20,7 @@ class SearchSuggestClient {
     fileprivate let userAgent: String
     fileprivate var task: URLSessionTask?
 
-    lazy fileprivate var urlSession: URLSession = makeURLSession(userAgent: self.userAgent, configuration: URLSessionConfiguration.ephemeral)
+    fileprivate lazy var urlSession: URLSession = makeURLSession(userAgent: self.userAgent, configuration: URLSessionConfiguration.ephemeral)
 
     init(searchEngine: OpenSearchEngine, userAgent: String) {
         self.searchEngine = searchEngine
@@ -42,7 +42,7 @@ class SearchSuggestClient {
             }
 
             guard let data = data,
-                  let _ = validatedHTTPResponse(response, statusCode: 200..<300)
+                  validatedHTTPResponse(response, statusCode: 200..<300) != nil
             else {
                 let error = NSError(domain: SearchSuggestClientErrorDomain, code: SearchSuggestClientErrorInvalidResponse, userInfo: nil)
                 callback(nil, error as NSError?)

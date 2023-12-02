@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
@@ -24,7 +24,6 @@ extension PocketStoriesProviding {
 }
 
 class PocketProvider: PocketStoriesProviding, FeatureFlaggable, URLCaching {
-
     private class PocketError: MaybeErrorType {
         var description = "Failed to load from API"
     }
@@ -32,21 +31,32 @@ class PocketProvider: PocketStoriesProviding, FeatureFlaggable, URLCaching {
     private let pocketEnvAPIKey = "PocketEnvironmentAPIKey"
 
     private static let SupportedLocales = ["en_CA", "en_US", "en_GB", "en_ZA", "de_DE", "de_AT", "de_CH"]
+
     private let pocketGlobalFeed: String
+    private var prefs: Prefs
 
     static let GlobalFeed = "https://getpocket.cdn.mozilla.net/v3/firefox/global-recs"
-    static let MoreStoriesURL = URL(string: "https://getpocket.com/explore?src=ff_ios&cdn=0")!
+    static let MoreStoriesURL = {
+        switch Locale.current.identifier {
+        case "de_DE":
+            return URL(string: "https://getpocket.com/de/explore?src=ff_ios")!
+        default:
+            return URL(string: "https://getpocket.com/explore?src=ff_ios&cdn=0")!
+        }
+    }()
 
     // Allow endPoint to be overriden for testing
-    init(endPoint: String = PocketProvider.GlobalFeed) {
+    init(endPoint: String = PocketProvider.GlobalFeed,
+         prefs: Prefs) {
         self.pocketGlobalFeed = endPoint
+        self.prefs = prefs
     }
 
     var urlCache: URLCache {
         return URLCache.shared
     }
 
-    lazy private var urlSession = makeURLSession(userAgent: UserAgent.defaultClientUserAgent, configuration: URLSessionConfiguration.default)
+    private lazy var urlSession = makeURLSession(userAgent: UserAgent.defaultClientUserAgent, configuration: URLSessionConfiguration.default)
 
     private lazy var pocketKey: String? = {
         return Bundle.main.object(forInfoDictionaryKey: pocketEnvAPIKey) as? String
@@ -58,15 +68,25 @@ class PocketProvider: PocketStoriesProviding, FeatureFlaggable, URLCaching {
 
     // Fetch items from the global pocket feed
     func fetchStories(items: Int, completion: @escaping (StoryResult) -> Void) {
+        let isFeatureEnabled = prefs.boolForKey(PrefsKeys.UserFeatureFlagPrefs.ASPocketStories) ?? true
+        let isCurrentLocaleSupported = PocketProvider.islocaleSupported(Locale.current.identifier)
+
+        // Check if we should use mock data
         if shouldUseMockData {
             return getMockDataFeed(count: items, completion: completion)
-        } else {
-            return getGlobalFeed(items: items, completion: completion)
         }
+
+        // Ensure the feature is enabled and current locale is supported
+        guard isFeatureEnabled, isCurrentLocaleSupported else {
+            completion(.failure(Error.failure))
+            return
+        }
+
+        // Note: Global feed is restricted to specific locale and feature availability
+        getGlobalFeed(items: items, completion: completion)
     }
 
     private func getGlobalFeed(items: Int, completion: @escaping (StoryResult) -> Void) {
-
         guard let request = createGlobalFeedRequest(items: items) else {
             return completion(.failure(Error.failure))
         }
@@ -107,7 +127,7 @@ class PocketProvider: PocketStoriesProviding, FeatureFlaggable, URLCaching {
             params.append(URLQueryItem(name: "consumer_key", value: pocketKey))
         }
 
-        guard let feedURL = URL(string: pocketGlobalFeed)?.withQueryParams(params) else { return nil }
+        guard let feedURL = URL(string: pocketGlobalFeed, invalidCharacters: false)?.withQueryParams(params) else { return nil }
 
         return URLRequest(url: feedURL, cachePolicy: .reloadIgnoringCacheData, timeoutInterval: 5)
     }
@@ -121,8 +141,9 @@ class PocketProvider: PocketStoriesProviding, FeatureFlaggable, URLCaching {
     }
 
     private func getMockDataFeed(count: Int = 2, completion: (StoryResult) -> Void) {
-        let path = Bundle(for: type(of: self)).path(forResource: "pocketglobalfeed", ofType: "json")
-        let data = try! Data(contentsOf: URL(fileURLWithPath: path!))
+        guard let path = Bundle(for: type(of: self)).path(forResource: "pocketglobalfeed", ofType: "json"),
+              let data = try? Data(contentsOf: URL(fileURLWithPath: path))
+        else { return }
 
         let json = try? JSONSerialization.jsonObject(with: data, options: .allowFragments) as? [String: Any]
         guard let items = json?["recommendations"] as? [[String: Any]] else {

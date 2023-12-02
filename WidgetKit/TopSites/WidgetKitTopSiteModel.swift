@@ -1,13 +1,13 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Shared
 
 struct WidgetKitTopSiteModel: Codable {
     var title: String
-    var faviconUrl: String
     var url: URL
     var imageKey: String
 
@@ -27,9 +27,7 @@ struct WidgetKitTopSiteModel: Codable {
                 let jsonDecoder = JSONDecoder()
                 let sites = try jsonDecoder.decode([WidgetKitTopSiteModel].self, from: topSites)
                 return sites
-            } catch {
-                print("Error occured")
-            }
+            } catch {}
         }
         return [WidgetKitTopSiteModel]()
     }

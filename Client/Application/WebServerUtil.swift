@@ -2,12 +2,12 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import GCDWebServers
 import Shared
 
 class WebServerUtil {
-
     private var readerModeHander: ReaderModeHandlersProtocol
     private var webServer: WebServerProtocol
     private var profile: Profile
@@ -44,9 +44,7 @@ class WebServerUtil {
         // so this is better anyway.
         do {
             try webServer.start()
-        } catch let err as NSError {
-            print("Error: Unable to start WebServer \(err)")
-        }
+        } catch {}
     }
 
     private func registerHandlersForTestMethods(server: GCDWebServer) {

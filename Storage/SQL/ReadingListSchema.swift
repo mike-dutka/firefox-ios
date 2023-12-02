@@ -1,22 +1,23 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
+import Common
 import Shared
-import XCGLogger
 
 private let AllTables: [String] = ["items"]
 
-private let log = Logger.syncLogger
-
 open class ReadingListSchema: Schema {
     static let DefaultVersion = 1
+    private var logger: Logger
 
     public var name: String { return "READINGLIST" }
     public var version: Int { return ReadingListSchema.DefaultVersion }
 
-    public init() {}
+    public init(logger: Logger = DefaultLogger.shared) {
+        self.logger = logger
+    }
 
     let itemsTableCreate = """
         CREATE TABLE IF NOT EXISTS items (
@@ -40,21 +41,29 @@ open class ReadingListSchema: Schema {
     public func update(_ db: SQLiteDBConnection, from: Int) -> Bool {
         let to = self.version
         if from == to {
-            log.debug("Skipping ReadingList schema update from \(from) to \(to).")
+            logger.log("Skipping ReadingList schema update from \(from) to \(to).",
+                       level: .debug,
+                       category: .storage)
             return true
         }
 
         if from < 1 && to >= 1 {
-            log.debug("Updating ReadingList database schema from \(from) to \(to).")
+            logger.log("Updating ReadingList database schema from \(from) to \(to).",
+                       level: .debug,
+                       category: .storage)
             return self.run(db, queries: [itemsTableCreate])
         }
 
-        log.debug("Dropping and re-creating ReadingList database schema from \(from) to \(to).")
+        logger.log("Dropping and re-creating ReadingList database schema from \(from) to \(to).",
+                   level: .debug,
+                   category: .storage)
         return drop(db) && create(db)
     }
 
     public func drop(_ db: SQLiteDBConnection) -> Bool {
-        log.debug("Dropping ReadingList database.")
+        logger.log("Dropping ReadingList database.",
+                   level: .debug,
+                   category: .storage)
         let tables = AllTables.map { "DROP TABLE IF EXISTS \($0)" }
         let queries = Array([tables].joined())
         return self.run(db, queries: queries)
@@ -64,18 +73,17 @@ open class ReadingListSchema: Schema {
         do {
             try db.executeChange(sql, withArgs: args)
         } catch let err as NSError {
-            log.error("Error running SQL in ReadingListSchema: \(err.localizedDescription)")
-            log.error("SQL was \(sql)")
+            logger.log("Error running SQL in ReadingListSchema: \(err.localizedDescription) with \(sql)",
+                       level: .warning,
+                       category: .storage)
             return false
         }
         return true
     }
 
     func run(_ db: SQLiteDBConnection, queries: [String]) -> Bool {
-        for sql in queries {
-            if !run(db, sql: sql, args: nil) {
-                return false
-            }
+        for sql in queries where !run(db, sql: sql, args: nil) {
+            return false
         }
         return true
     }

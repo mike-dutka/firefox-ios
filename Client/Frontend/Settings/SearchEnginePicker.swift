@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 
@@ -22,7 +22,8 @@ class SearchEnginePicker: ThemedTableViewController {
 
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let engine = engines[indexPath.item]
-        let cell = ThemedTableViewCell()
+        let cell = dequeueCellFor(indexPath: indexPath)
+        cell.applyTheme(theme: themeManager.currentTheme)
         cell.textLabel?.text = engine.shortName
         let size = CGSize(width: OpenSearchEngine.UX.preferredIconSize,
                           height: OpenSearchEngine.UX.preferredIconSize)
@@ -37,13 +38,16 @@ class SearchEnginePicker: ThemedTableViewController {
         let engine = engines[indexPath.item]
         delegate?.searchEnginePicker(self, didSelectSearchEngine: engine)
         tableView.cellForRow(at: indexPath)?.accessoryType = .checkmark
+
+        NotificationCenter.default.post(name: .DefaultSearchEngineUpdated, object: self)
     }
 
     override func tableView(_ tableView: UITableView, didDeselectRowAt indexPath: IndexPath) {
         tableView.cellForRow(at: indexPath)?.accessoryType = .none
     }
 
-    @objc func cancel() {
+    @objc
+    func cancel() {
         delegate?.searchEnginePicker(self, didSelectSearchEngine: nil)
     }
 }

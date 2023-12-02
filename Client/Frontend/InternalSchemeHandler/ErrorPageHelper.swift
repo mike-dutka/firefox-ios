@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import WebKit
@@ -33,7 +33,7 @@ private let CertErrorCodes = [
 private func certFromErrorURL(_ url: URL) -> SecCertificate? {
     func getCert(_ url: URL) -> SecCertificate? {
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        if let encodedCert = components?.queryItems?.filter({ $0.name == "badcert" }).first?.value,
+        if let encodedCert = components?.queryItems?.first(where: { $0.name == "badcert" })?.value,
             let certData = Data(base64Encoded: encodedCert, options: []) {
             return SecCertificateCreateWithData(nil, certData as CFData)
         }
@@ -188,7 +188,7 @@ class ErrorPageHandler: InternalSchemeResponse {
                   let comp = URLComponents(url: url, resolvingAgainstBaseURL: false),
                   let certError = comp.valueForQuery("certerror")
             else {
-                assert(false)
+                assertionFailure("Error unwrapping the cert error")
                 return nil
             }
 
@@ -209,7 +209,7 @@ class ErrorPageHandler: InternalSchemeResponse {
 
         let response = InternalSchemeHandler.response(forUrl: originalUrl)
         guard let file = asset, var html = try? String(contentsOfFile: file) else {
-            assert(false)
+            assertionFailure("Error unwrapping html from file contents")
             return nil
         }
 
@@ -223,7 +223,6 @@ class ErrorPageHandler: InternalSchemeResponse {
 }
 
 class ErrorPageHelper {
-
     fileprivate weak var certStore: CertStore?
 
     init(certStore: CertStore?) {
@@ -310,5 +309,12 @@ extension ErrorPageHelper: TabContentScript {
         default:
             assertionFailure("Unknown error message")
         }
+    }
+}
+
+private extension URLComponents {
+    // Return the first query parameter that matches
+    func valueForQuery(_ param: String) -> String? {
+        return self.queryItems?.first { $0.name == param }?.value
     }
 }

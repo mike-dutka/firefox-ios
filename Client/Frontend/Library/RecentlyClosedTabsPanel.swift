@@ -1,18 +1,15 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
-
 import Shared
 import Storage
-import XCGLogger
-
-private let log = Logger.browserLogger
+import SiteImageView
+import Common
 
 private struct RecentlyClosedPanelUX {
     static let IconSize = CGSize(width: 23, height: 23)
-    static let IconBorderColor = UIColor.Photon.Grey30
     static let IconBorderWidth: CGFloat = 0.5
 }
 
@@ -21,17 +18,26 @@ protocol RecentlyClosedPanelDelegate: AnyObject {
     func openRecentlyClosedSiteInNewTab(_ url: URL, isPrivate: Bool)
 }
 
-class RecentlyClosedTabsPanel: UIViewController, LibraryPanel {
+class RecentlyClosedTabsPanel: UIViewController, LibraryPanel, Themeable {
+    var themeManager: ThemeManager
+    var themeObserver: NSObjectProtocol?
+    var notificationCenter: NotificationProtocol
 
     weak var libraryPanelDelegate: LibraryPanelDelegate?
     var state: LibraryPanelMainState = .history(state: .inFolder)
-    var recentlyClosedTabsDelegate: RecentlyClosedPanelDelegate?
+    weak var recentlyClosedTabsDelegate: RecentlyClosedPanelDelegate?
     let profile: Profile
     var bottomToolbarItems: [UIBarButtonItem] = [UIBarButtonItem]()
 
     fileprivate lazy var tableViewController = RecentlyClosedTabsPanelSiteTableViewController(profile: profile)
 
-    init(profile: Profile) {
+    init(
+        profile: Profile,
+        themeManager: ThemeManager = AppContainer.shared.resolve(),
+        notificationCenter: NotificationProtocol = NotificationCenter.default
+    ) {
+        self.themeManager = themeManager
+        self.notificationCenter = notificationCenter
         self.profile = profile
         super.init(nibName: nil, bundle: nil)
     }
@@ -43,16 +49,14 @@ class RecentlyClosedTabsPanel: UIViewController, LibraryPanel {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        view.backgroundColor = UIColor.theme.tableView.headerBackground
-
         tableViewController.libraryPanelDelegate = libraryPanelDelegate
         tableViewController.recentlyClosedTabsDelegate = recentlyClosedTabsDelegate
         tableViewController.recentlyClosedTabsPanel = self
 
-        self.addChild(tableViewController)
+        addChild(tableViewController)
         tableViewController.didMove(toParent: self)
 
-        self.view.addSubview(tableViewController.view)
+        view.addSubview(tableViewController.view)
 
         NSLayoutConstraint.activate([
             tableViewController.view.topAnchor.constraint(equalTo: view.topAnchor),
@@ -60,12 +64,19 @@ class RecentlyClosedTabsPanel: UIViewController, LibraryPanel {
             tableViewController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             tableViewController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor)
         ])
+        title = .RecentlyClosedTabsPanelTitle
+        listenForThemeChange(view)
+        applyTheme()
+    }
+
+    func applyTheme() {
+        view.backgroundColor = themeManager.currentTheme.colors.layer1
     }
 }
 
 class RecentlyClosedTabsPanelSiteTableViewController: SiteTableViewController {
     weak var libraryPanelDelegate: LibraryPanelDelegate?
-    var recentlyClosedTabsDelegate: RecentlyClosedPanelDelegate?
+    weak var recentlyClosedTabsDelegate: RecentlyClosedPanelDelegate?
     var recentlyClosedTabs: [ClosedTab] = []
     weak var recentlyClosedTabsPanel: RecentlyClosedTabsPanel?
 
@@ -80,7 +91,8 @@ class RecentlyClosedTabsPanelSiteTableViewController: SiteTableViewController {
         self.recentlyClosedTabs = profile.recentlyClosedTabs.tabs
     }
 
-    @objc fileprivate func longPress(_ longPressGestureRecognizer: UILongPressGestureRecognizer) {
+    @objc
+    fileprivate func longPress(_ longPressGestureRecognizer: UILongPressGestureRecognizer) {
         guard longPressGestureRecognizer.state == .began else { return }
         let touchPoint = longPressGestureRecognizer.location(in: tableView)
         guard let indexPath = tableView.indexPathForRow(at: touchPoint) else { return }
@@ -94,26 +106,33 @@ class RecentlyClosedTabsPanelSiteTableViewController: SiteTableViewController {
         }
         let tab = recentlyClosedTabs[indexPath.row]
         let displayURL = tab.url.displayURL ?? tab.url
-        let site: Favicon? = (tab.faviconURL != nil) ? Favicon(url: tab.faviconURL!) : nil
         twoLineCell.descriptionLabel.isHidden = false
         twoLineCell.titleLabel.text = tab.title
         twoLineCell.titleLabel.isHidden = tab.title?.isEmpty ?? true ? true : false
         twoLineCell.descriptionLabel.text = displayURL.absoluteDisplayString
-        twoLineCell.leftImageView.layer.borderColor = RecentlyClosedPanelUX.IconBorderColor.cgColor
         twoLineCell.leftImageView.layer.borderWidth = RecentlyClosedPanelUX.IconBorderWidth
-        twoLineCell.leftImageView.contentMode = .center
-        twoLineCell.leftImageView.setImageAndBackground(forIcon: site, website: displayURL) { [weak twoLineCell] in
-            twoLineCell?.leftImageView.image = twoLineCell?.leftImageView.image?.createScaled(RecentlyClosedPanelUX.IconSize)
-        }
-
+        twoLineCell.leftImageView.setFavicon(FaviconImageViewModel(siteURLString: displayURL.absoluteString))
+        twoLineCell.applyTheme(theme: themeManager.currentTheme)
         return twoLineCell
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
-        recentlyClosedTabsDelegate?.openRecentlyClosedSiteInNewTab(recentlyClosedTabs[indexPath.row].url, isPrivate: false)
-        let visitType = VisitType.typed    // Means History, too.
-        libraryPanelDelegate?.libraryPanel(didSelectURL: recentlyClosedTabs[indexPath.row].url, visitType: visitType)
+        let url = recentlyClosedTabs[indexPath.row].url
+        recentlyClosedTabsDelegate?.openRecentlyClosedSiteInNewTab(url, isPrivate: false)
+
+        // The code above creates new tab and selects it, but TabManagerImplementation.selectTab()
+        // currently performs the actual selection update asynchronously via Swift Async + Task/Await.
+        // This means that selectTab() returns before the tab is actually selected. As a result, the
+        // delegate callback below will incorrectly cause a duplicate tab (since it will treat the
+        // url as having been applied to the current tab, not our newly-added tab from above). This
+        // is avoided by making sure we wait for our expected tab above to be selected before
+        // notifying our library panel delegate. [FXIOS-7741]
+
+        AppEventQueue.wait(for: .selectTab(url)) {
+            let visitType = VisitType.typed    // Means History, too.
+            self.libraryPanelDelegate?.libraryPanel(didSelectURL: url, visitType: visitType)
+        }
     }
 
     override func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
@@ -137,7 +156,6 @@ class RecentlyClosedTabsPanelSiteTableViewController: SiteTableViewController {
     func handleDoneButton() {
         // no implementation needed
     }
-
 }
 
 extension RecentlyClosedTabsPanelSiteTableViewController: LibraryPanelContextMenu {
@@ -162,11 +180,5 @@ extension RecentlyClosedTabsPanelSiteTableViewController: LibraryPanelContextMen
             return getRecentlyClosedTabContexMenuActions(for: site, recentlyClosedPanelDelegate: recentlyClosedTabsDelegate)
         }
         return getDefaultContextMenuActions(for: site, libraryPanelDelegate: libraryPanelDelegate)
-    }
-}
-
-extension RecentlyClosedTabsPanel: NotificationThemeable {
-    func applyTheme() {
-        tableViewController.tableView.reloadData()
     }
 }

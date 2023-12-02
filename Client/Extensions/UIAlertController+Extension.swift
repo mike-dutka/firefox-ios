@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
 import Shared
@@ -9,7 +9,6 @@ typealias UIAlertActionCallback = (UIAlertAction) -> Void
 
 // MARK: - Extension methods for building specific UIAlertController instances used across the app
 extension UIAlertController {
-
     /**
     Builds the Alert view that asks the user if they wish to opt into crash reporting.
 
@@ -24,7 +23,6 @@ extension UIAlertController {
         _ sendReportCallback: @escaping UIAlertActionCallback,
         alwaysSendCallback: @escaping UIAlertActionCallback,
         dontSendCallback: @escaping UIAlertActionCallback) -> UIAlertController {
-
         let alert = UIAlertController(
             title: .CrashOptInAlertTitle,
             message: .CrashOptInAlertMessage,
@@ -65,45 +63,23 @@ extension UIAlertController {
     - returns: UIAlertController for asking the user to restore tabs after a crash
     */
     class func restoreTabsAlert(okayCallback: @escaping UIAlertActionCallback, noCallback: @escaping UIAlertActionCallback) -> UIAlertController {
+        let titleString = String(format: .Alerts.RestoreTabs.Title, AppName.shortName.rawValue)
+
         let alert = UIAlertController(
-            title: .RestoreTabsAlertTitle,
-            message: .RestoreTabsAlertMessage,
+            title: titleString,
+            message: .Alerts.RestoreTabs.Message,
             preferredStyle: .alert
         )
 
         let noOption = UIAlertAction(
-            title: .RestoreTabsAlertNo,
+            title: .Alerts.RestoreTabs.ButtonNo,
             style: .cancel,
             handler: noCallback
         )
 
         let okayOption = UIAlertAction(
-            title: .RestoreTabsAlertOkay,
+            title: .Alerts.RestoreTabs.ButtonYes,
             style: .default,
-            handler: okayCallback
-        )
-
-        alert.addAction(okayOption)
-        alert.addAction(noOption)
-        return alert
-    }
-
-    class func clearPrivateDataAlert(okayCallback: @escaping (UIAlertAction) -> Void) -> UIAlertController {
-        let alert = UIAlertController(
-            title: "",
-            message: .ClearPrivateDataAlertMessage,
-            preferredStyle: .alert
-        )
-
-        let noOption = UIAlertAction(
-            title: .ClearPrivateDataAlertCancel,
-            style: .cancel,
-            handler: nil
-        )
-
-        let okayOption = UIAlertAction(
-            title: .ClearPrivateDataAlertOk,
-            style: .destructive,
             handler: okayCallback
         )
 
@@ -161,38 +137,6 @@ extension UIAlertController {
     }
 
     /**
-     Builds the Alert view that asks if the users wants to also delete history stored on their other devices.
-
-     - parameter okayCallback: Okay option handler.
-
-     - returns: UIAlertController for asking the user to restore tabs after a crash
-     */
-
-    class func clearSyncedHistoryAlert(okayCallback: @escaping (UIAlertAction) -> Void) -> UIAlertController {
-        let alert = UIAlertController(
-            title: "",
-            message: .ClearSyncedHistoryAlertMessage,
-            preferredStyle: .alert
-        )
-
-        let noOption = UIAlertAction(
-            title: .ClearSyncedHistoryAlertCancel,
-            style: .cancel,
-            handler: nil
-        )
-
-        let okayOption = UIAlertAction(
-            title: .ClearSyncedHistoryAlertOk,
-            style: .destructive,
-            handler: okayCallback
-        )
-
-        alert.addAction(okayOption)
-        alert.addAction(noOption)
-        return alert
-    }
-
-    /**
      Creates an alert view to warn the user that their logins will either be completely deleted in the
      case of local-only logins or deleted across synced devices in synced account logins.
 
@@ -204,7 +148,6 @@ extension UIAlertController {
     class func deleteLoginAlertWithDeleteCallback(
         _ deleteCallback: @escaping UIAlertActionCallback,
         hasSyncedLogins: Bool) -> UIAlertController {
-
         let deleteAlert: UIAlertController
         if hasSyncedLogins {
             deleteAlert = UIAlertController(title: .DeleteLoginAlertTitle, message: .DeleteLoginAlertSyncedMessage, preferredStyle: .alert)

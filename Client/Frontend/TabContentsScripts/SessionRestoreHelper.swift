@@ -1,6 +1,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import WebKit
@@ -22,12 +22,14 @@ class SessionRestoreHelper: TabContentScript {
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceiveScriptMessage message: WKScriptMessage) {
-        if let tab = tab, let params = message.body as? [String: AnyObject] {
-            if params["name"] as! String == "didRestoreSession" {
-                DispatchQueue.main.async {
-                    self.delegate?.sessionRestoreHelper(self, didRestoreSessionForTab: tab)
-                }
-            }
+        guard let tab = tab,
+              let params = message.body as? [String: AnyObject],
+              let parameter = params["name"] as? String,
+              parameter == "didRestoreSession"
+        else { return }
+
+        DispatchQueue.main.async {
+            self.delegate?.sessionRestoreHelper(self, didRestoreSessionForTab: tab)
         }
     }
 

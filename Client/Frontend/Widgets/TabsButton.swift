@@ -1,31 +1,22 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import SnapKit
 import Shared
+import Common
 
-struct TabsButtonUX {
-    static let CornerRadius: CGFloat = 2
-    static let TitleFont: UIFont = UIConstants.DefaultChromeSmallFontBold
-    static let BorderStrokeWidth: CGFloat = 1.5
-}
+class TabsButton: UIButton, ThemeApplicable {
+    struct UX {
+        static let cornerRadius: CGFloat = 2
+        static let titleFont: UIFont = UIConstants.DefaultChromeSmallFontBold
+        static let insideButtonSize = 24
+    }
 
-class TabsButton: UIButton {
-    var textColor = UIColor.Photon.Blue40 {
-        didSet {
-            countLabel.textColor = textColor
-        }
-    }
-    var titleBackgroundColor = UIColor.Photon.Blue40 {
-        didSet {
-            labelBackground.backgroundColor = titleBackgroundColor
-        }
-    }
-    var highlightTextColor: UIColor?
-    var highlightBackgroundColor: UIColor?
-    var inTopTabs = false
+    private var selectedTintColor: UIColor!
+    private var unselectedTintColor: UIColor!
+    private var theme: Theme?
 
     // When all animations are completed, this is the most-recently assigned tab count that is shown.
     // updateTabCount() can be called in rapid succession, this ensures only final tab count is displayed.
@@ -40,37 +31,44 @@ class TabsButton: UIButton {
         }
     }
 
-    lazy var countLabel: UILabel = {
+    override var isHighlighted: Bool {
+        didSet {
+            updateHighlightColors(isHighlighted: isHighlighted)
+        }
+    }
+
+    private lazy var countLabel: UILabel = {
         let label = UILabel()
-        label.font = TabsButtonUX.TitleFont
-        label.layer.cornerRadius = TabsButtonUX.CornerRadius
+        label.text = "0"
+        label.font = UX.titleFont
+        label.layer.cornerRadius = UX.cornerRadius
         label.textAlignment = .center
         label.isUserInteractionEnabled = false
         return label
     }()
 
-    lazy var insideButton: UIView = {
+    private lazy var insideButton: UIView = {
         let view = UIView()
         view.clipsToBounds = false
         view.isUserInteractionEnabled = false
         return view
     }()
 
-    fileprivate lazy var labelBackground: UIView = {
+    private lazy var labelBackground: UIView = {
         let background = UIView()
-        background.layer.cornerRadius = TabsButtonUX.CornerRadius
+        background.layer.cornerRadius = UX.cornerRadius
         background.isUserInteractionEnabled = false
+        background.backgroundColor = .clear
         return background
     }()
 
-    fileprivate lazy var borderView: UIImageView = {
+    private lazy var borderView: UIImageView = {
         let border = UIImageView(image: UIImage(named: ImageIdentifiers.navTabCounter)?.withRenderingMode(.alwaysTemplate))
-        border.tintColor = UIColor.theme.browser.tint
         return border
     }()
 
     // Used to temporarily store the cloned button so we can respond to layout changes during animation
-    fileprivate weak var clonedTabsButton: TabsButton?
+    private weak var clonedTabsButton: TabsButton?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -80,6 +78,9 @@ class TabsButton: UIButton {
         addSubview(insideButton)
         isAccessibilityElement = true
         accessibilityTraits.insert(.button)
+
+        selectedTintColor = tintColor
+        unselectedTintColor = tintColor
     }
 
     override func updateConstraints() {
@@ -94,7 +95,7 @@ class TabsButton: UIButton {
             make.edges.equalTo(insideButton)
         }
         insideButton.snp.remakeConstraints { (make) -> Void in
-            make.size.equalTo(24)
+            make.size.equalTo(UX.insideButtonSize)
             make.center.equalTo(self)
         }
     }
@@ -103,31 +104,33 @@ class TabsButton: UIButton {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func createTabsButton() -> TabsButton {
+    private func createTabsButton() -> TabsButton {
         let button = TabsButton()
 
         button.accessibilityLabel = accessibilityLabel
         button.countLabel.text = countLabel.text
 
-        // Copy all of the styable properties over to the new TabsButton
+        // Copy all of the stylable properties over to the new TabsButton
         button.countLabel.font = countLabel.font
-        button.countLabel.textColor = countLabel.textColor
         button.countLabel.layer.cornerRadius = countLabel.layer.cornerRadius
-
-        button.labelBackground.backgroundColor = labelBackground.backgroundColor
         button.labelBackground.layer.cornerRadius = labelBackground.layer.cornerRadius
+        if let theme {
+            button.applyTheme(theme: theme)
+        }
 
         return button
     }
 
-    func updateTabCount(_ count: Int, animated: Bool = true) {
+    func updateTabCount(_ count: Int,
+                        animated: Bool = true) {
         let count = max(count, 1)
         let currentCount = self.countLabel.text
         let infinity = "\u{221E}"
         countToBe = (count < 100) ? count.description : infinity
 
-        // only animate a tab count change if the tab count has actually changed
-        guard currentCount != count.description || (clonedTabsButton?.countLabel.text ?? count.description) != count.description else { return }
+        // Only animate a tab count change if the tab count has actually changed
+        let hasDescriptionChanged = (clonedTabsButton?.countLabel.text ?? count.description) != count.description
+        guard currentCount != count.description || hasDescriptionChanged else { return }
 
         // Re-entrancy guard: if this code is running just update the tab count value without starting another animation.
         if isUpdatingTabCount {
@@ -139,14 +142,13 @@ class TabsButton: UIButton {
         }
         isUpdatingTabCount = true
 
-        if let _ = self.clonedTabsButton {
+        if self.clonedTabsButton != nil {
             self.clonedTabsButton?.layer.removeAllAnimations()
             self.clonedTabsButton?.removeFromSuperview()
             insideButton.layer.removeAllAnimations()
         }
 
         let newTabsButton = createTabsButton()
-
         self.clonedTabsButton = newTabsButton
         newTabsButton.frame = self.bounds
         newTabsButton.addTarget(self, action: #selector(cloneDidClickTabs), for: .touchUpInside)
@@ -159,6 +161,10 @@ class TabsButton: UIButton {
             make.center.equalTo(self)
         }
 
+        animateButton(newTabsButton: newTabsButton, animated: animated)
+    }
+
+    private func animateButton(newTabsButton: TabsButton, animated: Bool) {
         // Instead of changing the anchorPoint of the CALayer, lets alter the rotation matrix math to be
         // a rotation around a non-origin point
         let frame = self.insideButton.frame
@@ -194,24 +200,35 @@ class TabsButton: UIButton {
         }
 
         if animated {
-            UIView.animate(withDuration: 1.5, delay: 0, usingSpringWithDamping: 0.5, initialSpringVelocity: 0.0, options: [], animations: animate, completion: completion)
+            UIView.animate(withDuration: 1.5,
+                           delay: 0,
+                           usingSpringWithDamping: 0.5,
+                           initialSpringVelocity: 0.0,
+                           options: [],
+                           animations: animate,
+                           completion: completion)
         } else {
             completion(true)
         }
-
     }
-    @objc func cloneDidClickTabs() {
+
+    @objc
+    func cloneDidClickTabs() {
         sendActions(for: .touchUpInside)
     }
-}
 
-extension TabsButton: NotificationThemeable {
-    func applyTheme() {
-        borderView.tintColor = UIColor.theme.browser.tint
-        if inTopTabs {
-            textColor = UIColor.theme.topTabs.buttonTint
-        } else {
-            textColor = UIColor.theme.browser.tint
-        }
+    // MARK: - ThemeApplicable
+    func applyTheme(theme: Theme) {
+        self.theme = theme
+        borderView.tintColor = theme.colors.iconPrimary
+        countLabel.textColor = theme.colors.iconPrimary
+
+        selectedTintColor = theme.colors.actionPrimary
+        unselectedTintColor = theme.colors.iconPrimary
+    }
+
+    private func updateHighlightColors(isHighlighted: Bool) {
+        borderView.tintColor = isHighlighted ? selectedTintColor: unselectedTintColor
+        countLabel.textColor = isHighlighted ? selectedTintColor: unselectedTintColor
     }
 }

@@ -1,18 +1,20 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 import Storage
+import Shared
 
 struct RecentlySavedCellViewModel {
     let site: Site
-    var heroImage: UIImage?
-    var favIconImage: UIImage?
+    var accessibilityLabel: String {
+        return "\(site.title)"
+    }
 }
 
 class RecentlySavedViewModel {
-
     struct UX {
         static let cellWidth: CGFloat = 150
         static let cellHeight: CGFloat = 110
@@ -23,21 +25,22 @@ class RecentlySavedViewModel {
     // MARK: - Properties
 
     var isZeroSearch: Bool
+    var theme: Theme
     private let profile: Profile
     private var recentlySavedDataAdaptor: RecentlySavedDataAdaptor
     private var recentItems = [RecentlySavedItem]()
     private var wallpaperManager: WallpaperManager
-    private var siteImageHelper: SiteImageHelperProtocol
     var headerButtonAction: ((UIButton) -> Void)?
 
     weak var delegate: HomepageDataModelDelegate?
 
     init(profile: Profile,
          isZeroSearch: Bool = false,
+         theme: Theme,
          wallpaperManager: WallpaperManager) {
         self.profile = profile
         self.isZeroSearch = isZeroSearch
-        self.siteImageHelper = SiteImageHelper(profile: profile)
+        self.theme = theme
         let adaptor = RecentlySavedDataAdaptorImplementation(readingList: profile.readingList,
                                                              bookmarksHandler: profile.places)
         self.recentlySavedDataAdaptor = adaptor
@@ -49,15 +52,13 @@ class RecentlySavedViewModel {
 
 // MARK: HomeViewModelProtocol
 extension RecentlySavedViewModel: HomepageViewModelProtocol, FeatureFlaggable {
-
     var sectionType: HomepageSectionType {
         return .recentlySaved
     }
 
     var headerViewModel: LabelButtonHeaderViewModel {
         var textColor: UIColor?
-        if let wallpaperVersion: WallpaperVersion = featureFlags.getCustomState(for: .wallpaperVersion),
-           wallpaperVersion == .v1 {
+        if wallpaperManager.featureAvailable {
             textColor = wallpaperManager.currentWallpaper.textColor
         }
 
@@ -71,7 +72,7 @@ extension RecentlySavedViewModel: HomepageViewModelProtocol, FeatureFlaggable {
             textColor: textColor)
     }
 
-    func section(for traitCollection: UITraitCollection) -> NSCollectionLayoutSection {
+    func section(for traitCollection: UITraitCollection, size: CGSize) -> NSCollectionLayoutSection {
         let itemSize = NSCollectionLayoutSize(
             widthDimension: .absolute(UX.cellWidth),
             heightDimension: .estimated(UX.cellHeight)
@@ -111,60 +112,28 @@ extension RecentlySavedViewModel: HomepageViewModelProtocol, FeatureFlaggable {
     }
 
     var isEnabled: Bool {
-        return featureFlags.isFeatureEnabled(.recentlySaved, checking: .buildAndUser)
+        return profile.prefs.boolForKey(PrefsKeys.UserFeatureFlagPrefs.RecentlySavedSection) ?? true
     }
 
     var hasData: Bool {
         return !recentItems.isEmpty
     }
 
-    func refreshData(for traitCollection: UITraitCollection,
-                     isPortrait: Bool = UIWindow.isPortrait,
-                     device: UIUserInterfaceIdiom = UIDevice.current.userInterfaceIdiom) {}
+    func setTheme(theme: Theme) {
+        self.theme = theme
+    }
 }
 
 // MARK: FxHomeSectionHandler
 extension RecentlySavedViewModel: HomepageSectionHandler {
-
     func configure(_ cell: UICollectionViewCell,
                    at indexPath: IndexPath) -> UICollectionViewCell {
-
         guard let recentlySavedCell = cell as? RecentlySavedCell else { return UICollectionViewCell() }
 
         if let item = recentItems[safe: indexPath.row] {
             let site = Site(url: item.url, title: item.title, bookmarked: true)
-            let id = Int(arc4random())
-            cell.tag = id
-            var heroImage: UIImage?
-            var favicon: UIImage?
-
-            let viewModel = RecentlySavedCellViewModel(site: site,
-                                                       heroImage: heroImage,
-                                                       favIconImage: favicon)
-
-            siteImageHelper.fetchImageFor(site: site,
-                                          imageType: .heroImage,
-                                          shouldFallback: true) { image in
-                guard cell.tag == id else { return }
-                heroImage = image
-                let viewModel = RecentlySavedCellViewModel(site: site,
-                                                           heroImage: heroImage,
-                                                           favIconImage: favicon)
-                recentlySavedCell.configure(viewModel: viewModel)
-            }
-
-            siteImageHelper.fetchImageFor(site: site,
-                                          imageType: .favicon,
-                                          shouldFallback: true) { image in
-                guard cell.tag == id else { return }
-                favicon = image
-                let viewModel = RecentlySavedCellViewModel(site: site,
-                                                           heroImage: heroImage,
-                                                           favIconImage: favicon)
-                recentlySavedCell.configure(viewModel: viewModel)
-            }
-
-            recentlySavedCell.configure(viewModel: viewModel)
+            let viewModel = RecentlySavedCellViewModel(site: site)
+            recentlySavedCell.configure(viewModel: viewModel, theme: theme)
         }
 
         return recentlySavedCell
@@ -173,7 +142,6 @@ extension RecentlySavedViewModel: HomepageSectionHandler {
     func didSelectItem(at indexPath: IndexPath,
                        homePanelDelegate: HomePanelDelegate?,
                        libraryPanelDelegate: LibraryPanelDelegate?) {
-
         if let item = recentItems[safe: indexPath.row] as? RecentlySavedBookmark {
             guard let url = URIFixup.getURL(item.url) else { return }
 
@@ -183,11 +151,9 @@ extension RecentlySavedViewModel: HomepageSectionHandler {
                                          object: .firefoxHomepage,
                                          value: .recentlySavedBookmarkItemAction,
                                          extras: TelemetryWrapper.getOriginExtras(isZeroSearch: isZeroSearch))
-
         } else if let item = recentItems[safe: indexPath.row] as? ReadingListItem,
-                  let url = URL(string: item.url),
+                  let url = URL(string: item.url, invalidCharacters: false),
                   let encodedUrl = url.encodeReaderModeURL(WebServer.sharedInstance.baseReaderModeURL()) {
-
             let visitType = VisitType.bookmark
             libraryPanelDelegate?.libraryPanel(didSelectURL: encodedUrl, visitType: visitType)
             TelemetryWrapper.recordEvent(category: .action,

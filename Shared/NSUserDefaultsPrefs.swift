@@ -1,11 +1,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
 
 open class NSUserDefaultsPrefs: Prefs {
-
     fileprivate let prefixWithDot: String
     fileprivate let userDefaults: UserDefaults
 
@@ -127,10 +127,8 @@ open class NSUserDefaultsPrefs: Prefs {
     open func clearAll() {
         // TODO: userDefaults.removePersistentDomainForName() has no effect for app group suites.
         // iOS Bug? Iterate and remove each manually for now.
-        for key in userDefaults.dictionaryRepresentation().keys {
-            if key.hasPrefix(prefixWithDot) {
-                userDefaults.removeObject(forKey: key)
-            }
+        for key in userDefaults.dictionaryRepresentation().keys where key.hasPrefix(prefixWithDot) {
+            userDefaults.removeObject(forKey: key)
         }
     }
 }

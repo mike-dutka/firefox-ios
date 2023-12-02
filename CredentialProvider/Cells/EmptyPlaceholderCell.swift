@@ -1,21 +1,21 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
+import Shared
 
 class EmptyPlaceholderCell: UITableViewCell {
-
     static let identifier = "emptyPlaceholderCell"
 
-    lazy private var titleLabel: UILabel = .build { label in
+    private lazy var titleLabel: UILabel = .build { label in
         label.textColor = UIColor.CredentialProvider.titleColor
         label.text = .LoginsListNoLoginsFoundTitle
         label.font = UIFont.systemFont(ofSize: 15)
     }
 
-    lazy private var descriptionLabel: UILabel = .build { label in
-        label.text = .LoginsListNoLoginsFoundDescription
+    private lazy var descriptionLabel: UILabel = .build { label in
+        label.text = String(format: .LoginsListNoLoginsFoundDescription, AppName.shortName.rawValue)
         label.font = UIFont.systemFont(ofSize: 13)
         label.textColor = .systemGray
         label.textAlignment = .center

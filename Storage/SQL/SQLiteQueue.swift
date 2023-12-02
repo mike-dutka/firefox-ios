@@ -1,12 +1,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at http://mozilla.org/MPL/2.0
+// file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
 import Shared
-import XCGLogger
-
-private let log = Logger.syncLogger
 
 open class SQLiteQueue: TabQueue {
     let db: BrowserDB
@@ -21,11 +18,18 @@ open class SQLiteQueue: TabQueue {
     }
 
     fileprivate func factory(_ row: SDRow) -> ShareItem {
-        return ShareItem(url: row["url"] as! String, title: row["title"] as? String, favicon: nil)
+        return ShareItem(url: row["url"] as! String, title: row["title"] as? String)
     }
 
-    open func getQueuedTabs() -> Deferred<Maybe<Cursor<ShareItem>>> {
-        return db.runQuery("SELECT url, title FROM queue", args: nil, factory: self.factory)
+    open func getQueuedTabs(completion: @escaping ([ShareItem]) -> Void) {
+        let sql = "SELECT url, title FROM queue"
+        let deferredResponse = db.runQuery(sql, args: nil, factory: self.factory) >>== { cursor in
+            return deferMaybe(cursor.asArray())
+        }
+
+        deferredResponse.upon { result in
+            completion(result.successValue ?? [])
+        }
     }
 
     open func clearQueuedTabs() -> Success {

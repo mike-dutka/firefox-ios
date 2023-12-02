@@ -10,43 +10,41 @@ import UIKit
 /// An enum describing the featureID of all features found in Nimbus.
 /// Please add new features alphabetically.
 enum NimbusFeatureFlagID: String, CaseIterable {
+    case addressAutofill
     case bottomSearchBar
-    case copyForJumpBackIn
-    case copyForToolbar
-    case contextualHintForJumpBackInSyncedTab
+    case contextualHintForToolbar
+    case creditCardAutofillStatus
+    case fakespotBackInStock
+    case fakespotFeature
+    case fakespotProductAds
+    case feltPrivacyUI
+    case firefoxSuggestFeature
     case historyHighlights
     case historyGroups
     case inactiveTabs
+    case isToolbarCFREnabled
     case jumpBackIn
-    case jumpBackInSyncedTab
-    case onboardingUpgrade
-    case onboardingFreshInstall
-    case pocket
-    case pullToRefresh
-    case recentlySaved
+    case qrCodeCoordinatorRefactor
+    case reduxIntegration
     case reportSiteIssue
     case searchHighlights
-    case shakeToRestore
-    case sponsoredPocket
-    case sponsoredTiles
-    case startAtHome
-    case tabTrayGroups
-    case topSites
+    case shareSheetChanges
+    case shareToolbarChanges
+    case tabTrayRefactor
     case wallpapers
     case wallpaperOnboardingSheet
     case wallpaperVersion
+    case zoomFeature
 }
 
 /// This enum is a constraint for any feature flag options that have more than
 /// just an ON or OFF setting. These option must also be added to `NimbusFeatureFlagID`
 enum NimbusFeatureFlagWithCustomOptionsID {
-    case startAtHome
     case searchBarPosition
     case wallpaperVersion
 }
 
 struct NimbusFlaggableFeature: HasNimbusSearchBar {
-
     // MARK: - Variables
     private let profile: Profile
     private var featureID: NimbusFeatureFlagID
@@ -57,6 +55,8 @@ struct NimbusFlaggableFeature: HasNimbusSearchBar {
         switch featureID {
         case .bottomSearchBar:
             return FlagKeys.SearchBarPosition
+        case .firefoxSuggestFeature:
+            return FlagKeys.FirefoxSuggest
         case .historyHighlights:
             return FlagKeys.HistoryHighlightsSection
         case .historyGroups:
@@ -65,37 +65,28 @@ struct NimbusFlaggableFeature: HasNimbusSearchBar {
             return FlagKeys.InactiveTabs
         case .jumpBackIn:
             return FlagKeys.JumpBackInSection
-        case .pocket:
-            return FlagKeys.ASPocketStories
-        case .pullToRefresh:
-            return FlagKeys.PullToRefresh
-        case .recentlySaved:
-            return FlagKeys.RecentlySavedSection
-        case .sponsoredPocket:
-            return FlagKeys.ASSponsoredPocketStories
-        case .sponsoredTiles:
-            return FlagKeys.SponsoredShortcuts
-        case .startAtHome:
-            return FlagKeys.StartAtHome
-        case .tabTrayGroups:
-            return FlagKeys.TabTrayGroups
-        case .topSites:
-            return FlagKeys.TopSiteSection
         case .wallpapers:
             return FlagKeys.CustomWallpaper
 
         // Cases where users do not have the option to manipulate a setting.
-        case .contextualHintForJumpBackInSyncedTab,
-                .copyForJumpBackIn,
-                .copyForToolbar,
-                .jumpBackInSyncedTab,
-                .onboardingUpgrade,
-                .onboardingFreshInstall,
+        case .contextualHintForToolbar,
+                .addressAutofill,
+                .creditCardAutofillStatus,
+                .fakespotBackInStock,
+                .fakespotFeature,
+                .fakespotProductAds,
+                .isToolbarCFREnabled,
+                .qrCodeCoordinatorRefactor,
+                .reduxIntegration,
                 .reportSiteIssue,
+                .feltPrivacyUI,
                 .searchHighlights,
-                .shakeToRestore,
+                .shareSheetChanges,
+                .shareToolbarChanges,
+                .tabTrayRefactor,
                 .wallpaperOnboardingSheet,
-                .wallpaperVersion:
+                .wallpaperVersion,
+                .zoomFeature:
             return nil
         }
     }
@@ -108,14 +99,12 @@ struct NimbusFlaggableFeature: HasNimbusSearchBar {
 
     // MARK: - Public methods
     public func isNimbusEnabled(using nimbusLayer: NimbusFeatureFlagLayer) -> Bool {
-        let nimbusValue = nimbusLayer.checkNimbusConfigFor(featureID)
-
-        switch featureID {
-        case .pocket, .sponsoredPocket:
-            return nimbusValue && PocketProvider.islocaleSupported(Locale.current.identifier)
-        default:
-            return nimbusValue
+        // Provide a way to override nimbus feature enabled for tests
+        if AppConstants.isRunningUnitTest, UserDefaults.standard.bool(forKey: PrefsKeys.NimbusFeatureTestsOverride) {
+            return true
         }
+
+        return nimbusLayer.checkNimbusConfigFor(featureID)
     }
 
     /// Returns whether or not the feature's state was changed by the user. If no
@@ -123,14 +112,6 @@ struct NimbusFlaggableFeature: HasNimbusSearchBar {
     /// setting is required (ie. startAtHome, which has multiple types of setting),
     /// then we should be using `getUserPreference`
     public func isUserEnabled(using nimbusLayer: NimbusFeatureFlagLayer) -> Bool {
-        if featureID == .startAtHome {
-            guard let pref = getUserPreference(using: nimbusLayer) else {
-                return isNimbusEnabled(using: nimbusLayer)
-            }
-
-            return pref == StartAtHomeSetting.afterFourHours.rawValue || pref == StartAtHomeSetting.always.rawValue
-        }
-
         guard let optionsKey = featureKey,
               let option = profile.prefs.boolForKey(optionsKey)
         else { return isNimbusEnabled(using: nimbusLayer) }
@@ -149,9 +130,6 @@ struct NimbusFlaggableFeature: HasNimbusSearchBar {
         switch featureID {
         case .bottomSearchBar:
             return nimbusSearchBar.getDefaultPosition().rawValue
-
-        case .startAtHome:
-            return nimbusLayer.checkNimbusConfigForStartAtHome().rawValue
 
         case .wallpaperVersion:
             return nimbusLayer.checkNimbusForWallpapersVersion()
@@ -183,9 +161,6 @@ struct NimbusFlaggableFeature: HasNimbusSearchBar {
         else { return }
 
         switch featureID {
-        case .startAtHome:
-            profile.prefs.setString(option, forKey: optionsKey)
-
         case .bottomSearchBar:
             profile.prefs.setString(option, forKey: optionsKey)
 
