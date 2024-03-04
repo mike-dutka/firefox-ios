@@ -694,9 +694,6 @@
 /* Placeholder test for search box in logins list view. */
 "LoginsList.LoginsListSearchPlaceholder" = "Filter";
 
-/* Label shown when there are no logins to list */
-"LoginsList.NoLoginsFound.Description" = "Tukaj se bodo prikazale shranjene prijave. Če ste prijave shranili v Firefox na drugi napravi, se prijavite v Firefox Račun.";
-
 /* Label shown when there are no logins to list. The placeholder will be replaced with the app name. */
 "LoginsList.NoLoginsFound.Description.v119" = "Tukaj se bodo prikazale shranjene prijave. Če ste prijave shranili v %@ na drugi napravi, se prijavite v račun.";
 
@@ -1007,7 +1004,7 @@
 "Sans-serif" = "Sans-serif";
 
 /* See http://mzl.la/1LXbDOL */
-"Save pages to your Reading List by tapping the book plus icon in the Reader View controls." = "Shranite strani na bralni seznam, tako da tapnete na ikono knjige plus v ukazih bralnega pogleda.";
+"Save pages to your Reading List by tapping the book plus icon in the Reader View controls." = "Shranite strani na bralni seznam, tako da v ukazih bralnega pogleda tapnete ikono knjige s plusom.";
 
 /* OK button to dismiss the error prompt. */
 "ScanQRCode.Error.OK.Button" = "V redu";
@@ -1025,7 +1022,7 @@
 "ScanQRCode.View.Title" = "Skenirajte QR-kodo";
 
 /* Open search section of settings */
-"Search" = "Išči";
+"Search" = "Iskanje";
 
 /* The text shown in the URL bar on about:home */
 "Search or enter address" = "Iskanje ali naslov strani";
@@ -1068,15 +1065,6 @@
 
 /* The confirmation button */
 "Search.ThirdPartyEngines.OK" = "V redu";
-
-/* Accessibility label for default search engine setting. */
-"SearchSettings.Accessibility.DefaultSearchEngine.v106" = "Privzeti iskalnik";
-
-/* Title for default search engine settings section. */
-"SearchSettings.Title.DefaultSearchEngine.v106" = "Privzeti iskalnik";
-
-/* Navigation title for search settings. */
-"SearchSettings.Title.Search.v106" = "Iskanje";
 
 /* Message displayed in the crash dialog above the buttons used to select when sending reports */
 "Send a crash report so Mozilla can fix the problem?" = "Pošljem poročilo, da lahko Mozilla odpravi napako?";
@@ -1565,10 +1553,10 @@
 "Settings.TrackingProtection.SectionName" = "Zaščita pred sledenjem";
 
 /* Tracking protection settings option for using the basic blocklist. */
-"Settings.TrackingProtectionOption.BasicBlockList" = "Običajno (privzeto)";
+"Settings.TrackingProtectionOption.BasicBlockList" = "Običajna (privzeto)";
 
 /* Tracking protection settings status showing the current option selected. */
-"Settings.TrackingProtectionOption.BasicBlockList.Status" = "Običajno";
+"Settings.TrackingProtectionOption.BasicBlockList.Status" = "Običajna";
 
 /* Tracking protection settings option for using the strict blocklist. */
 "Settings.TrackingProtectionOption.BlockListStrict" = "Stroga";

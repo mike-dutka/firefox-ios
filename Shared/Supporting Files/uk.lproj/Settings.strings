@@ -65,22 +65,16 @@
 "Settings.Notifications.TurnOnNotificationsTitle.v112" = "Увімкніть сповіщення";
 
 /* Accessibility label for default search engine setting. */
-"Settings.Search.Accessibility.DefaultSearchEngine.v121" = "Типовий засіб пошуку";
+"Settings.Search.Accessibility.DefaultSearchEngine.v121" = "Типова пошукова система";
 
 /* Title for the `default search engine` settings section in the Search page in the Settings menu. */
-"Settings.Search.DefaultSearchEngine.Title.v121" = "Типовий засіб пошуку";
+"Settings.Search.DefaultSearchEngine.Title.v121" = "Типова пошукова система";
 
 /* Navigation title for search page in the Settings menu. */
 "Settings.Search.PageTitle.v121" = "Пошук";
 
-/* Label for toggle. Explains that in private browsing mode, the search suggestions which appears at the top of the search bar, can be toggled on or off. Located in the Private Session section in the Search page in the Settings menu. */
-"Settings.Search.PrivateSession.Setting.v121" = "Вимкнути пропозиції в приватному перегляді";
-
-/* Title for the `Private Session` settings section in the Search page in the Settings menu. */
-"Settings.Search.PrivateSession.Title.v121" = "Приватний сеанс";
-
 /* Title for quick-search engines settings section in the Search page in the Settings menu. */
-"Settings.Search.QuickEnginesTitle.v121" = "Швидкі засоби пошуку";
+"Settings.Search.QuickEnginesTitle.v121" = "Системи швидкого пошуку";
 
 /* Label for the `show search suggestions` setting, in the Search Settings page. */
 "Settings.Search.ShowSuggestions.v121" = "Пошукові пропозиції";
