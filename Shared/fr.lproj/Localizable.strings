@@ -694,9 +694,6 @@
 /* Placeholder test for search box in logins list view. */
 "LoginsList.LoginsListSearchPlaceholder" = "Filtrer";
 
-/* Label shown when there are no logins to list */
-"LoginsList.NoLoginsFound.Description" = "Les identifiants enregistrés apparaîtront ici. Si vous avez enregistré vos identifiants dans Firefox sur un autre appareil, connectez-vous à votre compte Firefox.";
-
 /* Label shown when there are no logins to list. The placeholder will be replaced with the app name. */
 "LoginsList.NoLoginsFound.Description.v119" = "Les identifiants enregistrés apparaîtront ici. Si vous avez enregistré vos identifiants dans %@ sur un autre appareil, connectez-vous à votre compte.";
 
@@ -1069,15 +1066,6 @@
 /* The confirmation button */
 "Search.ThirdPartyEngines.OK" = "OK";
 
-/* Accessibility label for default search engine setting. */
-"SearchSettings.Accessibility.DefaultSearchEngine.v106" = "Moteur de recherche par défaut";
-
-/* Title for default search engine settings section. */
-"SearchSettings.Title.DefaultSearchEngine.v106" = "Moteur de recherche par défaut";
-
-/* Navigation title for search settings. */
-"SearchSettings.Title.Search.v106" = "Rechercher";
-
 /* Message displayed in the crash dialog above the buttons used to select when sending reports */
 "Send a crash report so Mozilla can fix the problem?" = "Envoyer un rapport de plantage afin que Mozilla puisse corriger le problème ?";
 
@@ -1400,16 +1388,16 @@
 "Settings.NewTab.CustomURL" = "Adresse personnalisée";
 
 /* Option in settings to show a blank page when you open a new tab */
-"Settings.NewTab.Option.BlankPage" = "Une page vide";
+"Settings.NewTab.Option.BlankPage" = "Page vide";
 
 /* Option in settings to show your homepage when you open a new tab */
 "Settings.NewTab.Option.Custom" = "Personnalisé";
 
 /* Option in settings to show Firefox Home when you open a new tab */
-"Settings.NewTab.Option.FirefoxHome" = "La page d’accueil de Firefox";
+"Settings.NewTab.Option.FirefoxHome" = "Page d’accueil de Firefox";
 
 /* Option in settings to show your homepage when you open a new tab */
-"Settings.NewTab.Option.HomePage" = "La page d’accueil";
+"Settings.NewTab.Option.HomePage" = "Page d’accueil";
 
 /* Label used as an item in Settings. When touched it will open a dialog to configure the new tab behavior. */
 "Settings.NewTab.SectionName" = "Nouvel onglet";
