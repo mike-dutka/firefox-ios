@@ -56,7 +56,7 @@
 "AddPass.Error.Dismiss" = "Tamam";
 
 /* Text of the 'Add Pass Failed' alert.  See https://support.apple.com/HT204003 for context on Wallet. */
-"AddPass.Error.Message" = "Parola Wallet’a eklenirken bir hat oluştu. Lütfen daha sonra yeniden deneyin.";
+"AddPass.Error.Message" = "Parola Wallet’a eklenirken bir hata oluştu. Lütfen daha sonra yeniden deneyin.";
 
 /* Title of the 'Add Pass Failed' alert. See https://support.apple.com/HT204003 for context on Wallet. */
 "AddPass.Error.Title" = "Parola eklenemedi";
@@ -221,7 +221,7 @@
 "Could not load page." = "Sayfa yüklenemedi.";
 
 /* Description for the new ETP mode i.e. standard vs strict */
-"CoverSheet.v24.ETP.Description" = "Gelişmiş izlenme korumamız reklamların sizi takip etmesini önlüyor. Daha fazla takip kodunu, reklamı ve açılır pencereyi engellemek isterseniz “sıkı” korumayı seçebilirsiniz.";
+"CoverSheet.v24.ETP.Description" = "Gelişmiş izlenme korumamız reklamların sizi takip etmesini önlüyor. Daha fazla takip kodunu, reklamı ve açılır pencereyi engellemek isterseniz “sıkı” korumayı seçebilirsiniz. ";
 
 /* Text for the new ETP settings button */
 "CoverSheet.v24.ETP.Settings.Button" = "Ayarlara git";
@@ -694,9 +694,6 @@
 /* Placeholder test for search box in logins list view. */
 "LoginsList.LoginsListSearchPlaceholder" = "Filtrele";
 
-/* Label shown when there are no logins to list */
-"LoginsList.NoLoginsFound.Description" = "Kaydedilen hesaplar burada görünecektir. Hesaplarınızı farklı bir cihazda Firefox’a kaydettiyseniz Firefox hesabınıza giriş yapın.";
-
 /* Label shown when there are no logins to list. The placeholder will be replaced with the app name. */
 "LoginsList.NoLoginsFound.Description.v119" = "Kaydedilen hesaplar burada görünecektir. Hesaplarınızı farklı bir cihazda %@’a kaydettiyseniz hesabınıza giriş yapın.";
 
@@ -908,7 +905,7 @@
 "Onboarding.WhatsNew.Button.Title" = "Gezinmeye başla";
 
 /* Title for prompt displayed to user after the app crashes */
-"Oops! Firefox crashed" = "Eyvahlar olsun! Firefox çöktü";
+"Oops! Firefox crashed" = "Firefox çöktü";
 
 /* See http://mzl.la/1LXbDOL */
 "Open articles in Reader View by tapping the book icon when it appears in the title bar." = "Makaleleri Okuyucu görünümünde açmak için başlık çubuğunda kitap simgesi göründüğünde ona dokunun.";
@@ -1068,15 +1065,6 @@
 
 /* The confirmation button */
 "Search.ThirdPartyEngines.OK" = "Tamam";
-
-/* Accessibility label for default search engine setting. */
-"SearchSettings.Accessibility.DefaultSearchEngine.v106" = "Varsayılan arama motoru";
-
-/* Title for default search engine settings section. */
-"SearchSettings.Title.DefaultSearchEngine.v106" = "Varsayılan arama motoru";
-
-/* Navigation title for search settings. */
-"SearchSettings.Title.Search.v106" = "Arama";
 
 /* Message displayed in the crash dialog above the buttons used to select when sending reports */
 "Send a crash report so Mozilla can fix the problem?" = "Sorunu giderebilmemiz için Mozilla’ya çökme raporu gönderilsin mi?";
