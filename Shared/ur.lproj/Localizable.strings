@@ -658,20 +658,11 @@
 /* Placeholder test for search box in logins list view. */
 "LoginsList.LoginsListSearchPlaceholder" = "فلٹر";
 
-/* Label shown when there are no logins saved */
-"LoginsList.NoLoginsFound.Title" = "کوئی لاگ ان نہیں ملا";
-
 /* Label that appears after the search if there are no logins matching the search */
 "LoginsList.NoMatchingResult.Subtitle" = "آپ کی تلاش سے مماثل کوئی نتائج نہیں مل رہے ہیں۔";
 
-/* Label displayed when a user searches and no matches can be found against the search query */
-"LoginsList.NoMatchingResult.Title" = "کوئی مماثل لاگ ان نہیں۔";
-
 /* Title for cancel button for user to stop searching for a particular login */
 "LoginsList.Search.Cancel" = "منسوخ کریں";
-
-/* Placeholder text for search field */
-"LoginsList.Search.Placeholder" = "لاگ ان تلاش کریں";
 
 /* Label displaying select a password to fill instruction */
 "LoginsList.SelectPassword.Title" = "بھرنے کے لیے پاس ورڈ منتخب کریں۔";
@@ -984,9 +975,6 @@
 
 /* The confirmation button */
 "Search.ThirdPartyEngines.OK" = "ٹھیک ہے";
-
-/* Navigation title for search settings. */
-"SearchSettings.Title.Search.v106" = "تلاش کریں";
 
 /* Message displayed in the crash dialog above the buttons used to select when sending reports */
 "Send a crash report so Mozilla can fix the problem?" = "ایک تباہ رپورٹ ارسال کریں تاکہ Mozilla مسلہ کو جل کرسکے؟";
