@@ -1,6 +1,9 @@
 only_rules: # Only enforce these rules, ignore all others
+  - line_length
   - blanket_disable_command
   - class_delegate_protocol
+  - closure_spacing
+  - closure_parameter_position
   - colon
   - comma
   - comment_spacing
@@ -79,6 +82,8 @@ only_rules: # Only enforce these rules, ignore all others
   - vertical_whitespace_closing_braces
   - vertical_whitespace_opening_braces
   - yoda_condition
+  - accessibility_label_for_image
+  - accessibility_trait_for_button
 
 # These rules were originally opted into. Disabling for now to get
 # Swiftlint up and running.
@@ -88,6 +93,11 @@ only_rules: # Only enforce these rules, ignore all others
   # - prohibited_interface_builder
   # - prohibited_super_call
   # - protocol_property_accessors_order
+
+line_length:
+  warning: 125
+  ignores_urls: true
+  ignores_interpolated_strings: true
 
 file_header:
   required_string: |
@@ -99,33 +109,39 @@ analyzer_rules: # Rules run by `swiftlint analyze`
   - unused_import
 
 excluded: # paths to ignore during linting. Takes precedence over `included`.
+  # Firefox specific
   - build/
   - .build/
-  - Client/Assets/Search/get_supported_locales.swift
-  - Client/Generated
-  - fastlane/
-  - FxA
-  - FxAClient
-  - Source/ExcludedFolder
-  - Source/ExcludedFile.swift
-  - Storage/ThirdParty/SwiftData.swift
-  - Sync/Generated/Metrics.swift
-  - Storage/Generated/Metrics.swift
-  - ThirdParty
+  - firefox-ios/Client/Assets/Search/get_supported_locales.swift
+  - firefox-ios/Client/Generated
+  - firefox-ios/fastlane/
+  - firefox-ios/FxA
+  - firefox-ios/FxAClient
+  - firefox-ios/Source/ExcludedFolder
+  - firefox-ios/Source/ExcludedFile.swift
+  - firefox-ios/Storage/ThirdParty/SwiftData.swift
+  - firefox-ios/Sync/Generated/Metrics.swift
+  - firefox-ios/Storage/Generated/Metrics.swift
+  - firefox-ios/ThirdParty
   - test-fixtures/tmp
-  - firefox-ios/Tests/UITests/
+  - firefox-ios/firefox-ios-tests/Tests/UITests/
   - l10n-screenshots-dd/
   - DerivedData/
   # Package.swift files need a custom header for swift-tools-version
   # so must be excluded due to file_header rule
-  - Package.swift
+  - firefox-ios/Package.swift
   - BrowserKit/Package.swift
-  - Client/ContentBlocker/ContentBlockerGenerator/Package.swift
-  
+  - BrowserKit/.build/
+  - firefox-ios/Client/ContentBlocker/ContentBlockerGenerator/Package.swift
+  - Package.swift
+  - firefox-ios/Build/Intermediates.noindex/Client.build/Fennec-iphoneos/WidgetKitExtension.build/DerivedSources/IntentDefinitionGenerated/WidgetIntents/*
+  # Temporarly ignore focus-ios folder
+  - focus-ios/
 
 included:
   - /Users/vagrant/git
   - .
+
 
 # reporter: "json" # reporter type (xcode, json, csv, checkstyle)
 reporter: "xcode" # reporter type (xcode, json, csv, checkstyle)

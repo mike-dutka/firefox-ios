@@ -16,8 +16,9 @@
 # Adds the files in the 'nimbus-features' directory in the
 # `include` block of the FML
 addFeatureFilesToNimbus() {
-    for filename in nimbus-features/*.yaml; do
-        echo "  - $filename" >> $1
+    for filename in firefox-ios/nimbus-features/*.yaml; do
+        relativeName="${filename#firefox-ios/}"
+        echo "  - $relativeName" >> $1
     done
 }
 
@@ -29,7 +30,7 @@ cleanupNimbusFile() {
 }
 
 updateNimbusFML() {
-    NIMBUSFML=nimbus.fml.yaml
+    NIMBUSFML=firefox-ios/nimbus.fml.yaml
 
     cleanupNimbusFile $NIMBUSFML
     addFeatureFilesToNimbus $NIMBUSFML
@@ -69,7 +70,7 @@ enums:
 }
 
 if [ "$1" == "--add" ]; then
-    NEW_FILE=nimbus-features/$2.yaml
+    NEW_FILE=firefox-ios/nimbus-features/$2.yaml
     touch $NEW_FILE
     addNewFeatureContent $NEW_FILE $2
     updateNimbusFML

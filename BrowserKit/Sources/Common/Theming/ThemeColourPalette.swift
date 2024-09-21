@@ -14,7 +14,6 @@ public protocol ThemeColourPalette {
     var layer3: UIColor { get }
     var layer4: UIColor { get }
     var layer5: UIColor { get }
-    var layer6: UIColor { get }
     var layer5Hover: UIColor { get }
     var layerScrim: UIColor { get }
     var layerGradient: Gradient { get }
@@ -22,13 +21,13 @@ public protocol ThemeColourPalette {
     var layerAccentNonOpaque: UIColor { get }
     var layerAccentPrivate: UIColor { get }
     var layerAccentPrivateNonOpaque: UIColor { get }
-    var layerLightGrey30: UIColor { get }
     var layerSepia: UIColor { get }
     var layerHomepage: Gradient { get }
     var layerInfo: UIColor { get }
     var layerConfirmation: UIColor { get }
     var layerWarning: UIColor { get }
     var layerError: UIColor { get }
+    var layerSelectedText: UIColor { get }
     var layerSearch: UIColor { get }
     var layerGradientURL: Gradient { get }
 
@@ -47,6 +46,7 @@ public protocol ThemeColourPalette {
     // MARK: - Actions
     var actionPrimary: UIColor { get }
     var actionPrimaryHover: UIColor { get }
+    var actionPrimaryDisabled: UIColor { get }
     var actionSecondary: UIColor { get }
     var actionSecondaryHover: UIColor { get }
     var formSurfaceOff: UIColor { get }
@@ -56,19 +56,20 @@ public protocol ThemeColourPalette {
     var actionConfirmation: UIColor { get }
     var actionWarning: UIColor { get }
     var actionError: UIColor { get }
+    var actionInfo: UIColor { get }
     var actionTabActive: UIColor { get }
     var actionTabInactive: UIColor { get }
 
     // MARK: - Text
     var textPrimary: UIColor { get }
     var textSecondary: UIColor { get }
-    var textSecondaryAction: UIColor { get }
     var textDisabled: UIColor { get }
     var textWarning: UIColor { get }
     var textAccent: UIColor { get }
     var textOnDark: UIColor { get }
     var textOnLight: UIColor { get }
     var textInverted: UIColor { get }
+    var textInvertedDisabled: UIColor { get }
 
     // MARK: - Icons
     var iconPrimary: UIColor { get }
@@ -83,6 +84,7 @@ public protocol ThemeColourPalette {
     var iconAccentPink: UIColor { get }
     var iconAccentGreen: UIColor { get }
     var iconAccentYellow: UIColor { get }
+    var iconRatingNeutral: UIColor { get }
 
     // MARK: - Border
     var borderPrimary: UIColor { get }

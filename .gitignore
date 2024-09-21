@@ -1,6 +1,6 @@
 # Xcode
 build/
-!taskcluster/ci/build
+!taskcluster/kinds/build
 .build/
 *.pbxuser
 !default.pbxuser
@@ -50,7 +50,7 @@ DerivedData
 /fastlane/templates
 
 # content blocking lists
-Client/ContentBlocker/Lists/*
+firefox-ios/Client/ContentBlocker/Lists/*
 
 #python environment
 python-env/
@@ -66,12 +66,13 @@ python-env/
 .idea
 
 # Required for Glean
-/Client/Generated
-/Sync/Generated
-/Storage/Generated
+firefox-ios/Client/Generated
+firefox-ios/Sync/Generated
+firefox-ios/Storage/Generated
+focus-ios/Blockzilla/Generated
 .venv/
 
-ThirdParty/google-breakpad
+firefox-ios/ThirdParty/google-breakpad
 
 # Saved Sync credentials for tests.
 signedInUser.json
@@ -91,19 +92,23 @@ __pycache__
 
 # Node.js
 node_modules
-Client/Assets/AllFramesAtDocumentStart.js
-Client/Assets/AllFramesAtDocumentEnd.js
-Client/Assets/MainFrameAtDocumentStart.js
-Client/Assets/MainFrameAtDocumentEnd.js
-Client/Assets/AutofillAllFramesAtDocumentStart.js
-Client/Assets/WebcompatAllFramesAtDocumentStart.js
-Client/Assets/*.js.LICENSE.txt
+firefox-ios/Client/Assets/AllFramesAtDocumentStart.js
+firefox-ios/Client/Assets/AllFramesAtDocumentEnd.js
+firefox-ios/Client/Assets/MainFrameAtDocumentStart.js
+firefox-ios/Client/Assets/MainFrameAtDocumentEnd.js
+firefox-ios/Client/Assets/AutofillAllFramesAtDocumentStart.js
+firefox-ios/Client/Assets/WebcompatAllFramesAtDocumentStart.js
+firefox-ios/Client/Assets/addressFormLayout.js
+firefox-ios/Client/Assets/AddressFormManager.js
+firefox-ios/Client/Assets/*.js.LICENSE.txt
 
 # L10n
 /firefoxios-l10n
 /ios-l10n-scripts
-/shavar-prod-lists
 /LocalizationTools
+
+focus-ios/focus-ios-tests/tools/Localizations
+focus-ios/focusios-l10n
 import-strings.log
 export-strings.log
 
@@ -118,3 +123,12 @@ nimbus-fml/
 # Nimbus build artifacts.
 bin/nimbus-fml-configuration.local.sh
 bin/nimbus-fml.sh
+firefox-ios/nimbus-fml-configuration.local.sh
+firefox-ios/bin/nimbus-fml.sh
+firefox-ios/bin/nimbus-fml-configuration.local.sh
+
+# ContentBlocking
+ContentBlockingLists/disconnect-*
+focus-ios/shavar-*
+firefox-ios/shavar-*
+shavar-*

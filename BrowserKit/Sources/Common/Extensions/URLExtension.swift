@@ -7,11 +7,9 @@ import Foundation
 extension URL {
     /// Temporary init that will be removed with the update to XCode 15 where this URL API is available
     public init?(string: String, invalidCharacters: Bool) {
-        if #available(iOS 17, *) {
-            self.init(string: string, encodingInvalidCharacters: invalidCharacters)
-        } else {
-            self.init(string: string)
-        }
+        // FXIOS-8107: Removed 'encodingInvalidCharacters' init for
+        // compatibility reasons that is available for iOS 17+ only
+        self.init(string: string)
     }
 
     /// Returns a shorter displayable string for a domain
@@ -73,13 +71,54 @@ extension URL {
         if let range = host.range(of: "^(www|mobile|m)\\.", options: .regularExpression) {
             host.replaceSubrange(range, with: "")
         }
-        guard host != publicSuffix else { return nil }
+        // If the host equals the public suffix, it means that the host is already normalized.
+        // Therefore, we return the original host without any modifications.
+        guard host != publicSuffix else { return components.host }
 
         return host
     }
 
     var normalizedHostAndPath: String? {
         return normalizedHost.flatMap { $0 + self.path }
+    }
+
+    /// Extracts the subdomain and host from a given URL string and appends a dot to the subdomain.
+    ///
+    /// This function takes a URL string as input and returns a tuple containing the subdomain and the normalized host.
+    /// If the URL string does not contain a subdomain, the function returns `nil` for the subdomain. 
+    /// If a subdomain is present, it is returned with a trailing dot.
+    ///
+    /// - Parameter urlString: The URL string to extract the subdomain and host from.
+    ///
+    /// - Returns: A tuple containing the subdomain (with a trailing dot) and the normalized host.
+    ///  The subdomain is optional and may be `nil`.
+    ///
+    /// # Example
+    /// ```
+    /// let (subdomain, host) = getSubdomainAndHost(from: "https://docs.github.com")
+    /// print(subdomain) // Prints "docs."
+    /// print(host) // Prints "docs.github.com"
+    /// ```
+    public static func getSubdomainAndHost(from urlString: String) -> (subdomain: String?, normalizedHost: String) {
+        guard let url = URL(string: urlString) else { return (nil, urlString) }
+        let normalizedHost = url.normalizedHost ?? urlString
+
+        guard let publicSuffix = url.publicSuffix else { return (nil, normalizedHost) }
+
+        let publicSuffixComponents = publicSuffix.split(separator: ".")
+
+        let normalizedHostWithoutSuffix = normalizedHost
+            .split(separator: ".")
+            .dropLast(publicSuffixComponents.count)
+            .joined(separator: ".")
+
+        let components = normalizedHostWithoutSuffix.split(separator: ".")
+
+        guard components.count >= 2 else { return (nil, normalizedHost) }
+        let subdomain = components.dropLast()
+                                  .joined(separator: ".")
+                                  .appending(".")
+        return (subdomain, normalizedHost)
     }
 
     /// Returns the public portion of the host name determined by the public suffix list found here: https://publicsuffix.org/list/.
@@ -180,7 +219,12 @@ extension URL {
                 let literalFromEnd: NSString.CompareOptions = [.literal,        // Match the string exactly.
                                      .backwards,      // Search from the end.
                                      .anchored]         // Stick to the end.
-                let suffixlessHost = host.replacingOccurrences(of: suffix, with: "", options: literalFromEnd, range: nil)
+                let suffixlessHost = host.replacingOccurrences(
+                    of: suffix,
+                    with: "",
+                    options: literalFromEnd,
+                    range: nil
+                )
                 let suffixlessTokens = suffixlessHost.components(separatedBy: ".").filter { !$0.isEmpty }
                 let maxAdditionalCount = max(0, suffixlessTokens.count - additionalPartCount)
                 let additionalParts = suffixlessTokens[maxAdditionalCount..<suffixlessTokens.count]
@@ -218,6 +262,57 @@ extension URL {
 
         let stringURL = String(urlString[urlString.index(urlString.startIndex, offsetBy: 5)...])
         return URL(string: stringURL) ?? self
+    }
+
+    public func getQuery() -> [String: String] {
+        var results = [String: String]()
+
+        guard let components = URLComponents(url: self, resolvingAgainstBaseURL: false),
+              let queryItems = components.percentEncodedQueryItems
+        else {
+            return results
+        }
+
+        for item in queryItems {
+            if let value = item.value {
+                results[item.name] = value
+            }
+        }
+
+        return results
+    }
+
+    public var origin: String? {
+        guard isWebPage(includeDataURIs: false),
+              let hostPort = self.hostPort,
+              let scheme = scheme
+        else { return nil }
+
+        return "\(scheme)://\(hostPort)"
+    }
+
+    public var hostPort: String? {
+        if let host = self.host {
+            if let port = (self as NSURL).port?.int32Value {
+                return "\(host):\(port)"
+            }
+            return host
+        }
+        return nil
+    }
+
+    public func isWebPage(includeDataURIs: Bool = true) -> Bool {
+        let schemes = includeDataURIs ? ["http", "https", "data"] : ["http", "https"]
+        return scheme.map { schemes.contains($0) } ?? false
+    }
+
+    /// Returns the standard location of the website's favicon. (This is the base directoy path with
+    /// favicon.ico appended).
+    public func faviconUrl() -> URL? {
+        if let host = host, let rootDirectoryURL = URL(string: (scheme ?? "https") + "://" + host) {
+            return rootDirectoryURL.appendingPathComponent("favicon.ico")
+        }
+        return nil
     }
 }
 

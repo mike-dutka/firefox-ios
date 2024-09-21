@@ -10,49 +10,113 @@ public class SecondaryRoundedButton: ResizableButton, ThemeApplicable {
         static let buttonCornerRadius: CGFloat = 12
         static let buttonVerticalInset: CGFloat = 12
         static let buttonHorizontalInset: CGFloat = 16
-        static let buttonFontSize: CGFloat = 16
+
+        static let contentInsets = NSDirectionalEdgeInsets(
+            top: buttonVerticalInset,
+            leading: buttonHorizontalInset,
+            bottom: buttonVerticalInset,
+            trailing: buttonHorizontalInset
+        )
     }
 
-    private var highlightedTintColor: UIColor!
-    private var normalTintColor: UIColor!
-
-    override open var isHighlighted: Bool {
-        didSet {
-            backgroundColor = isHighlighted ? highlightedTintColor : normalTintColor
-        }
-    }
+    private var highlightedBackgroundColor: UIColor!
+    private var normalBackgroundColor: UIColor!
+    private var foregroundColor: UIColor!
 
     override init(frame: CGRect) {
         super.init(frame: frame)
 
-        titleLabel?.font = DefaultDynamicFontHelper.preferredBoldFont(
-            withTextStyle: .callout,
-            size: UX.buttonFontSize)
-        layer.cornerRadius = UX.buttonCornerRadius
-        titleLabel?.textAlignment = .center
+        configuration = UIButton.Configuration.filled()
         titleLabel?.adjustsFontForContentSizeCategory = true
-        contentEdgeInsets = UIEdgeInsets(top: UX.buttonVerticalInset,
-                                         left: UX.buttonHorizontalInset,
-                                         bottom: UX.buttonVerticalInset,
-                                         right: UX.buttonHorizontalInset)
-    }
-
-    public func configure(viewModel: SecondaryRoundedButtonViewModel) {
-        accessibilityIdentifier = viewModel.a11yIdentifier
-        setTitle(viewModel.title, for: .normal)
+        isUserInteractionEnabled = true
+        isAccessibilityElement = true
     }
 
     required init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override public func updateConfiguration() {
+        guard var updatedConfiguration = configuration else { return }
+
+        updatedConfiguration.background.backgroundColor = switch state {
+        case [.highlighted]: highlightedBackgroundColor
+        default: normalBackgroundColor
+        }
+
+        updatedConfiguration.baseForegroundColor = foregroundColor
+
+        let transformer = UIConfigurationTextAttributesTransformer { [weak foregroundColor] incoming in
+            var container = incoming
+
+            container.foregroundColor = foregroundColor
+            container.font = FXFontStyles.Bold.callout.scaledFont()
+            return container
+        }
+        updatedConfiguration.titleTextAttributesTransformer = transformer
+
+        configuration = updatedConfiguration
+    }
+
+    public func configure(viewModel: SecondaryRoundedButtonViewModel) {
+        guard var updatedConfiguration = configuration else { return }
+
+        updatedConfiguration.contentInsets = UX.contentInsets
+        updatedConfiguration.title = viewModel.title
+        updatedConfiguration.titleAlignment = .center
+
+        // Using a nil backgroundColorTransformer will just make the background view
+        // use configuration.background.backgroundColor without any transformation
+        updatedConfiguration.background.backgroundColorTransformer = nil
+        updatedConfiguration.background.cornerRadius = UX.buttonCornerRadius
+        updatedConfiguration.cornerStyle = .fixed
+        addCornerRadiusForVisualEffectView(radiusSize: UX.buttonCornerRadius)
+
+        accessibilityIdentifier = viewModel.a11yIdentifier
+
+        configuration = updatedConfiguration
+    }
+
+    /// To keep alignment && spacing consistent between the buttons on pages,
+    /// we must make the secondary button invisible if there is no
+    /// secondary button in the configuration.
+    public func makeButtonInvisible() {
+        guard var updatedConfiguration = configuration else { return }
+
+        isUserInteractionEnabled = false
+        isAccessibilityElement = false
+        normalBackgroundColor = .clear
+        highlightedBackgroundColor = .clear
+        foregroundColor = .clear
+
+        // In order to have a proper height, the button needs some text. This
+        // is invisible, but something sensible is used as a placeholder.
+        updatedConfiguration.title = "Skip"
+
+        configuration = updatedConfiguration
+
+        setNeedsUpdateConfiguration()
+    }
+
+    func addCornerRadiusForVisualEffectView(radiusSize: CGFloat) {
+        // Note: changing the corner radius for the subview, in this case UIVisualEffectView
+        // is required for certain cases where UIVisualEffectView doesn't update with super view radius change
+        for subview in self.subviews where subview is UIVisualEffectView {
+            subview.layer.cornerRadius = radiusSize
+        }
+    }
+
     // MARK: ThemeApplicable
 
     public func applyTheme(theme: Theme) {
-        highlightedTintColor = theme.colors.actionSecondaryHover
-        normalTintColor = theme.colors.actionSecondary
+        if configuration?.title == nil || !isUserInteractionEnabled {
+            makeButtonInvisible()
+        } else {
+            highlightedBackgroundColor = theme.colors.actionSecondaryHover
+            normalBackgroundColor = theme.colors.actionSecondary
+            foregroundColor = theme.colors.textPrimary
 
-        setTitleColor(theme.colors.textSecondaryAction, for: .normal)
-        backgroundColor = theme.colors.actionSecondary
+            setNeedsUpdateConfiguration()
+        }
     }
 }

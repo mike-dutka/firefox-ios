@@ -23,7 +23,6 @@ public class BottomSheetViewController: UIViewController,
                                         UIGestureRecognizerDelegate {
     private struct UX {
         static let minVisibleTopSpace: CGFloat = 40
-        static let closeButtonWidthHeight: CGFloat = 30
         static let closeButtonTopTrailingSpace: CGFloat = 16
         static let initialSpringVelocity: CGFloat = 1
         static let springWithDamping = 0.7
@@ -52,8 +51,7 @@ public class BottomSheetViewController: UIViewController,
         view.backgroundColor = .clear
     }
 
-    private lazy var closeButton: UIButton = .build { button in
-        button.setImage(UIImage(named: StandardImageIdentifiers.ExtraLarge.crossCircleFill), for: .normal)
+    private lazy var closeButton: CloseButton = .build { button in
         button.addTarget(self, action: #selector(self.closeTapped), for: .touchUpInside)
     }
 
@@ -62,11 +60,13 @@ public class BottomSheetViewController: UIViewController,
     private lazy var scrollContentView: UIView = .build { _ in }
     private var contentViewBottomConstraint: NSLayoutConstraint!
     private var viewTranslation = CGPoint(x: 0, y: 0)
+    private let windowUUID: WindowUUID
 
     // MARK: Init
     public init(viewModel: BottomSheetViewModel,
                 childViewController: BottomSheetChild,
                 usingDimmedBackground: Bool = false,
+                windowUUID: WindowUUID,
                 notificationCenter: NotificationProtocol = NotificationCenter.default,
                 themeManager: ThemeManager = AppContainer.shared.resolve()) {
         self.viewModel = viewModel
@@ -74,6 +74,7 @@ public class BottomSheetViewController: UIViewController,
         self.notificationCenter = notificationCenter
         self.themeManager = themeManager
         self.useDimmedBackground = usingDimmedBackground
+        self.windowUUID = windowUUID
 
         super.init(nibName: nil, bundle: nil)
 
@@ -85,12 +86,15 @@ public class BottomSheetViewController: UIViewController,
         fatalError("init(coder:) has not been implemented")
     }
 
-    // MARK: View lifecyle
+    // MARK: View lifecycle
     override public func viewDidLoad() {
         super.viewDidLoad()
         sheetView.alpha = 1
         setupChildViewController()
-        closeButton.accessibilityLabel = viewModel.closeButtonA11yLabel
+
+        let closeButtonViewModel = CloseButtonViewModel(a11yLabel: viewModel.closeButtonA11yLabel,
+                                                        a11yIdentifier: "a11yCloseButton")
+        closeButton.configure(viewModel: closeButtonViewModel)
 
         let gesture = UIPanGestureRecognizer(target: self, action: #selector(panGesture))
         contentView.addGestureRecognizer(gesture)
@@ -135,13 +139,17 @@ public class BottomSheetViewController: UIViewController,
     // MARK: - Theme
 
     public func applyTheme() {
-        contentView.backgroundColor = themeManager.currentTheme.colors.layer1
+        contentView.backgroundColor = themeManager.getCurrentTheme(for: windowUUID).colors.layer1
         sheetView.layer.shadowOpacity = viewModel.shadowOpacity
 
         if useDimmedBackground {
             dimmedBackgroundView.alpha = 0.4
             dimmedBackgroundView.backgroundColor = .black
         }
+    }
+
+    public var currentWindowUUID: WindowUUID? {
+        return windowUUID
     }
 
     // MARK: - UIGestureRecognizerDelegate
@@ -165,6 +173,7 @@ public class BottomSheetViewController: UIViewController,
         sheetView.addSubview(contentView)
         contentView.addSubviews(closeButton, scrollView)
         view.addSubviews(dimmedBackgroundView, topTapView, sheetView)
+        view.accessibilityElements = [closeButton, sheetView]
 
         contentViewBottomConstraint = sheetView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         let scrollViewHeightConstraint = scrollView.heightAnchor.constraint(
@@ -196,8 +205,6 @@ public class BottomSheetViewController: UIViewController,
                                              constant: BottomSheetViewController.UX.closeButtonTopTrailingSpace),
             closeButton.trailingAnchor.constraint(equalTo: contentView.safeAreaLayoutGuide.trailingAnchor,
                                                   constant: -BottomSheetViewController.UX.closeButtonTopTrailingSpace),
-            closeButton.widthAnchor.constraint(equalToConstant: BottomSheetViewController.UX.closeButtonWidthHeight),
-            closeButton.heightAnchor.constraint(equalToConstant: BottomSheetViewController.UX.closeButtonWidthHeight),
 
             scrollContentView.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
             scrollContentView.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),

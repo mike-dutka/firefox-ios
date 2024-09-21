@@ -5,14 +5,18 @@
 import Foundation
 
 public protocol AnyStoreSubscriber: AnyObject {
+    func subscribeToRedux()
     func newState(state: Any)
 }
 
 /// Subscribers listen for state changes.
-/// While all reducers will be called when a action gets dispatched, the subscriber will only be called when an actual state change happens.
+/// While all reducers will be called when a action gets dispatched, the subscriber will only be called
+/// when an actual state change happens.
 public protocol StoreSubscriber: AnyStoreSubscriber {
     associatedtype SubscriberStateType
 
+    /// Updates the subscriber with a new State for its screen state type.
+    /// - Parameter state: the changed screen state.
     func newState(state: SubscriberStateType)
 }
 

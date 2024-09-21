@@ -6,15 +6,16 @@ import UIKit
 
 open class ResizableButton: UIButton {
     public struct UX {
-        public static let buttonEdgeSpacing: CGFloat = 8
+        public static let buttonEdgeHorizontalSpacing: CGFloat = 8
+        public static let buttonEdgeVerticalSpacing: CGFloat = 0
     }
 
-    public var buttonEdgeSpacing: CGFloat = UX.buttonEdgeSpacing {
+    public var buttonEdgeInsets = NSDirectionalEdgeInsets(top: UX.buttonEdgeVerticalSpacing,
+                                                          leading: UX.buttonEdgeHorizontalSpacing,
+                                                          bottom: UX.buttonEdgeVerticalSpacing,
+                                                          trailing: UX.buttonEdgeHorizontalSpacing) {
         didSet {
-            contentEdgeInsets = UIEdgeInsets(top: 0,
-                                             left: buttonEdgeSpacing,
-                                             bottom: 0,
-                                             right: buttonEdgeSpacing)
+            updateContentInsets()
         }
     }
 
@@ -28,34 +29,23 @@ open class ResizableButton: UIButton {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func commonInit() {
-        titleLabel?.numberOfLines = 0
-        titleLabel?.adjustsFontForContentSizeCategory = true
-        titleLabel?.lineBreakMode = .byWordWrapping
-        adjustsImageSizeForAccessibilityContentSizeCategory = true
-        contentEdgeInsets = UIEdgeInsets(top: 0,
-                                         left: buttonEdgeSpacing,
-                                         bottom: 0,
-                                         right: buttonEdgeSpacing)
-    }
-
     override public var intrinsicContentSize: CGSize {
-        guard let title = titleLabel else {
+        guard let title = titleLabel, let configuration else {
             return super.intrinsicContentSize
         }
 
-        let widthTitleInset = titleEdgeInsets.left + titleEdgeInsets.right
-        let widthImageInset = imageEdgeInsets.left + imageEdgeInsets.right
-        let widthContentInset = contentEdgeInsets.left + contentEdgeInsets.right
+        let imagePadding = configuration.imagePadding
+        let widthContentInset = configuration.contentInsets.leading + configuration.contentInsets.trailing
+        let heightContentInset = configuration.contentInsets.top + configuration.contentInsets.bottom
 
-        var availableWidth = frame.width - widthTitleInset - widthImageInset - widthContentInset
-        if let imageWidth = image(for: [])?.size.width {
-            availableWidth = availableWidth - imageWidth
+        var availableWidth = frame.width - widthContentInset
+        if let imageWidth = image(for: [])?.size.width ?? configuration.image?.size.width {
+            availableWidth = availableWidth - imageWidth - imagePadding
         }
 
         let size = title.sizeThatFits(CGSize(width: availableWidth, height: .greatestFiniteMagnitude))
         return CGSize(width: size.width + widthContentInset,
-                      height: size.height + contentEdgeInsets.top + contentEdgeInsets.bottom)
+                      height: size.height + heightContentInset)
     }
 
     override public func layoutSubviews() {
@@ -63,5 +53,19 @@ open class ResizableButton: UIButton {
         guard let title = titleLabel else { return }
 
         titleLabel?.preferredMaxLayoutWidth = title.frame.size.width
+    }
+
+    private func commonInit() {
+        titleLabel?.numberOfLines = 0
+        titleLabel?.adjustsFontForContentSizeCategory = true
+        adjustsImageSizeForAccessibilityContentSizeCategory = true
+
+        configuration = UIButton.Configuration.plain()
+        configuration?.titleLineBreakMode = .byWordWrapping
+        updateContentInsets()
+    }
+
+    private func updateContentInsets() {
+        configuration?.contentInsets = buttonEdgeInsets
     }
 }

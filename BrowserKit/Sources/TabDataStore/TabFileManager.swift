@@ -50,6 +50,10 @@ public protocol TabFileManager {
     ///   - windowData: the window data to be saved
     ///   - url: the directory to save the data to
     func writeWindowData(windowData: WindowData, to url: URL) throws
+
+    /// Removes the file at the given URL.
+    /// - Parameter path: the file to be removed.
+    func removeFileAt(path: URL)
 }
 
 public struct DefaultTabFileManager: TabFileManager {
@@ -77,11 +81,21 @@ public struct DefaultTabFileManager: TabFileManager {
     }
 
     public func windowDataDirectory(isBackup: Bool) -> URL? {
-        guard let containerID = BrowserKitInformation.shared.sharedContainerIdentifier else { return nil }
+        guard let containerID = BrowserKitInformation.shared.sharedContainerIdentifier else {
+            logger.log(
+                "Failed to get the window data container ID from BrowserKit's sharedContainerIdentifier",
+                level: .warning,
+                category: .tabs
+            )
+            return nil
+        }
         let pathInfo = isBackup ? PathInfo.backup : PathInfo.primary
-        var containerURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: containerID)
-        containerURL = containerURL?.appendingPathComponent(PathInfo.rootDirectory)
-        return containerURL?.appendingPathComponent(pathInfo)
+        guard let containerURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: containerID) else {
+            logger.log("Failed to get the window data container URL", level: .warning, category: .tabs)
+            return nil
+        }
+        let appendedURL = containerURL.appendingPathComponent(PathInfo.rootDirectory)
+        return appendedURL.appendingPathComponent(pathInfo)
     }
 
     public func contentsOfDirectory(at path: URL) -> [URL] {
@@ -101,7 +115,7 @@ public struct DefaultTabFileManager: TabFileManager {
         try fileManager.copyItem(at: sourceURL, to: destinationURL)
     }
 
-    private func removeFileAt(path: URL) {
+    public func removeFileAt(path: URL) {
         do {
             try fileManager.removeItem(at: path)
             return
@@ -140,7 +154,7 @@ public struct DefaultTabFileManager: TabFileManager {
             return windowData
         } catch {
             logger.log("Error decoding window data: \(error)",
-                       level: .debug,
+                       level: .warning,
                        category: .tabs)
             throw error
         }

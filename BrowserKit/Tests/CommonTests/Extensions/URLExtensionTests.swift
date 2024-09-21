@@ -6,6 +6,8 @@ import XCTest
 @testable import Common
 
 final class URLExtensionTests: XCTestCase {
+    private var webServerPort = 1234
+
     func testNormalBaseDomainWithSingleSubdomain() {
         // TLD Entry: co.uk
         let url = URL(string: "http://a.bbc.co.uk")!
@@ -105,6 +107,12 @@ final class URLExtensionTests: XCTestCase {
         XCTAssertEqual(url!.fragment!, "h=dupes%7CData%20%26%20BI%20Services%20Team%7C")
     }
 
+    func testNormalizedHostReturnsOriginalHost() {
+        let url = URL(string: "https://mobile.co.uk")!
+        let host = url.normalizedHost
+        XCTAssertEqual(host, "mobile.co.uk")
+    }
+
     func testIPv6Domain() {
         let url = URL(string: "http://[::1]/foo/bar")!
         XCTAssertTrue(url.isIPv6)
@@ -137,6 +145,31 @@ final class URLExtensionTests: XCTestCase {
         badurls.forEach { XCTAssertNil(URL(string: $0)!.normalizedHostAndPath) }
     }
 
+    func testGetSubdomainAndHost() {
+        let testCases = [
+            ("https://www.google.com", (nil, "google.com")),
+            ("https://blog.engineering.company.com", ("blog.engineering.", "blog.engineering.company.com")),
+            ("https://long-extended-subdomain-name-containing-many-letters-and-dashes.badssl.com", ("long-extended-subdomain-name-containing-many-letters-and-dashes.", "long-extended-subdomain-name-containing-many-letters-and-dashes.badssl.com")),
+            ("http://com:org@m.canadacomputers.co.uk", (nil, "canadacomputers.co.uk")),
+            ("https://www.wix.com/blog/what-is-a-subdomain", (nil, "wix.com")),
+            ("nothing", (nil, "nothing")),
+            ("https://super-long-url-with-dashes-and-things.badssl.com/xyz-something", ("super-long-url-with-dashes-and-things.", "super-long-url-with-dashes-and-things.badssl.com")),
+            ("https://accounts.firefox.com", ("accounts.", "accounts.firefox.com")),
+            ("http://username:password@subdomain.example.com:8080", ("subdomain.", "subdomain.example.com")),
+            ("https://example.com:8080#fragment", (nil, "example.com")),
+            ("http://username:password@subdomain.example.com:8080#fragment", ("subdomain.", "subdomain.example.com")),
+            ("https://www.amazon.co.uk", (nil, "amazon.co.uk")),
+            ("https://mobile.co.uk", (nil, "mobile.co.uk"))
+        ]
+
+        for testCase in testCases {
+            let (urlString, expected) = testCase
+            let result = URL.getSubdomainAndHost(from: urlString)
+            XCTAssertEqual(result.subdomain, expected.0, "Unexpected subdomain for URL: \(urlString)")
+            XCTAssertEqual(result.normalizedHost, expected.1, "Unexpected normalized host for URL: \(urlString)")
+        }
+    }
+
     func testShortDisplayString() {
         let urls = [
             ("https://www.example.com/index.html", "example"),
@@ -166,5 +199,107 @@ final class URLExtensionTests: XCTestCase {
 
         let originalURL = url.removeBlobFromUrl()
         XCTAssertEqual(originalURL, URL(string: "https://example.blob.com"))
+    }
+
+    // MARK: getQuery tests
+
+    func testGetQueryWhenTheresParametersThenGetQueryReturnsTheRightParameters() {
+        let url = URL(string: "http://example.com/path?a=1&b=2&c=3")!
+
+        let urlParams = url.getQuery()
+
+        let expectedParams = ["a": "1", "b": "2", "c": "3"]
+        XCTAssertEqual(urlParams["a"], expectedParams["a"])
+        XCTAssertEqual(urlParams["b"], expectedParams["b"])
+        XCTAssertEqual(urlParams["c"], expectedParams["c"])
+    }
+
+    func testGetQueryWhenPercentEncodedParamsThenGetQueryReturnsTheRightParameters() {
+        let url = URL(string: "http://example.com/path?a=%20")!
+
+        let urlParams = url.getQuery()
+
+        XCTAssertEqual(urlParams["a"], "%20")
+    }
+
+    // MARK: isWebPage
+
+    func testIsWebPageGivenReaderModeURLThenisWebPage() {
+        let url = URL(string: "http://localhost:\(webServerPort)/reader-mode/page")!
+        XCTAssertTrue(url.isWebPage())
+    }
+
+    func testIsWebPageGivenSessionRestoreHTMLThenisWebPage() {
+        let url = URL(string: "https://127.0.0.1:\(webServerPort)/sessionrestore.html")!
+        XCTAssertTrue(url.isWebPage())
+    }
+
+    func testIsWebPageGivenDataSessionRestoreThenisWebPage() {
+        let url = URL(string: "data://:\(webServerPort)/sessionrestore.html")!
+        XCTAssertTrue(url.isWebPage())
+    }
+
+    func testIsWebPageGivenAboutURLThenisNotWebPage() {
+        let url = URL(string: "about://google.com")!
+        XCTAssertFalse(url.isWebPage())
+    }
+
+    func testIsWebPageGivenTelURLThenisNotWebPage() {
+        let url = URL(string: "tel:6044044004")!
+        XCTAssertFalse(url.isWebPage())
+    }
+
+    func testIsWebPageGivenLocalHostURLThenisNotWebPage() {
+        let url = URL(string: "hax://localhost:\(webServerPort)/about")!
+        XCTAssertFalse(url.isWebPage())
+    }
+
+    // MARK: Host port
+
+    func testHostPortGivenExampleHostThenIsEqual() {
+        let givenURL = URL(string: "https://www.example.com")!
+        XCTAssertEqual(givenURL.hostPort, "www.example.com")
+    }
+
+    func testHostPortGivenUserPassHostThenIsEqual() {
+        let givenURL = URL(string: "https://user:pass@www.example.com")!
+        XCTAssertEqual(givenURL.hostPort, "www.example.com")
+    }
+
+    func testHostPortGivenLocalHostThenIsEqual() {
+        let givenURL = URL(string: "http://localhost:6000/blah")!
+        XCTAssertEqual(givenURL.hostPort, "localhost:6000")
+    }
+
+    func testHostPortGivenBlahURLThenIsNil() {
+        let givenURL = URL(string: "blah")!
+        XCTAssertNil(givenURL.hostPort)
+    }
+
+    func testHostPortGivenEmptyURLThenIsNil() {
+        let givenURL = URL(string: "http://")!
+        XCTAssertNil(givenURL.hostPort)
+    }
+
+    // MARK: Origin
+
+    func testOriginGivenExampleIndexURLThenOriginIsExample() {
+        let givenURL = URL(string: "https://www.example.com/index.html")!
+        XCTAssertEqual(givenURL.origin, "https://www.example.com")
+
+        let badurls = [
+            "data://google.com"
+        ]
+        badurls.forEach { XCTAssertNil(URL(string: $0)!.origin) }
+    }
+
+    func testOriginGivenUserPassURLThenOriginIsFoo() {
+        let givenURL = URL(string: "https://user:pass@m.foo.com/bar/baz?noo=abc#123")!
+        XCTAssertEqual(givenURL.origin, "https://m.foo.com")
+    }
+
+    func testOriginGivenDataURLThenOriginIsNil() {
+        let givenURL = URL(string: "data://google.com")!
+        XCTAssertNil(givenURL.origin)
     }
 }

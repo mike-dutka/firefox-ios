@@ -5,13 +5,31 @@
 import UIKit
 
 public protocol ThemeManager {
-    var currentTheme: Theme { get }
-    var window: UIWindow? { get set }
+    // Current theme
+    func getCurrentTheme(for window: WindowUUID?) -> Theme
 
-    func getInterfaceStyle() -> UIUserInterfaceStyle
-    func changeCurrentTheme(_ newTheme: ThemeType)
-    func systemThemeChanged()
+    // System theme and brightness settings
+    var systemThemeIsOn: Bool { get }
+    var automaticBrightnessIsOn: Bool { get }
+    var automaticBrightnessValue: Float { get }
     func setSystemTheme(isOn: Bool)
+    func setManualTheme(to newTheme: ThemeType)
+    func getUserManualTheme() -> ThemeType
     func setAutomaticBrightness(isOn: Bool)
     func setAutomaticBrightnessValue(_ value: Float)
+
+    // Window management and window-specific themeing
+    func applyThemeUpdatesToWindows()
+    func setPrivateTheme(isOn: Bool, for window: WindowUUID)
+    func getPrivateThemeIsOn(for window: WindowUUID) -> Bool
+    func setWindow(_ window: UIWindow, for uuid: WindowUUID)
+    func windowDidClose(uuid: WindowUUID)
+
+    // Theme functions for app extensions
+
+    /// Returns the general theme setting outside of any specific iOS window.
+    /// This is generally only meant to be used in scenarios where the UI is
+    /// presented outside the context of any particular browser window, such
+    /// as in our app extensions.
+    func windowNonspecificTheme() -> Theme
 }

@@ -5,7 +5,8 @@ import PackageDescription
 let package = Package(
     name: "BrowserKit",
     platforms: [
-        .iOS(.v15)
+        .iOS(.v15),
+        .macOS(.v10_14)
     ],
     products: [
         .library(
@@ -22,7 +23,22 @@ let package = Package(
             targets: ["Redux"]),
         .library(
             name: "ComponentLibrary",
-            targets: ["ComponentLibrary"])
+            targets: ["ComponentLibrary"]),
+        .library(
+            name: "WebEngine",
+            targets: ["WebEngine"]),
+        .library(
+            name: "ToolbarKit",
+            targets: ["ToolbarKit"]),
+        .library(
+            name: "MenuKit",
+            targets: ["MenuKit"]),
+        .library(
+            name: "ContentBlockingGenerator",
+            targets: ["ContentBlockingGenerator"]),
+        .executable(
+            name: "ExecutableContentBlockingGenerator",
+            targets: ["ExecutableContentBlockingGenerator"]),
     ],
     dependencies: [
         .package(
@@ -30,7 +46,7 @@ let package = Package(
             branch: "master"),
         .package(
             url: "https://github.com/onevcat/Kingfisher.git",
-            exact: "7.9.1"),
+            exact: "7.11.0"),
         .package(
             url: "https://github.com/AliSoftware/Dip.git",
             exact: "7.1.1"),
@@ -39,7 +55,9 @@ let package = Package(
             exact: "2.0.0"),
         .package(
             url: "https://github.com/getsentry/sentry-cocoa.git",
-            exact: "8.13.1"),
+            exact: "8.36.0"),
+        .package(url: "https://github.com/nbhasin2/GCDWebServer.git",
+                 branch: "master")
     ],
     targets: [
         .target(
@@ -74,9 +92,41 @@ let package = Package(
             dependencies: ["TabDataStore"]),
         .target(
             name: "Redux",
+            dependencies: ["Common"],
             swiftSettings: [.unsafeFlags(["-enable-testing"])]),
         .testTarget(
             name: "ReduxTests",
-            dependencies: ["Redux"])
+            dependencies: ["Redux"]),
+        .target(
+            name: "WebEngine",
+            dependencies: ["Common",
+                           .product(name: "GCDWebServers", package: "GCDWebServer")],
+            swiftSettings: [.unsafeFlags(["-enable-testing"])]),
+        .testTarget(
+            name: "WebEngineTests",
+            dependencies: ["WebEngine"]),
+        .target(
+            name: "ToolbarKit",
+            dependencies: ["Common"],
+            swiftSettings: [.unsafeFlags(["-enable-testing"])]),
+        .testTarget(
+            name: "ToolbarKitTests",
+            dependencies: ["ToolbarKit"]),
+        .target(
+            name: "MenuKit",
+            dependencies: ["Common"],
+            swiftSettings: [.unsafeFlags(["-enable-testing"])]),
+        .testTarget(
+            name: "MenuKitTests",
+            dependencies: ["MenuKit"]),
+        .target(
+            name: "ContentBlockingGenerator",
+            swiftSettings: [.unsafeFlags(["-enable-testing"])]),
+        .testTarget(
+            name: "ContentBlockingGeneratorTests",
+            dependencies: ["ContentBlockingGenerator"]),
+        .executableTarget(
+            name: "ExecutableContentBlockingGenerator",
+            dependencies: ["ContentBlockingGenerator"]),
     ]
 )
