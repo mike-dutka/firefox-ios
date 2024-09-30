@@ -2,10 +2,10 @@
 "ContextualHints.Shopping.NotOptedIn.v120" = "Prima di acquistare, scopri se puoi fidarti delle recensioni di questo prodotto.";
 
 /* Contextual hints are little popups that appear for the users informing them of new features. This one is a call to action for the popup describing the Shopping feature. It indicates that a user can go directly to the Shopping feature by tapping the text of the action. */
-"ContextualHints.Shopping.NotOptedInAction.v120" = "Prova verifica recensioni";
+"ContextualHints.Shopping.NotOptedInAction.v120" = "Prova Verifica recensioni";
 
 /* Contextual hints are little popups that appear for the users informing them of new features. This is a call to action for the popup that appears after the user has opted in for the Shopping feature. It indicates that a user can directly open the review checker by tapping the text of the action. */
-"ContextualHints.Shopping.OptedInAction.v120" = "Apri verifica recensioni";
+"ContextualHints.Shopping.OptedInAction.v120" = "Apri Verifica recensioni";
 
 /* Contextual hints are little popups that appear for the users informing them of new features. This one appears after the user has opted in and informs him if he wants use the review checker by tapping the Shopping button. */
 "ContextualHints.Shopping.OptedInBody.v120" = "Queste recensioni sono affidabili? Controlla ora per vedere la valutazione rettificata.";
@@ -15,9 +15,6 @@
 
 /* Title label for the Fakespot Ad card. This is displayed above a product image, suggested as an alternative to the product reviewed. */
 "Shopping.AdCard.Title.v121" = "Altri prodotti da valutare";
-
-/* Description adjusted of the rating card displayed in the shopping review quality bottom sheet. */
-"Shopping.AdjustedRating.Description.v120" = "Recensioni inaffidabili rimosse";
 
 /* Description adjusted of the rating card displayed in the shopping review quality bottom sheet. */
 "Shopping.AdjustedRating.Description.v121" = "Basato su recensioni affidabili";
@@ -118,12 +115,6 @@
 /* Title for card displayed when a shopping product has not been analysed yet. */
 "Shopping.NoAnalysisCard.HeadlineLabel.Title.v120" = "Non ci sono ancora informazioni su queste recensioni";
 
-/* Description for the card displayed when a shopping product has not been analysed yet but the analysis is in progress. */
-"Shopping.NoAnalysisCard.InProgress.Body.Label.v120" = "Questa operazione potrebbe richiedere circa 60 secondi.";
-
-/* Title for the card displayed when a shopping product has not been analysed yet but the analysis is in progress. */
-"Shopping.NoAnalysisCard.InProgress.Headline.Title.v120" = "Verifica qualità recensioni";
-
 /* Text for the disclaimer that appears underneath the rating image of the Shopping Experience Opt In onboarding Card (Fakespot). The parameter will be replaced by the Fakespot app name. After the colon, what appears are two links, each on their own line. The first link is to a Privacy policy. The second link is to Terms of use. */
 "Shopping.OptInCard.Disclaimer.Text.v120" = "Selezionando “Sì, provalo” accetti le condizioni di %@:";
 
@@ -215,13 +206,13 @@
 "Shopping.SettingsCard.RecommendedProducts.Label.v120" = "Mostra i prodotti consigliati da %@";
 
 /* Label of the button from settings card displayed in the shopping review quality bottom sheet. */
-"Shopping.SettingsCard.TurnOffButton.Title.v120" = "Disattiva verifica recensioni";
+"Shopping.SettingsCard.TurnOffButton.Title.v120" = "Disattiva Verifica recensioni";
 
 /* Beta label for the header of the Shopping Experience (Fakespot) sheet */
 "Shopping.Sheet.Beta.Title.v120" = "BETA";
 
 /* Accessibility label for close button that dismisses the Shopping Experience (Fakespot) sheet. */
-"Shopping.Sheet.Close.AccessibilityLabel.v121" = "Chiudi verifica recensioni";
+"Shopping.Sheet.Close.AccessibilityLabel.v121" = "Chiudi Verifica recensioni";
 
 /* Label for the header of the Shopping Experience (Fakespot) sheet */
 "Shopping.Sheet.Title.v120" = "Verifica recensioni";
