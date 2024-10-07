@@ -2,7 +2,7 @@
 "TabLocation.ETP.Off.NotSecure.A11y.Label.v119" = "Nid yw'r cysylltiad yn ddiogel. Mae Diogelwch Uwch rhag Tracio wedi'i ddiffodd.";
 
 /* Accessibility label for the security icon in url bar */
-"TabLocation.ETP.Off.Secure.A11y.Label.v119" = "Cysylltiad diogel. Mae Diogelwch Uwch rhag Tracio wedi'i ddiffodd.";
+"TabLocation.ETP.Off.Secure.A11y.Label.v119" = "Cysylltiad diogel. Mae Diogelwch Uwch Rhag Tracio wedi'i ddiffodd.";
 
 /* Accessibility label for the security icon in url bar */
 "TabLocation.ETP.On.NotSecure.A11y.Label.v119" = "Nid yw’r cysylltiad yn ddiogel";
@@ -14,5 +14,5 @@
 "TabLocation.Share.A11y.Label.v119" = "Rhannwch y dudalen hon";
 
 /* Accessibility label for the shopping button in url bar */
-"TabLocation.Shopping.A11y.Label.v120" = "Gwiriwr Adolygiadau";
+"TabLocation.Shopping.A11y.Label.v120" = "Gwirydd Adolygiadau";
 
