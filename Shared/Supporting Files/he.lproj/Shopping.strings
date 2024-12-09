@@ -14,9 +14,6 @@
 "Shopping.AdCard.Footer.v121" = "פרסומת מאת %@";
 
 /* Description adjusted of the rating card displayed in the shopping review quality bottom sheet. */
-"Shopping.AdjustedRating.Description.v120" = "סקירות בלתי אמינות הוסרו";
-
-/* Description adjusted of the rating card displayed in the shopping review quality bottom sheet. */
 "Shopping.AdjustedRating.Description.v121" = "מבוסס על סקירות אמינות";
 
 /* Accessibility label, associated to adjusted rating stars. %@ is a decimal value from 0 to 5 that will only use a tenth (example: 3.5). */
@@ -97,9 +94,6 @@
 /* Description for info card when the product is in analysis mode */
 "Shopping.InfoCard.ProgressAnalysis.Description.v120" = "פעולה זו יכולה להימשך כ־60 שניות.";
 
-/* Title for info card when the product is in analysis mode */
-"Shopping.InfoCard.ProgressAnalysis.Title.v120" = "בתהליך בדיקת איכות הסקירות";
-
 /* This description appears beneath the confirmation title on the information card to inform the user that their report regarding the product stock status has been received and is being processed. It serves to set the expectation that the review information will be updated within 24 hours and invites the user to revisit the product page for updates. */
 "Shopping.InfoCard.ReportSubmittedByCurrentUser.Description.v121" = "אמור להיות לנו מידע על הסקירות של מוצר זה תוך 24 שעות. נא לבדוק שוב אז.";
 
@@ -115,15 +109,6 @@
 /* Title for card displayed when a shopping product has not been analysed yet. */
 "Shopping.NoAnalysisCard.HeadlineLabel.Title.v120" = "אין עדיין מידע על סקירות אלה";
 
-/* Description for the card displayed when a shopping product has not been analysed yet but the analysis is in progress. */
-"Shopping.NoAnalysisCard.InProgress.Body.Label.v120" = "פעולה זו יכולה להימשך כ־60 שניות.";
-
-/* Title for the card displayed when a shopping product has not been analysed yet but the analysis is in progress. */
-"Shopping.NoAnalysisCard.InProgress.Headline.Title.v120" = "בתהליך בדיקת איכות הסקירות";
-
-/* Text for the disclaimer that appears underneath the rating image of the Shopping Experience Opt In onboarding Card (Fakespot). The parameter will be replaced by the Fakespot app name. After the colon, what appears are two links, each on their own line. The first link is to a Privacy policy. The second link is to Terms of use. */
-"Shopping.OptInCard.Disclaimer.Text.v120" = "בחירה באפשרות ״כן, ארצה לנסות״ מהווה הסכמה לתנאים הבאים מאת %@:";
-
 /* Label for the first paragraph of the Shopping Experience Opt In onboarding Card (Fakespot). The first parameter will be the website the user is coming from when viewing this screen (default Amazon). The second parameter will be replaced by the app name. The third and fourth parameters will be the other two websites that are currently supported (Amazon, Best Buy or Walmart) besides the one used for the first parameter. */
 "Shopping.OptInCard.FirstParagraph.Description.v120" = "ניתן לבדוק עד כמה ביקורות מוצר אמינות ב־%1$@ לפני הקנייה. בודק הסקירות, תכונה ניסיונית מאת %2$@, מובנה ישירות בדפדפן. הוא עובד גם על %3$@ ו־%4$@.";
 
@@ -136,17 +121,11 @@
 /* Text for the main button of the Shopping Experience Opt In onboarding Card (Fakespot) */
 "Shopping.OptInCard.MainButton.Title.v120" = "כן, ארצה לנסות";
 
-/* Show Firefox Browser Privacy Policy page from the Privacy section in the Shopping Experience Opt In onboarding Card (Fakespot). See https://www.mozilla.org/privacy/firefox/ */
-"Shopping.OptInCard.PrivacyPolicy.Button.Title.v120" = "מדיניות הפרטיות";
-
 /* Text for the secondary button of the Shopping Experience Opt In onboarding Card (Fakespot) */
 "Shopping.OptInCard.SecondaryButton.Title.v120" = "לא כעת";
 
 /* Label for the second paragraph of the Shopping Experience Opt In onboarding Card (Fakespot). The first parameter will be replaced by the Fakespot app name. The second parameter will be replaced the company name of Mozilla. */
 "Shopping.OptInCard.SecondParagraph.Description.v120" = "באמצעות הכוח של %1$@ מאת %2$@, אנו עוזרים לך להימנע מסקירות מוטות ולא אותנטיות. מודל הבינה המלאכותית שלנו משתפר תמיד כדי להגן עליך בזמן הקנייה.";
-
-/* Show Firefox Browser Terms of Use page from the Privacy section in the Shopping Experience Opt In onboarding Card (Fakespot). See https://www.mozilla.org/privacy/firefox/ */
-"Shopping.OptInCard.TermsOfUse.Button.Title.v120" = "תנאי שימוש";
 
 /* Accessibility label for the Grade labels used in 'How we determine review quality' card and 'How reliable are these reviews' card displayed in the shopping review quality bottom sheet. The placeholder will be replaced by a grade letter (e.g. A). The grading system contains letters from A-F. */
 "Shopping.ReliabilityScore.Grade.A11y.Label.v120" = "ציון %@";
@@ -174,9 +153,6 @@
 
 /* Label of the headline from How we determine review quality card displayed in the shopping review quality bottom sheet. The first parameter will be replaced by the Fakespot app name and the second parameter by the company name of Mozilla. */
 "Shopping.ReviewQualityCard.Headline.Label.v120" = "אנו משתמשים בטכנולוגיית AI של %1$@ מבית %2$@ כדי לנתח את המהימנות של סקירות מוצרים. ניתוח זה רק יעזור לך להעריך את איכות הסקירות, לא את איכות המוצר.";
-
-/* Highlights label from How we determine review quality card displayed in the shopping review quality bottom sheet. The parameter substitutes the partner website the user is coming from. The *text inside asterisks* denotes part of the string to bold, please leave the text inside the '*' so that it is bolded correctly. */
-"Shopping.ReviewQualityCard.Highlights.Label.v120" = "*הדגשים* הם מסקירות של %1@ במהלך 80 הימים האחרונים, שאנו מאמינים שהן אמינות.";
 
 /* Title of the 'How we determine review quality' card displayed in the shopping review quality bottom sheet. */
 "Shopping.ReviewQualityCard.Label.Title.v120" = "כיצד אנו קובעים את איכות הסקירות";
