@@ -52,6 +52,9 @@
 /* Accessibility label for the search input field in the Logins list */
 "Search Input Field" = "തെരയുന്ന വാക്കിടാനുള്ള ഇടം";
 
+/* Title for the search field at the top of the Logins list screen */
+"SearchInput.Title.Search.v106" = "തിരയുക";
+
 /* Label for the button used to select all logins. */
 "Select All" = "എല്ലാം തിരഞ്ഞെടുക്കുക";
 

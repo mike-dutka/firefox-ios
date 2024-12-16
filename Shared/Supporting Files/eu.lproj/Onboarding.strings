@@ -37,9 +37,6 @@
 /* String used to describe the option to continue to ask for the notification permission in Firefox Onboarding screens. */
 "Onboarding.Notification.TurnOnNotifications.Action.v114" = "Aktibatu jakinarazpenak";
 
-/* String used to describes the description of what Firefox is on the Sync onboarding page for current version in our Onboarding screens. Placeholder is for the app name. */
-"Onboarding.Sync.Description.v120" = "Saioa hasita eta sinkronizatuta zaudenean, seguruago zaude. %@(e)k\nzure pasahitzak, laster-markak eta gehiago zifratzen du.";
-
 /* String used to describes the option to skip the Sync sign in during onboarding for the current version in Firefox Onboarding screens. */
 "Onboarding.Sync.SignIn.Action.v114" = "Hasi saioa";
 

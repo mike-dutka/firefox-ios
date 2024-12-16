@@ -37,9 +37,6 @@
 /* String used to describe the option to continue to ask for the notification permission in Firefox Onboarding screens. */
 "Onboarding.Notification.TurnOnNotifications.Action.v114" = "Vklopi obvestila";
 
-/* String used to describes the description of what Firefox is on the Sync onboarding page for current version in our Onboarding screens. Placeholder is for the app name. */
-"Onboarding.Sync.Description.v120" = "Prijavljeni in sinhronizirani ste varnejši. %@ šifrira vaša gesla, zaznamke in ostale podatke.";
-
 /* String used to describes the option to skip the Sync sign in during onboarding for the current version in Firefox Onboarding screens. */
 "Onboarding.Sync.SignIn.Action.v114" = "Prijava";
 
@@ -75,6 +72,12 @@
 
 /* Accessibility label for close button that dismisses the welcome onboarding screen. Placeholder is for the app name. */
 "Onboarding.Welcome.Close.AccessibilityLabel.v121" = "Zapri in zapusti uvod v %@";
+
+/* String used to describes the description of what Firefox is on the welcome onboarding page for current version in our Onboarding screens. */
+"Onboarding.Welcome.Description.TreatementA.v120" = "Naš neprofitni brskalnik preprečuje podjetjem, da bi vas skrivaj spremljala po spletu.";
+
+/* String used to describes the description of what Firefox is on the welcome onboarding page for current version in our Onboarding screens. Placeholder is for the app name. */
+"Onboarding.Welcome.Description.v120" = "Naš neprofitni brskalnik preprečuje podjetjem, da bi vas skrivaj spremljala po spletu.";
 
 /* String used to describe the title of link button is on the welcome onboarding page for current version in our Onboarding screens. */
 "Onboarding.Welcome.Link.Action.v114" = "Preberite več v obvestilu o zasebnosti";
