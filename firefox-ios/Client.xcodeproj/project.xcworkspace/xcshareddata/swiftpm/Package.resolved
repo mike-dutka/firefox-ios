@@ -41,8 +41,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mozilla/glean-swift",
       "state" : {
-        "revision" : "2185e2eea2d5ce272ff5c0e851eed42d52104ce4",
-        "version" : "60.5.0"
+        "revision" : "be4fbca81f9e1da5f9b91e8bd245a8dee53cc57f",
+        "version" : "63.0.0"
       }
     },
     {
@@ -68,8 +68,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher.git",
       "state" : {
-        "revision" : "5b92f029fab2cce44386d28588098b5be0824ef5",
-        "version" : "7.11.0"
+        "revision" : "e6749919f9761d573d37a7d7e78b1b854c191d7f",
+        "version" : "8.1.3"
       }
     },
     {
@@ -95,8 +95,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/mozilla/rust-components-swift.git",
       "state" : {
-        "revision" : "1601e925c75912e9f891c31c2b62b102b90fb274",
-        "version" : "131.0.20240828212705"
+        "revision" : "86e99d13757d0042f3c2894dfd7739f06d250591",
+        "version" : "136.0.0"
       }
     },
     {
@@ -122,8 +122,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-asn1.git",
       "state" : {
-        "revision" : "df5d2fcd22e3f480e3ef85bf23e277a4a0ef524d",
-        "version" : "1.2.0"
+        "revision" : "ae33e5941bb88d88538d0a6b19ca0b01e6c76dcf",
+        "version" : "1.3.1"
       }
     },
     {
@@ -140,8 +140,17 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-crypto.git",
       "state" : {
-        "revision" : "a53a7e8f858902659d4784322bede34f4e49097e",
-        "version" : "3.6.1"
+        "revision" : "21f7878f2b39d46fd8ba2b06459ccb431cdf876c",
+        "version" : "3.8.1"
+      }
+    },
+    {
+      "identity" : "swiftdraw",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swhitty/SwiftDraw",
+      "state" : {
+        "revision" : "a5c680f07b33f4cc9a451491b417b8119de23c6e",
+        "version" : "0.17.0"
       }
     },
     {

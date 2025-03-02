@@ -70,9 +70,15 @@ class BlockView: UIView {
             }
         }))
         
-        UIApplication.shared.keyWindow!.rootViewController?.present(alert, animated: true, completion: {
-            
-        })
+        // Get the active window scene
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            // Get the root view controller from the first window
+            if let rootViewController = windowScene.windows.first?.rootViewController {
+                // Present the alert
+                rootViewController.present(alert, animated: true, completion: nil)
+            }
+        }
+
     }
     
     @objc func handleSetPassword(){
@@ -117,9 +123,14 @@ class BlockView: UIView {
             self.unhide()
         }))
         
-        UIApplication.shared.keyWindow!.rootViewController?.present(alert, animated: true, completion: {
-            
-        })
+        // Get the active window scene
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            // Get the root view controller from the first window
+            if let rootViewController = windowScene.windows.first?.rootViewController {
+                // Present the alert
+                rootViewController.present(alert, animated: true, completion: nil)
+            }
+        }
     }
     
     func unhide() {

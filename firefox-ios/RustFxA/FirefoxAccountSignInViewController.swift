@@ -17,6 +17,7 @@ enum FxASignInParentType {
     case onboarding
     case upgrade
     case tabTray
+    case library
 }
 
 /// ViewController handling Sign In through QR Code or Email address
@@ -147,6 +148,9 @@ class FirefoxAccountSignInViewController: UIViewController, Themeable {
         case .tabTray:
             self.telemetryObject = .tabTray
             self.fxaDismissStyle = .popToTabTray
+        case .library:
+            self.telemetryObject = .libraryPanel
+            self.fxaDismissStyle = .dismiss
         }
         self.logger = logger
         self.notificationCenter = notificationCenter
@@ -315,8 +319,8 @@ extension FirefoxAccountSignInViewController: QRCodeViewControllerDelegate {
         }
     }
 
-    func didScanQRCodeWithText(_ text: String) {
-        logger.log("FirefoxAccountSignInVC Error: `didScanQRCodeWithText` should not be called",
+    func didScanQRCodeWithTextContent(_ content: TextContentDetector.DetectedType?, rawText: String) {
+        logger.log("FirefoxAccountSignInVC Error: `didScanQRCodeWithTextContent` should not be called",
                    level: .info,
                    category: .sync)
     }
@@ -361,6 +365,9 @@ extension FirefoxAccountSignInViewController {
             case .tabTray:
                 parentType = .tabTray
                 object = .tabTray
+            case .library:
+                parentType = .library
+                object = .libraryPanel
             }
 
             let signInVC = FirefoxAccountSignInViewController(

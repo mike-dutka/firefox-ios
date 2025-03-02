@@ -9,6 +9,7 @@ final class TabNumberButton: ToolbarButton {
     // MARK: - UX Constants
     struct UX {
         static let cornerRadius: CGFloat = 2
+        static let dimmedOpacity: CGFloat = 0.2
         static let titleFont = FXFontStyles.Bold.caption2.systemFont()
 
         // Tab count related constants
@@ -25,14 +26,6 @@ final class TabNumberButton: ToolbarButton {
         label.textAlignment = .center
     }
 
-    override var isHighlighted: Bool {
-        didSet {
-            countLabel.textColor = isHighlighted ?
-            foregroundColorHighlighted :
-            foregroundColorNormal
-        }
-    }
-
     // MARK: - Init
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -43,11 +36,26 @@ final class TabNumberButton: ToolbarButton {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override public func configure(element: ToolbarElement) {
+    override func configure(
+        element: ToolbarElement,
+        notificationCenter: NotificationProtocol = NotificationCenter.default) {
         super.configure(element: element)
 
         guard let numberOfTabs = element.numberOfTabs else { return }
         updateTabCount(numberOfTabs)
+    }
+
+    override func tintColorDidChange() {
+        super.tintColorDidChange()
+
+        if tintAdjustmentMode == .dimmed {
+            UIView.performWithoutAnimation { countLabel.alpha = UX.dimmedOpacity }
+        } else { countLabel.alpha = 1.0 }
+    }
+
+    override func updateConfiguration() {
+        super.updateConfiguration()
+        countLabel.textColor = configuration?.baseForegroundColor
     }
 
     private func updateTabCount(_ count: Int) {
@@ -66,11 +74,5 @@ final class TabNumberButton: ToolbarButton {
             countLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
             countLabel.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
-    }
-
-    // MARK: - Theming System
-    override func applyTheme(theme: any Theme) {
-        super.applyTheme(theme: theme)
-        countLabel.textColor = theme.colors.iconPrimary
     }
 }

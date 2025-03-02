@@ -54,10 +54,13 @@ class TelemetryWrapper: TelemetryWrapperProtocol, FeatureFlaggable {
 
     private var profile: Profile?
     private var logger: Logger
+    private let gleanUsageReportingMetricsService: GleanUsageReportingMetricsService
 
-    init(logger: Logger = DefaultLogger.shared) {
+    init(logger: Logger = DefaultLogger.shared,
+         gleanUsageReportingMetricsService: GleanUsageReportingMetricsService = AppContainer.shared.resolve()) {
         crashedLastLaunch = logger.crashedLastLaunch
         self.logger = logger
+        self.gleanUsageReportingMetricsService = gleanUsageReportingMetricsService
     }
 
     private func migratePathComponentInDocumentsDirectory(_ pathComponent: String, to destinationSearchPath: FileManager.SearchPathDirectory) {
@@ -96,16 +99,50 @@ class TelemetryWrapper: TelemetryWrapperProtocol, FeatureFlaggable {
         // If there's no default search engine, (there's not, at this point), we will
         // send "unavailable" in order not to send `null`, but still differentiate
         // the event in the startup sequence.
-        let defaultEngine = profile.searchEngines.defaultEngine
+        let defaultEngine = profile.searchEnginesManager.defaultEngine
         GleanMetrics.Search.defaultEngine.set(defaultEngine?.engineID ?? "unavailable")
 
         // Get the legacy telemetry ID and record it in Glean for the deletion-request ping
-        if let uuidString = UserDefaults.standard.string(forKey: "telemetry-key-prefix-clientId"), let uuid = UUID(uuidString: uuidString) {
+        if let uuidString = UserDefaults.standard.string(forKey: "telemetry-key-prefix-clientId"),
+           let uuid = UUID(uuidString: uuidString) {
             GleanMetrics.LegacyIds.clientId.set(uuid)
         }
 
+        GleanMetrics.Pings.shared.usageDeletionRequest.setEnabled(enabled: true)
+        GleanMetrics.Pings.shared.onboardingOptOut.setEnabled(enabled: true)
+
+        let shouldSendUsagePing: Bool
+
+        if let dailyUsagePing = profile.prefs.boolForKey(AppConstants.prefSendDailyUsagePing) {
+            // If SendDailyUsagePing is explicitly set, use its value
+            shouldSendUsagePing = dailyUsagePing
+        } else if let usageData = profile.prefs.boolForKey(AppConstants.prefSendUsageData) {
+            // If SendDailyUsagePing is not set, follow SendUsageData
+            shouldSendUsagePing = usageData
+
+            // Persist the SendDailyUsagePing value to ensure it is explicitly set for future launches
+            profile.prefs.setBool(usageData, forKey: AppConstants.prefSendDailyUsagePing)
+        } else {
+            // Default to true if neither is set
+            shouldSendUsagePing = true
+
+            // Persist the default to ensure consistency on subsequent launches
+            profile.prefs.setBool(true, forKey: AppConstants.prefSendDailyUsagePing)
+        }
+
+        if shouldSendUsagePing {
+            gleanUsageReportingMetricsService.start()
+        } else {
+            gleanUsageReportingMetricsService.unsetUsageProfileId()
+        }
+
+        glean.registerPings(GleanMetrics.Pings.shared)
+
         // Initialize Glean telemetry
-        let gleanConfig = Configuration(channel: AppConstants.buildChannel.rawValue, logLevel: .off)
+        let gleanConfig = Configuration(
+            channel: AppConstants.buildChannel.rawValue,
+            logLevel: .off
+        )
         glean.initialize(uploadEnabled: sendUsageData,
                          configuration: gleanConfig,
                          buildInfo: GleanMetrics.GleanBuild.info)
@@ -134,6 +171,22 @@ class TelemetryWrapper: TelemetryWrapperProtocol, FeatureFlaggable {
         )
     }
 
+    func recordStartUpTelemetry() {
+        let isEnabled: Bool = (profile?.prefs.boolForKey(PrefsKeys.UserFeatureFlagPrefs.SponsoredShortcuts) ?? true) &&
+                               (profile?.prefs.boolForKey(PrefsKeys.UserFeatureFlagPrefs.TopSiteSection) ?? true)
+        recordEvent(category: .information,
+                    method: .view,
+                    object: .sponsoredShortcuts,
+                    extras: [EventExtraKey.preference.rawValue: isEnabled])
+
+        if logger.crashedLastLaunch {
+            recordEvent(category: .information,
+                        method: .error,
+                        object: .app,
+                        value: .crashedLastLaunch)
+        }
+    }
+
     @objc
     func recordFinishedLaunchingPreferenceMetrics(notification: NSNotification) {
         guard let profile = self.profile else { return }
@@ -155,7 +208,7 @@ class TelemetryWrapper: TelemetryWrapperProtocol, FeatureFlaggable {
         }
 
         // Record default search engine setting
-        let defaultEngine = profile.searchEngines.defaultEngine
+        let defaultEngine = profile.searchEnginesManager.defaultEngine
         GleanMetrics.Search.defaultEngine.set(defaultEngine?.engineID ?? "custom")
 
         // Record the open tab count
@@ -326,6 +379,7 @@ extension TelemetryWrapper {
         case downloadNowButton = "download-now-button"
         case downloadsPanel = "downloads-panel"
         case defaultSearchEngine = "default-search-engine"
+        case showPullRefreshEasterEgg = "show-pull-refresh-easter-egg"
         // MARK: Fakespot
         case shoppingButton = "shopping-button"
         case shoppingBottomSheet = "shopping-bottom-sheet"
@@ -437,6 +491,8 @@ extension TelemetryWrapper {
         case creditCardDeleted = "creditCard-deleted"
         case creditCardModified = "creditCard-modified"
         case notificationPermission = "notificationPermission"
+        case defaultBrowser = "defaultBrowser"
+        case choiceScreenAcquisition = "choiceScreenAcquisition"
         case engagementNotification = "engagementNotification"
         // MARK: New Onboarding
         case onboardingCardView = "onboarding-card-view"
@@ -518,10 +574,8 @@ extension TelemetryWrapper {
         case syncedTabTileImpressions = "synced-tab-tile-impressions"
         case historyImpressions = "history-highlights-impressions"
         case bookmarkImpressions = "bookmark-impressions"
-        case inactiveTabTray = "inactiveTabTray"
         case reload = "reload"
         case reloadFromUrlBar = "reload-from-url-bar"
-        case restoreTabsAlert = "restore-tabs-alert"
         case fxaLoginWebpage = "fxa-login-webpage"
         case fxaLoginCompleteWebpage = "fxa-login-complete-webpage"
         case fxaRegistrationWebpage = "fxa-registration-webpage"
@@ -560,7 +614,6 @@ extension TelemetryWrapper {
         case shareExtension = "share-extension"
         case shareMenu = "share-menu"
         case shareSendToDevice = "share-send-to-device"
-        case shareCopyLink = "share-copy-link"
         case sharePocketIcon = "share-pocket-icon"
         case shareSaveToPocket = "save-to-pocket-share-action"
         case tabTray = "tab-tray"
@@ -606,12 +659,6 @@ extension TelemetryWrapper {
         case addBookmarkToast = "add-bookmark-toast"
         case openHomeFromAwesomebar = "open-home-from-awesomebar"
         case openHomeFromPhotonMenuButton = "open-home-from-photon-menu-button"
-        case openInactiveTab = "openInactiveTab"
-        case inactiveTabShown = "inactive-Tab-Shown"
-        case inactiveTabExpand = "inactivetab-expand"
-        case inactiveTabCollapse = "inactivetab-collapse"
-        case inactiveTabCloseAllButton = "inactive-tab-close-all-button"
-        case inactiveTabSwipeClose = "inactive-tab-swipe-close"
         case openRecentlyClosedTab = "openRecentlyClosedTab"
         case tabGroupWithExtras = "tabGroupWithExtras"
         case closeGroupedTab = "recordCloseGroupedTab"
@@ -636,6 +683,7 @@ extension TelemetryWrapper {
         case crashedLastLaunch = "crashed_last_launch"
         case cpuException = "cpu_exception"
         case hangException = "hang-exception"
+        case tabLossDetected = "tab_loss_detected"
         case fxSuggestionTelemetryInfo = "fx-suggestion-telemetry-info"
         case fxSuggestionPosition = "fx-suggestion-position"
         case fxSuggestionDidTap = "fx-suggestion-did-tap"
@@ -646,13 +694,15 @@ extension TelemetryWrapper {
     }
 
     public enum EventExtraKey: String, CustomStringConvertible {
+        case isDefaultBrowser = "is-default-browser"
+        case didComeFromBrowserChoiceScreen = "did-come-from-browser-choice-screen"
+
         case topSitePosition = "tilePosition"
         case topSiteTileType = "tileType"
         case contextualMenuType = "contextualMenuType"
         case pocketTilePosition = "pocketTilePosition"
         case fxHomepageOrigin = "fxHomepageOrigin"
         case tabsQuantity = "tabsQuantity"
-        case isRestoreTabsStarted = "is-restore-tabs-started"
         case recordSearchLocation = "recordSearchLocation"
         case recordSearchEngineID = "recordSearchEngineID"
         case windowCount = "windowCount"
@@ -688,10 +738,6 @@ extension TelemetryWrapper {
 
         // Tabs Tray
         case done = "done"
-
-        // Inactive Tab
-        case inactiveTabsCollapsed = "collapsed"
-        case inactiveTabsExpanded = "expanded"
 
         // GleanPlumb
         case actionUUID = "action-uuid"
@@ -793,12 +839,6 @@ extension TelemetryWrapper {
             GleanMetrics.Bookmarks.viewList[from.rawValue].add()
         case (.action, .add, .bookmark, let from?, _):
             GleanMetrics.Bookmarks.add[from.rawValue].add()
-        case (.action, .delete, .bookmark, let from?, _):
-            GleanMetrics.Bookmarks.delete[from.rawValue].add()
-        case (.action, .open, .bookmark, let from?, _):
-            GleanMetrics.Bookmarks.open[from.rawValue].add()
-        case (.action, .change, .bookmark, let from?, _):
-            GleanMetrics.Bookmarks.edit[from.rawValue].add()
         case(.information, .view, .mobileBookmarks, .doesHaveMobileBookmarks, _):
             GleanMetrics.Bookmarks.hasMobileBookmarks.set(true)
         case(.information, .view, .mobileBookmarks, .doesNotHaveMobileBookmarks, _):
@@ -807,8 +847,6 @@ extension TelemetryWrapper {
             if let quantity = extras?[EventExtraKey.mobileBookmarksQuantity.rawValue] as? Int64 {
                 GleanMetrics.Bookmarks.mobileBookmarksCount.set(quantity)
             }
-        case(.action, .tap, .bookmark, .bookmarkAddFolder, _):
-            GleanMetrics.Bookmarks.folderAdd.record()
         // MARK: Reader Mode
         case (.action, .tap, .readerModeOpenButton, _, _):
             GleanMetrics.ReaderMode.open.add()
@@ -904,8 +942,10 @@ extension TelemetryWrapper {
             GleanMetrics.Tabs.pressTabToolbar.record()
         case (.action, .press, .tab, _, _):
             GleanMetrics.Tabs.pressTopTab.record()
-        case(.action, .pull, .reload, _, _):
-            GleanMetrics.Tabs.pullToRefresh.add()
+        case (.action, .pull, .reload, _, _):
+            GleanMetrics.Tabs.pullToRefresh.record()
+        case (.action, .detect, .showPullRefreshEasterEgg, _, _):
+            GleanMetrics.Tabs.pullToRefreshEasterEgg.record()
         case(.action, .navigate, .tab, _, _):
             GleanMetrics.Tabs.normalAndPrivateUriCount.add()
         case(.action, .tap, .navigateTabHistoryBack, _, _), (.action, .press, .navigateTabHistoryBack, _, _):
@@ -916,18 +956,6 @@ extension TelemetryWrapper {
             GleanMetrics.Tabs.navigateTabBackSwipe.add()
         case(.action, .tap, .reloadFromUrlBar, _, _):
             GleanMetrics.Tabs.reloadFromUrlBar.add()
-        case(.action, .tap, .restoreTabsAlert, _, let extras):
-            if let isEnabled = extras?[EventExtraKey.isRestoreTabsStarted.rawValue] as? Bool {
-                let isEnabledExtra = GleanMetrics.Tabs.RestoreTabsAlertExtra(isEnabled: isEnabled)
-                GleanMetrics.Tabs.restoreTabsAlert.record(isEnabledExtra)
-            } else {
-                recordUninstrumentedMetrics(
-                    category: category,
-                    method: method,
-                    object: object,
-                    value: value,
-                    extras: extras)
-            }
         case(.information, .background, .iPadWindowCount, _, let extras):
             if let quantity = extras?[EventExtraKey.windowCount.rawValue] as? Int64 {
                 GleanMetrics.Windows.ipadWindowCount.set(quantity)
@@ -1248,6 +1276,14 @@ extension TelemetryWrapper {
                     object: object,
                     value: value,
                     extras: extras)
+            }
+        case (.action, .open, .defaultBrowser, _, let extras):
+            if let isDefaultBrowser = extras?[EventExtraKey.isDefaultBrowser.rawValue] as? Bool {
+                GleanMetrics.App.defaultBrowser.set(isDefaultBrowser)
+            }
+        case (.action, .open, .choiceScreenAcquisition, _, let extras):
+            if let choiceScreen = extras?[EventExtraKey.didComeFromBrowserChoiceScreen.rawValue] as? Bool {
+                GleanMetrics.App.choiceScreenAcquisition.set(choiceScreen)
             }
         case(.action, .tap, .engagementNotification, _, _):
             GleanMetrics.Onboarding.engagementNotificationTapped.record()
@@ -1756,21 +1792,6 @@ extension TelemetryWrapper {
             }
         case (.action, .tap, .newPrivateTab, .tabTray, _):
             GleanMetrics.TabsTray.newPrivateTabTapped.record()
-        // MARK: Inactive Tab Tray
-        case (.action, .tap, .inactiveTabTray, .openInactiveTab, _):
-            GleanMetrics.InactiveTabsTray.openInactiveTab.add()
-        case (.action, .tap, .inactiveTabTray, .inactiveTabExpand, _):
-            let expandedExtras = GleanMetrics.InactiveTabsTray.ToggleInactiveTabTrayExtra(toggleType: EventExtraKey.inactiveTabsExpanded.rawValue)
-            GleanMetrics.InactiveTabsTray.toggleInactiveTabTray.record(expandedExtras)
-        case (.action, .tap, .inactiveTabTray, .inactiveTabCollapse, _):
-            let collapsedExtras = GleanMetrics.InactiveTabsTray.ToggleInactiveTabTrayExtra(toggleType: EventExtraKey.inactiveTabsCollapsed.rawValue)
-            GleanMetrics.InactiveTabsTray.toggleInactiveTabTray.record(collapsedExtras)
-        case (.action, .tap, .inactiveTabTray, .inactiveTabSwipeClose, _):
-            GleanMetrics.InactiveTabsTray.inactiveTabSwipeClose.add()
-        case (.action, .tap, .inactiveTabTray, .inactiveTabCloseAllButton, _):
-            GleanMetrics.InactiveTabsTray.inactiveTabsCloseAllBtn.add()
-        case (.action, .tap, .inactiveTabTray, .inactiveTabShown, _):
-            GleanMetrics.InactiveTabsTray.inactiveTabShown.add()
 
         // MARK: Tab Groups
         case (.action, .view, .tabTray, .tabGroupWithExtras, let extras):
@@ -1994,8 +2015,6 @@ extension TelemetryWrapper {
         // MARK: - Share sheet actions
         case (.action, .tap, .shareSheet, .shareSendToDevice, _):
             GleanMetrics.ShareSheet.sendDeviceTapped.record()
-        case (.action, .tap, .shareSheet, .shareCopyLink, _):
-            GleanMetrics.ShareSheet.copyLinkTapped.record()
         case (.action, .tap, .shareSheet, .sharePocketIcon, _):
             GleanMetrics.ShareSheet.pocketActionTapped.record()
         case (.action, .tap, .shareSheet, .shareSaveToPocket, _):
@@ -2011,6 +2030,8 @@ extension TelemetryWrapper {
             }
         case(.information, .error, .app, .crashedLastLaunch, _):
             GleanMetrics.AppErrors.crashedLastLaunch.record()
+        case(.information, .error, .app, .tabLossDetected, _):
+            GleanMetrics.AppErrors.tabLossDetected.record()
         case(.information, .error, .app, .cpuException, let extras):
             if let quantity = extras?[EventExtraKey.size.rawValue] as? Int32 {
                 let properties = GleanMetrics.AppErrors.CpuExceptionExtra(size: quantity)

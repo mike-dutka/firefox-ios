@@ -36,6 +36,60 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
         UIAccessibility.post(notification: .layoutChanged, argument: dataClearanceContextHintVC)
     }
 
+    // Starts a timer to monitor for a navigation button double tap for the navigation contextual hint
+    func startNavigationButtonDoubleTapTimer() {
+        guard isToolbarRefactorEnabled, isToolbarNavigationHintEnabled else { return }
+        if navigationHintDoubleTapTimer == nil {
+            navigationHintDoubleTapTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: false) { _ in
+                self.navigationHintDoubleTapTimer = nil
+            }
+        } else {
+            navigationHintDoubleTapTimer = nil
+            let action = ToolbarAction(windowUUID: windowUUID, actionType: ToolbarActionType.navigationButtonDoubleTapped)
+            store.dispatch(action)
+        }
+    }
+
+    func configureNavigationContextualHint(_ view: UIView) {
+        guard isToolbarRefactorEnabled, isToolbarNavigationHintEnabled else { return }
+        navigationContextHintVC.configure(
+            anchor: view,
+            withArrowDirection: ToolbarHelper().shouldShowNavigationToolbar(for: traitCollection) ? .down : .up,
+            andDelegate: self,
+            presentedUsing: { [weak self] in self?.presentNavigationContextualHint() },
+            actionOnDismiss: {
+                let action = ToolbarAction(windowUUID: self.windowUUID,
+                                           actionType: ToolbarActionType.navigationHintFinishedPresenting)
+                store.dispatch(action)
+            },
+            andActionForButton: { },
+            overlayState: overlayManager,
+            ignoreSafeArea: true)
+    }
+
+    private func presentNavigationContextualHint() {
+        // Only show the contextual hint if:
+        // 1. The tab webpage is loaded OR we are on the home page, and the
+        // 2. Microsurvey prompt is not being displayed
+        // If the hint does not show,
+        // ToolbarActionType.navigationButtonDoubleTapped will have to be dispatched again through user action
+        guard let state = store.state.screenState(BrowserViewControllerState.self,
+                                                  for: .browserViewController,
+                                                  window: windowUUID)
+        else { return }
+
+        if let selectedTab = tabManager.selectedTab,
+            selectedTab.isFxHomeTab || !selectedTab.loading,
+            !state.microsurveyState.showPrompt {
+            present(navigationContextHintVC, animated: true)
+            UIAccessibility.post(notification: .layoutChanged, argument: navigationContextHintVC)
+        } else {
+            let action = ToolbarAction(windowUUID: self.windowUUID,
+                                       actionType: ToolbarActionType.navigationHintFinishedPresenting)
+            store.dispatch(action)
+        }
+    }
+
     func tabToolbarDidPressHome(_ tabToolbar: TabToolbarProtocol, button: UIButton) {
         didTapOnHome()
     }
@@ -119,8 +173,8 @@ extension BrowserViewController: TabToolbarDelegate, PhotonActionSheetProtocol {
     func dismissUrlBar() {
         if isToolbarRefactorEnabled, addressToolbarContainer.inOverlayMode {
             addressToolbarContainer.leaveOverlayMode(reason: .finished, shouldCancelLoading: false)
-        } else if !isToolbarRefactorEnabled, urlBar.inOverlayMode {
-            urlBar.leaveOverlayMode(reason: .finished, shouldCancelLoading: false)
+        } else if !isToolbarRefactorEnabled, let legacyUrlBar, legacyUrlBar.inOverlayMode {
+            legacyUrlBar.leaveOverlayMode(reason: .finished, shouldCancelLoading: false)
         }
     }
 
@@ -294,7 +348,7 @@ extension BrowserViewController: ToolBarActionMenuDelegate, UIDocumentPickerDele
         presentWithModalDismissIfNeeded(viewController, animated: true)
     }
 
-    func showToast(_ bookmarkURL: URL? = nil, _ title: String?, message: String, toastAction: MenuButtonToastAction) {
+    func showToast(_ urlString: String? = nil, _ title: String?, message: String, toastAction: MenuButtonToastAction) {
         switch toastAction {
         case .bookmarkPage:
             let viewModel = ButtonToastViewModel(labelText: message,
@@ -302,9 +356,13 @@ extension BrowserViewController: ToolBarActionMenuDelegate, UIDocumentPickerDele
                                                  textAlignment: .left)
             let toast = ButtonToast(viewModel: viewModel,
                                     theme: currentTheme()) { isButtonTapped in
-                isButtonTapped ? self.openBookmarkEditPanel() : nil
+                isButtonTapped ? self.openBookmarkEditPanel(urlString: urlString) : nil
             }
-            self.show(toast: toast)
+            if isBookmarkRefactorEnabled {
+                self.show(toast: toast, duration: DispatchTimeInterval.milliseconds(8000))
+            } else {
+                self.show(toast: toast)
+            }
         case .removeBookmark:
             let viewModel = ButtonToastViewModel(labelText: message,
                                                  buttonText: .UndoString,
@@ -313,7 +371,7 @@ extension BrowserViewController: ToolBarActionMenuDelegate, UIDocumentPickerDele
                                     theme: currentTheme()) { [weak self] isButtonTapped in
                 guard let self, let currentTab = tabManager.selectedTab else { return }
                 isButtonTapped ? self.addBookmark(
-                    url: bookmarkURL?.absoluteString ?? currentTab.url?.absoluteString ?? "",
+                    urlString: urlString ?? currentTab.url?.absoluteString ?? "",
                     title: title ?? currentTab.title
                 ) : nil
             }
@@ -375,5 +433,10 @@ extension BrowserViewController: ToolBarActionMenuDelegate, UIDocumentPickerDele
         documentPicker.delegate = self
         documentPicker.modalPresentationStyle = .formSheet
         showViewController(viewController: documentPicker)
+    }
+
+    func showEditBookmark() {
+        guard let urlString = tabManager.selectedTab?.url?.absoluteString else { return }
+        openBookmarkEditPanel(urlString: urlString)
     }
 }

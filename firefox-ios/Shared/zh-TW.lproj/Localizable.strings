@@ -37,9 +37,6 @@
 /* Section title label for recently visited websites */
 "ActivityStream.RecentHistory.Title" = "最近造訪過的頁面";
 
-/* Section title label for Shortcuts */
-"ActivityStream.Shortcuts.SectionTitle" = "捷徑";
-
 /* The title for the setting page which lets you select the number of top site rows */
 "ActivityStream.TopSites.RowSettingFooter" = "設定列數";
 
@@ -395,7 +392,7 @@
 "fxa.signin.ready-to-scan" = "準備好了，開始掃描！";
 
 /* FxA sign in view email login button */
-"fxa.signin.use-email-instead" = "改用電子郵件";
+"fxa.signin.use-email-instead" = "改以接收電子郵件來登入";
 
 /* Button label to Sync your Firefox Account */
 "FxA.SyncNow" = "立刻同步";
@@ -896,7 +893,7 @@
 "Oops! Firefox crashed" = "喔喔，Firefox 發生錯誤";
 
 /* See http://mzl.la/1LXbDOL */
-"Open articles in Reader View by tapping the book icon when it appears in the title bar." = "點選標題列出現的書本圖示，即可將該頁面於閱讀畫面開啟。";
+"Open articles in Reader View by tapping the book icon when it appears in the title bar." = "點選標題列出現的書本圖示，即可用閱讀畫面開啟該頁面。";
 
 /* See http://mzl.la/1G7uHo7 */
 "Open Settings" = "開啟設定";
@@ -947,7 +944,7 @@
 "Reader View" = "閱讀畫面";
 
 /* Accessibility message e.g. spoken by VoiceOver when Reader Mode becomes available. */
-"ReaderMode.Available.VoiceOverAnnouncement" = "可使用閱讀模式";
+"ReaderMode.Available.VoiceOverAnnouncement" = "可使用閱讀畫面";
 
 /* Name for Mark as read button in reader mode */
 "ReaderModeBar.MarkAsRead.v106" = "標示為已讀";
@@ -1407,9 +1404,6 @@
 
 /* Description displayed under the ”Offer to Open Copied Link” option. See https://bug1223660.bmoattachments.org/attachment.cgi?id=8898349. Placeholder is for the app name. */
 "Settings.OfferClipboardBar.Status.v128" = "開啟 %@ 時";
-
-/* Description displayed under the ”Offer to Open Copied Link” option. See https://bug1223660.bmoattachments.org/attachment.cgi?id=8898349 */
-"Settings.OfferClipboardBar.StatusV2" = "開啟 Firefox 時";
 
 /* Title of setting to enable the Go to Copied URL feature. See https://bug1223660.bmoattachments.org/attachment.cgi?id=8898349 */
 "Settings.OfferClipboardBar.Title" = "詢問是否直接開啟複製的鏈結";

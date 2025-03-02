@@ -4,11 +4,8 @@
 
 import UIKit
 import CoreSpotlight
-import Storage
 import Shared
-import Sync
 import UserNotifications
-import Account
 import Common
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -20,7 +17,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var sceneCoordinator: SceneCoordinator?
     var routeBuilder = RouteBuilder()
-    var logger: Logger = DefaultLogger.shared
+
+    private let logger: Logger = DefaultLogger.shared
+    private let tabErrorTelemetryHelper = TabErrorTelemetryHelper.shared
 
     lazy private var blockView: BlockView = {
         let v = BlockView()
@@ -53,6 +52,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         options connectionOptions: UIScene.ConnectionOptions
     ) {
         guard !AppConstants.isRunningUnitTest else { return }
+        cancelStartupTimeRecordIfNeeded(options: connectionOptions)
         logger.log("SceneDelegate: will connect to session", level: .info, category: .lifecycle)
 
         // Add hooks for the nimbus-cli to test experiments on device or involving deeplinks.
@@ -74,6 +74,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         handle(connectionOptions: connectionOptions)
         
         hide(on: scene)
+    }
+
+    private func cancelStartupTimeRecordIfNeeded(options: UIScene.ConnectionOptions) {
+        // if the conditions are met it means the app was launched with no deeplink options
+        guard options.urlContexts.isEmpty, options.shortcutItem == nil, options.userActivities.isEmpty else { return }
+        AppEventQueue.signal(event: .recordStartupTimeOpenURLCancelled)
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
@@ -107,6 +113,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Resume previously stopped downloads for, and on, THIS scene only.
         if let uuid = sceneCoordinator?.windowUUID {
             downloadQueue.resumeAll(for: uuid)
+            AppEventQueue.wait(for: .tabRestoration(uuid)) {
+                self.tabErrorTelemetryHelper.validateTabCountForForegroundedScene(uuid)
+            }
         }
     }
     
@@ -125,6 +134,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         logger.log("SceneDelegate: scene did enter background. UUID: \(logUUID)", level: .info, category: .lifecycle)
         if let uuid = sceneCoordinator?.windowUUID {
             downloadQueue.pauseAll(for: uuid)
+            tabErrorTelemetryHelper.recordTabCountForBackgroundedScene(uuid)
         }
     }
 
@@ -162,6 +172,13 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         performActionFor shortcutItem: UIApplicationShortcutItem,
         completionHandler: @escaping (Bool) -> Void
     ) {
+        routeBuilder.configure(
+            isPrivate: UserDefaults.standard.bool(
+                forKey: PrefsKeys.LastSessionWasPrivate
+            ),
+            prefs: profile.prefs
+        )
+
         guard let route = routeBuilder.makeRoute(shortcutItem: shortcutItem,
                                                  tabSetting: NewTabAccessors.getNewTabPage(profile.prefs))
         else { return }
@@ -241,7 +258,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         logger.log("Scene coordinator will handle a route", level: .info, category: .coordinator)
         sessionManager.launchSessionProvider.openedFromExternalSource = true
 
-        AppEventQueue.wait(for: [.startupFlowComplete, .tabRestoration(sceneCoordinator.windowUUID)]) {
+        AppEventQueue.wait(for: [.startupFlowComplete, .tabRestoration(sceneCoordinator.windowUUID)]) { [weak self] in
+            self?.logger.log("Start up flow and restoration done, will handle route",
+                             level: .info,
+                             category: .coordinator)
             sceneCoordinator.findAndHandle(route: route)
         }
     }

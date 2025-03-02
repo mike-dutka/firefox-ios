@@ -35,10 +35,13 @@
 "Deselect All" = "Poništi odabir";
 
 /* Accessibility label for entering search mode for logins */
-"Enter Search Mode" = "Uključi pretraživački način rada";
+"Enter Search Mode" = "Uključi modus pretraživanja";
 
 /* Hide password text selection menu item */
 "Hide" = "Sakrij";
+
+/* This message appears briefly as a notification (toast) to inform the user that a password has been successfully removed. */
+"LoginList.DeleteToast.v135" = "Lozinka je uklonjena";
 
 /* Prompt message warning the user that deleting non-synced logins will permanently remove them */
 "Logins will be permanently removed." = "Prijave će biti trajno uklonjene.";

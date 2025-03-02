@@ -37,9 +37,6 @@
 /* Section title label for recently visited websites */
 "ActivityStream.RecentHistory.Title" = "Kunjungan Terbaru";
 
-/* Section title label for Shortcuts */
-"ActivityStream.Shortcuts.SectionTitle" = "Pintasan";
-
 /* The title for the setting page which lets you select the number of top site rows */
 "ActivityStream.TopSites.RowSettingFooter" = "Atur Baris";
 
@@ -95,13 +92,13 @@
 "Bookmarks" = "Markah";
 
 /* The button on the snackbar to edit a bookmark after adding it. */
-"Bookmarks.Edit.Button" = "Ubah";
+"Bookmarks.Edit.Button" = "Edit";
 
 /* The button to edit a bookmark */
-"Bookmarks.EditBookmark.Label" = "Ubah Markah";
+"Bookmarks.EditBookmark.Label" = "Edit Markah";
 
 /* The button to edit a folder */
-"Bookmarks.EditFolder.Label" = "Ubah Folder";
+"Bookmarks.EditFolder.Label" = "Edit Folder";
 
 /* The label to show the location of the folder where the bookmark is located */
 "Bookmarks.Folder.Label" = "Folder";
@@ -1407,9 +1404,6 @@
 
 /* Description displayed under the ”Offer to Open Copied Link” option. See https://bug1223660.bmoattachments.org/attachment.cgi?id=8898349. Placeholder is for the app name. */
 "Settings.OfferClipboardBar.Status.v128" = "Saat membuka %@";
-
-/* Description displayed under the ”Offer to Open Copied Link” option. See https://bug1223660.bmoattachments.org/attachment.cgi?id=8898349 */
-"Settings.OfferClipboardBar.StatusV2" = "Ketika Membuka Firefox";
 
 /* Title of setting to enable the Go to Copied URL feature. See https://bug1223660.bmoattachments.org/attachment.cgi?id=8898349 */
 "Settings.OfferClipboardBar.Title" = "Sarankan untuk Membuka Tautan Tersalin";

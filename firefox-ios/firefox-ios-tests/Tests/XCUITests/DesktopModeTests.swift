@@ -109,14 +109,14 @@ class DesktopModeTestsIphone: IphoneOnlyTestCase {
         XCTAssert(app.webViews.staticTexts.matching(identifier: "MOBILE_UA").count > 0)
         mozWaitForElementToExist(app.buttons[AccessibilityIdentifiers.Toolbar.settingsMenuButton])
         navigator.goto(BrowserTabMenu)
-        mozWaitForElementToExist(app.tables["Context Menu"].otherElements[StandardImageIdentifiers.Large.deviceDesktop])
+        mozWaitForElementToExist(app.tables.cells[AccessibilityIdentifiers.MainMenu.switchToDesktopSite])
         navigator.goto(RequestDesktopSite)
         waitUntilPageLoad()
         XCTAssert(app.webViews.staticTexts.matching(identifier: "DESKTOP_UA").count > 0)
 
         navigator.nowAt(BrowserTab)
         navigator.goto(BrowserTabMenu)
-        mozWaitForElementToExist(app.tables["Context Menu"].otherElements[StandardImageIdentifiers.Large.deviceMobile])
+        mozWaitForElementToExist(app.tables.cells.staticTexts["Switch to Mobile Site"])
         // Select Mobile site here, the identifier is the same but the Text is not
         navigator.goto(RequestMobileSite)
         waitUntilPageLoad()
@@ -142,12 +142,11 @@ class DesktopModeTestsIphone: IphoneOnlyTestCase {
         navigator.openURL(path(forTestPage: "test-user-agent.html"))
         // Workaround to be sure the snackbar disappears
         waitUntilPageLoad()
-        mozWaitForElementToExist(app.buttons[AccessibilityIdentifiers.Toolbar.reloadButton])
-        app.buttons[AccessibilityIdentifiers.Toolbar.reloadButton].tap()
+        app.buttons[AccessibilityIdentifiers.Toolbar.reloadButton].waitAndTap()
         navigator.goto(BrowserTabMenu)
-        navigator.goto(RequestMobileSite) // toggle off
+        navigator.goto(RequestDesktopSite) // toggle off
         waitUntilPageLoad()
-        XCTAssert(app.webViews.staticTexts.matching(identifier: "MOBILE_UA").count > 0)
+        XCTAssert(app.webViews.staticTexts.matching(identifier: "DESKTOP_UA").count > 0)
 
         // is now off in private, mode, confirm it is off in normal mode
 
@@ -155,7 +154,7 @@ class DesktopModeTestsIphone: IphoneOnlyTestCase {
         navigator.toggleOff(userState.isPrivate, withAction: Action.TogglePrivateMode)
         navigator.openURL(path(forTestPage: "test-user-agent.html"))
         waitUntilPageLoad()
-        XCTAssert(app.webViews.staticTexts.matching(identifier: "MOBILE_UA").count > 0)
+        XCTAssert(app.webViews.staticTexts.matching(identifier: "DESKTOP_UA").count > 0)
     }
 
     // https://mozilla.testrail.io/index.php?/cases/view/2306857
@@ -170,7 +169,7 @@ class DesktopModeTestsIphone: IphoneOnlyTestCase {
         navigator.openURL(path(forTestPage: "test-user-agent.html"))
         waitUntilPageLoad()
         // Workaround
-        app.buttons[AccessibilityIdentifiers.Toolbar.reloadButton].tap()
+        app.buttons[AccessibilityIdentifiers.Toolbar.reloadButton].waitAndTap()
         navigator.goto(BrowserTabMenu)
         navigator.goto(RequestDesktopSite)
         waitUntilPageLoad()

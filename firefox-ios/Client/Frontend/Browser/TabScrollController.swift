@@ -8,7 +8,9 @@ import Shared
 import Common
 
 private let ToolbarBaseAnimationDuration: CGFloat = 0.2
-class TabScrollingController: NSObject, FeatureFlaggable, SearchBarLocationProvider {
+class TabScrollingController: NSObject,
+                              SearchBarLocationProvider,
+                              Themeable {
     private struct UX {
         static let abruptScrollEventOffset: CGFloat = 200
     }
@@ -33,10 +35,15 @@ class TabScrollingController: NSObject, FeatureFlaggable, SearchBarLocationProvi
         didSet {
             // FXIOS-9781 This could result in scrolling not closing the toolbar
             assert(scrollView != nil, "Can't set the scrollView delegate if the webView.scrollView is nil")
-            self.scrollView?.addGestureRecognizer(panGesture)
+            scrollView?.addGestureRecognizer(panGesture)
             scrollView?.delegate = self
             scrollView?.keyboardDismissMode = .onDrag
             configureRefreshControl(isEnabled: true)
+            if isPullToRefreshRefactorEnabled {
+                tab?.onLoading = { [weak self] in
+                    self?.handleOnTabContentLoading()
+                }
+            }
         }
     }
 
@@ -100,12 +107,20 @@ class TabScrollingController: NSObject, FeatureFlaggable, SearchBarLocationProvi
     }()
 
     private var scrollView: UIScrollView? { return tab?.webView?.scrollView }
+    private let isPullToRefreshRefactorEnabled: Bool
     var contentOffset: CGPoint { return scrollView?.contentOffset ?? .zero }
     private var scrollViewHeight: CGFloat { return scrollView?.frame.height ?? 0 }
     private var topScrollHeight: CGFloat { header?.frame.height ?? 0 }
     private var contentSize: CGSize { return scrollView?.contentSize ?? .zero }
     private var contentOffsetBeforeAnimation = CGPoint.zero
     private var isAnimatingToolbar = false
+
+    var themeManager: any Common.ThemeManager
+    var themeObserver: (any NSObjectProtocol)?
+    var notificationCenter: any Common.NotificationProtocol
+    var currentWindowUUID: Common.WindowUUID? {
+        return windowUUID
+    }
 
     // Over keyboard content and bottom content
     private var overKeyboardScrollHeight: CGFloat {
@@ -127,13 +142,29 @@ class TabScrollingController: NSObject, FeatureFlaggable, SearchBarLocationProvi
     deinit {
         logger.log("TabScrollController deallocating", level: .info, category: .lifecycle)
         observedScrollViews.forEach({ stopObserving(scrollView: $0) })
+        guard let themeObserver else { return }
+        notificationCenter.removeObserver(themeObserver)
     }
 
-    init(windowUUID: WindowUUID, logger: Logger = DefaultLogger.shared) {
+    init(windowUUID: WindowUUID,
+         isPullToRefreshRefactorEnabled: Bool,
+         themeManager: ThemeManager = AppContainer.shared.resolve(),
+         notificationCenter: NotificationProtocol = NotificationCenter.default,
+         logger: Logger = DefaultLogger.shared) {
+        self.themeManager = themeManager
         self.windowUUID = windowUUID
+        self.notificationCenter = notificationCenter
         self.logger = logger
+        self.isPullToRefreshRefactorEnabled = isPullToRefreshRefactorEnabled
         super.init()
         setupNotifications()
+    }
+
+    func traitCollectionDidChange() {
+        if isPullToRefreshRefactorEnabled {
+            tab?.webView?.removePullRefresh()
+            configureRefreshControl(isEnabled: true)
+        }
     }
 
     private func setupNotifications() {
@@ -141,6 +172,19 @@ class TabScrollingController: NSObject, FeatureFlaggable, SearchBarLocationProvi
                                                selector: #selector(applicationWillTerminate(_:)),
                                                name: UIApplication.willTerminateNotification,
                                                object: nil)
+        // need to add this manually otherwise listenForThemeChanges(view) will retain the view in memory
+        // causing memory leaks
+        themeObserver = notificationCenter.addObserver(name: .ThemeDidChange, queue: .main) { [weak self] _ in
+            self?.applyTheme()
+        }
+    }
+
+    private func handleOnTabContentLoading() {
+        if tabIsLoading() || (tab?.isFxHomeTab ?? false) {
+            tab?.webView?.removePullRefresh()
+        } else {
+            configureRefreshControl(isEnabled: true)
+        }
     }
 
     @objc
@@ -265,13 +309,30 @@ class TabScrollingController: NSObject, FeatureFlaggable, SearchBarLocationProvi
         self.isZoomedOut = false
         self.lastZoomedScale = 0
     }
+
+    // MARK: - Themeable
+
+    func applyTheme() {
+        tab?.webView?.applyTheme(theme: themeManager.getCurrentTheme(for: windowUUID))
+    }
 }
 
 // MARK: - Private
 private extension TabScrollingController {
-    func configureRefreshControl(isEnabled: Bool) {
-        scrollView?.refreshControl = isEnabled ? UIRefreshControl() : nil
-        scrollView?.refreshControl?.addTarget(self, action: #selector(reload), for: .valueChanged)
+    private func configureRefreshControl(isEnabled: Bool) {
+        if isPullToRefreshRefactorEnabled {
+            configureNewRefreshControl()
+        } else {
+            scrollView?.refreshControl = isEnabled ? UIRefreshControl() : nil
+            scrollView?.refreshControl?.addTarget(self, action: #selector(reload), for: .valueChanged)
+        }
+    }
+
+    private func configureNewRefreshControl() {
+        tab?.webView?.addPullRefresh { [weak self] in
+            self?.reload()
+        }
+        applyTheme()
     }
 
     @objc
@@ -482,15 +543,16 @@ extension TabScrollingController: UIScrollViewDelegate {
             setOffset(y: 0, for: scrollView)
         }
 
-        let scrolledToTop = lastContentOffsetY > 0 && scrollView.contentOffset.y <= 0
-        let scrolledDown = lastContentOffsetY == 0 && scrollView.contentOffset.y > 0
-
-        if scrolledDown || scrolledToTop {
+        // this action controls the address toolbar's border position, and to prevent spamming redux with actions for every
+        // change in content offset, we keep track of lastContentOffsetY to know if the border needs to be updated
+        if (lastContentOffsetY > 0 && scrollView.contentOffset.y <= 0) ||
+            (lastContentOffsetY <= 0 && scrollView.contentOffset.y > 0) {
             lastContentOffsetY = scrollView.contentOffset.y
-            let action = GeneralBrowserMiddlewareAction(scrollOffset: scrollView.contentOffset,
-                                                        windowUUID: windowUUID,
-                                                        actionType: GeneralBrowserMiddlewareActionType.websiteDidScroll)
-            store.dispatch(action)
+            store.dispatch(
+                GeneralBrowserMiddlewareAction(
+                    scrollOffset: scrollView.contentOffset,
+                    windowUUID: windowUUID,
+                    actionType: GeneralBrowserMiddlewareActionType.websiteDidScroll))
         }
 
         guard isAnimatingToolbar else { return }
@@ -518,7 +580,11 @@ extension TabScrollingController: UIScrollViewDelegate {
     }
 
     func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
-        configureRefreshControl(isEnabled: false)
+        if isPullToRefreshRefactorEnabled {
+            tab?.webView?.removePullRefresh()
+        } else {
+            configureRefreshControl(isEnabled: false)
+        }
         self.isUserZoom = true
     }
 

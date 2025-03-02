@@ -11,16 +11,16 @@ protocol LocationTextFieldDelegate: AnyObject {
     func locationTextField(_ textField: LocationTextField, didEnterText text: String)
     func locationTextFieldShouldReturn(_ textField: LocationTextField) -> Bool
     func locationTextFieldShouldClear(_ textField: LocationTextField) -> Bool
-    func locationPasteAndGo(_ textField: LocationTextField)
     func locationTextFieldDidBeginEditing(_ textField: UITextField)
     func locationTextFieldDidEndEditing(_ textField: UITextField)
+    func locationTextFieldNeedsSearchReset(_ textField: UITextField)
 }
 
 class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
     private var tintedClearImage: UIImage?
     private var clearButtonTintColor: UIColor?
 
-    var autocompleteDelegate: LocationTextFieldDelegate?
+    weak var autocompleteDelegate: LocationTextFieldDelegate?
 
     // This variable is a solution to get the right behaviour for refocusing
     // the LocationTextField. The initial transition into Overlay Mode
@@ -34,7 +34,9 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
     private var lastReplacement: String?
     private var hideCursor = false
     private var isSettingMarkedText = false
-
+    var clearButton: UIButton? {
+        return value(forKey: "_clearButton") as? UIButton
+    }
     private let copyShortcutKey = "c"
 
     // MARK: - Init
@@ -42,7 +44,7 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
         super.init(frame: .zero)
         super.addTarget(self, action: #selector(LocationTextField.textDidChange), for: .editingChanged)
 
-        font = UIFont.preferredFont(forTextStyle: .body)
+        font = FXFontStyles.Regular.body.scaledFont()
         adjustsFontForContentSizeCategory = true
         clearButtonMode = .whileEditing
         keyboardType = .webSearch
@@ -50,6 +52,11 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
         autocapitalizationType = .none
         returnKeyType = .go
         tintAdjustmentMode = .normal
+
+        // Setting the content type to a field that is not related to AutoFill functionality
+        // like email and password, should disable the Operating system to load those content,
+        // hence having a faster keyboard start up the first time
+        textContentType = .URL
         delegate = self
 
         // Disable dragging urls on iPhones because it conflicts with editing the text
@@ -93,7 +100,7 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
     }
 
     override func deleteBackward() {
-        lastReplacement = nil
+        lastReplacement = ""
         hideCursor = false
 
         guard markedTextRange == nil else {
@@ -107,6 +114,7 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard isEditing else { return }
         applyCompletion()
         super.touchesBegan(touches, with: event)
     }
@@ -138,14 +146,7 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
 
         let suggestionText = String(suggestion.dropFirst(normalized.count))
         setMarkedText(suggestionText, selectedRange: NSRange())
-
-        // Only call forceResetCursor() if `hideCursor` changes.
-        // Because forceResetCursor() auto accept iOS user's text replacement
-        // (e.g. mu->μ) which makes user unable to type "mu".
-        if !hideCursor {
-            hideCursor = true
-            forceResetCursor()
-        }
+        hideCursor = true
     }
 
     // MARK: - ThemeApplicable
@@ -153,11 +154,13 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
         let colors = theme.colors
         tintColor = colors.layerSelectedText
         clearButtonTintColor = colors.iconPrimary
-        markedTextStyle = [NSAttributedString.Key.backgroundColor: colors.layerSelectedText]
+        markedTextStyle = [NSAttributedString.Key.backgroundColor: colors.layerAutofillText]
+        textColor = colors.textPrimary
 
-        if isEditing {
-            textColor = colors.textPrimary
-        }
+        attributedPlaceholder = NSAttributedString(
+            string: placeholder ?? "",
+            attributes: [NSAttributedString.Key.foregroundColor: colors.textSecondary]
+        )
 
         tintClearButton()
     }
@@ -170,7 +173,6 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
         guard !isSettingMarkedText else { return }
 
         hideCursor = markedTextRange != nil
-        removeCompletion()
 
         let isKeyboardReplacingText = lastReplacement != nil
         if isKeyboardReplacingText, markedTextRange == nil {
@@ -257,6 +259,7 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
 
     public func textFieldDidEndEditing(_ textField: UITextField) {
         lastReplacement = nil
+        textField.selectedTextRange = nil
         autocompleteDelegate?.locationTextFieldDidEndEditing(self)
     }
 
@@ -274,7 +277,7 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
         // can reset itself since it will only lookup results if the new text is
         // longer than the previous text.
         if lastReplacement == nil {
-            autocompleteDelegate?.locationTextField(self, didEnterText: "")
+            autocompleteDelegate?.locationTextFieldNeedsSearchReset(textField)
         }
 
         lastReplacement = string
@@ -302,9 +305,7 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
 
          return {
              // If calling again, invalidate the last timer.
-             if let timer = timer {
-                 timer.invalidate()
-             }
+             if let timer { timer.invalidate() }
              timer = Timer(
                  timeInterval: delay,
                  target: callback,

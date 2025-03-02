@@ -37,9 +37,6 @@
 /* Section title label for recently visited websites */
 "ActivityStream.RecentHistory.Title" = "Visitado recentemente";
 
-/* Section title label for Shortcuts */
-"ActivityStream.Shortcuts.SectionTitle" = "Atalhos";
-
 /* The title for the setting page which lets you select the number of top site rows */
 "ActivityStream.TopSites.RowSettingFooter" = "Definir linhas";
 
@@ -386,10 +383,10 @@
 "FxA.NoInternetConnection" = "Sem conexão à internet";
 
 /* FxA sign in view subtitle */
-"fxa.signin.camera-signin" = "Conecte usando sua câmera";
+"fxa.signin.camera-signin" = "Conecte usando a câmera";
 
 /* FxA sign in view qr code instructions */
-"fxa.signin.qr-link-instruction" = "Em seu computador, abra o Firefox e acesse firefox.com/pair";
+"fxa.signin.qr-link-instruction" = "Abra o Firefox no computador e acesse firefox.com/pair";
 
 /* FxA sign in view qr code scan button */
 "fxa.signin.ready-to-scan" = "Pronto para digitalizar";
@@ -896,7 +893,7 @@
 "Oops! Firefox crashed" = "Ops! O Firefox travou";
 
 /* See http://mzl.la/1LXbDOL */
-"Open articles in Reader View by tapping the book icon when it appears in the title bar." = "Abra artigos no Leitor tocando no ícone de livro quando ele aparecer na barra de título.";
+"Open articles in Reader View by tapping the book icon when it appears in the title bar." = "Abra artigos no modo de leitura tocando no ícone de livro quando ele aparecer na barra de título.";
 
 /* See http://mzl.la/1G7uHo7 */
 "Open Settings" = "Abrir configurações";
@@ -944,10 +941,10 @@
 "read" = "lido";
 
 /* Accessibility label for the Reader View button */
-"Reader View" = "Leitor";
+"Reader View" = "Modo de leitura";
 
 /* Accessibility message e.g. spoken by VoiceOver when Reader Mode becomes available. */
-"ReaderMode.Available.VoiceOverAnnouncement" = "Modo Leitor disponível";
+"ReaderMode.Available.VoiceOverAnnouncement" = "Modo de leitura disponível";
 
 /* Name for Mark as read button in reader mode */
 "ReaderModeBar.MarkAsRead.v106" = "Marcar como lido";
@@ -992,7 +989,7 @@
 "Sans-serif" = "Sem serifa";
 
 /* See http://mzl.la/1LXbDOL */
-"Save pages to your Reading List by tapping the book plus icon in the Reader View controls." = "Salve páginas na sua lista de leitura, tocando no ícone de livro com + nos controles do Leitor.";
+"Save pages to your Reading List by tapping the book plus icon in the Reader View controls." = "Salve páginas na sua lista de leitura, tocando no ícone de livro com + nos controles do modo de leitura.";
 
 /* OK button to dismiss the error prompt. */
 "ScanQRCode.Error.OK.Button" = "OK";
@@ -1376,7 +1373,7 @@
 "Settings.NewTab.CustomURL" = "URL personalizada";
 
 /* Option in settings to show a blank page when you open a new tab */
-"Settings.NewTab.Option.BlankPage" = "Página em branco";
+"Settings.NewTab.Option.BlankPage" = "Página vazia";
 
 /* Option in settings to show your homepage when you open a new tab */
 "Settings.NewTab.Option.Custom" = "Personalizado";
@@ -1407,9 +1404,6 @@
 
 /* Description displayed under the ”Offer to Open Copied Link” option. See https://bug1223660.bmoattachments.org/attachment.cgi?id=8898349. Placeholder is for the app name. */
 "Settings.OfferClipboardBar.Status.v128" = "Ao abrir %@";
-
-/* Description displayed under the ”Offer to Open Copied Link” option. See https://bug1223660.bmoattachments.org/attachment.cgi?id=8898349 */
-"Settings.OfferClipboardBar.StatusV2" = "Ao abrir o Firefox";
 
 /* Title of setting to enable the Go to Copied URL feature. See https://bug1223660.bmoattachments.org/attachment.cgi?id=8898349 */
 "Settings.OfferClipboardBar.Title" = "Oferecer abrir links copiados";
@@ -1460,7 +1454,7 @@
 "Settings.ShowLinkPreviews.Title" = "Mostrar exibição prévia do link";
 
 /* Setting to show Logins & Passwords quick access in the application menu */
-"Settings.ShowLoginsInAppMenu.Title" = "Exibir no menu de aplicativos";
+"Settings.ShowLoginsInAppMenu.Title" = "Exibir no menu do aplicativo";
 
 /* The description of the open new tab siri shortcut */
 "Settings.Siri.OpenTabShortcut" = "Abrir nova aba";
@@ -1529,7 +1523,7 @@
 "Settings.TrackingProtection.LearnMore" = "Saiba mais";
 
 /* Additional information about your Enhanced Tracking Protection */
-"Settings.TrackingProtection.ProtectionCellFooter" = "Reduz anúncios direcionados e ajuda a impedir que anunciantes rastreiem sua navegação.";
+"Settings.TrackingProtection.ProtectionCellFooter" = "Reduzir anúncios direcionados e ajudar a impedir que anunciantes rastreiem sua navegação.";
 
 /* Footer information for tracker protection level. */
 "Settings.TrackingProtection.ProtectionLevel.Footer" = "Se um site não funcionar conforme esperado, toque no cadeado na barra de endereços e desative a proteção aprimorada contra rastreamento na página.";
@@ -1538,10 +1532,10 @@
 "Settings.TrackingProtection.ProtectionLevel.Footer.Lock" = "Se um site não funcionar conforme esperado, toque no cadeado na barra de endereços e desative a proteção aprimorada contra rastreamento na página.";
 
 /* Description for standard level tracker protection */
-"Settings.TrackingProtection.ProtectionLevelStandard.Description" = "Permite algum rastreamento de anúncios para que sites funcionem corretamente.";
+"Settings.TrackingProtection.ProtectionLevelStandard.Description" = "Permitir algum rastreamento de anúncios para que sites funcionem corretamente.";
 
 /* Description for strict level tracker protection */
-"Settings.TrackingProtection.ProtectionLevelStrict.Description" = "Bloqueia mais rastreadores, anúncios e notificações. As páginas são carregadas mais rápido, mas algumas coisas podem não funcionar.";
+"Settings.TrackingProtection.ProtectionLevelStrict.Description" = "Bloquear mais rastreadores, anúncios e notificações. As páginas são carregadas mais rápido, mas algumas coisas podem não funcionar.";
 
 /* Title for tracking protection options section where level can be selected. */
 "Settings.TrackingProtection.ProtectionLevelTitle" = "Nível de proteção";
@@ -1691,7 +1685,7 @@
 "TabTrayButtons.Accessibility.ShowTabs.v106" = "Mostrar abas";
 
 /* Message displayed when the reader mode page could not be loaded. This message will appear only when sharing to Firefox reader mode from another app. */
-"The page could not be displayed in Reader View." = "A página não pôde ser exibida no Leitor.";
+"The page could not be displayed in Reader View." = "A página não pôde ser exibida no modo de leitura.";
 
 /* Error message in the remote tabs panel */
 "There was a problem accessing tabs from your other devices. Try again in a few moments." = "Houve um problema ao acessar abas de seus outros dispositivos. Tente novamente daqui a pouco.";

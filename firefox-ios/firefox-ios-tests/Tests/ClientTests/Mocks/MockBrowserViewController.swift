@@ -51,7 +51,6 @@ class MockBrowserViewController: BrowserViewController {
 
     var didRequestToOpenInNewTabCalled = false
     var didSelectURLCalled = false
-    var didOpenRecentlyClosedSiteInSameTab = 0
     var lastOpenedURL: URL?
     var lastVisitType: VisitType?
     var isPrivate = false
@@ -62,12 +61,18 @@ class MockBrowserViewController: BrowserViewController {
         switchToPrivacyModeCount += 1
     }
 
-    override func switchToTabForURLOrOpen(_ url: URL, uuid: String?, isPrivate: Bool) {
+    override func switchToTabForURLOrOpen(
+        _ url: URL,
+        uuid: String?,
+        isPrivate: Bool,
+        completionHandler: (() -> Void)? = nil
+    ) {
         switchToTabForURLOrOpenCalled = true
         switchToTabForURLOrOpenURL = url
         switchToTabForURLOrOpenUUID = uuid
         switchToTabForURLOrOpenIsPrivate = isPrivate
         switchToTabForURLOrOpenCount += 1
+        completionHandler?()
     }
 
     override func openBlankNewTab(focusLocationField: Bool, isPrivate: Bool, searchFor searchText: String?) {
@@ -78,7 +83,7 @@ class MockBrowserViewController: BrowserViewController {
         openBlankNewTabCount += 1
     }
 
-    override func handle(query: String) {
+    override func handle(query: String, isPrivate: Bool) {
         handleQueryCalled = true
         handleQuery = query
         handleQueryCount += 1
@@ -138,9 +143,5 @@ class MockBrowserViewController: BrowserViewController {
         didSelectURLCalled = true
         lastOpenedURL = url
         lastVisitType = visitType
-    }
-
-    override func openRecentlyClosedSiteInSameTab(_ url: URL) {
-        didOpenRecentlyClosedSiteInSameTab += 1
     }
 }
