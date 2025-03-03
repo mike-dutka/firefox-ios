@@ -19,9 +19,6 @@
 /* Description adjusted of the rating card displayed in the shopping review quality bottom sheet. */
 "Shopping.AdjustedRating.Description.v121" = "Με βάση αξιόπιστες κριτικές";
 
-/* Description adjusted of the rating card displayed in the shopping review quality bottom sheet. */
-"Shopping.AdjustedRating.Description.v121" = "Με βάση αξιόπιστες κριτικές";
-
 /* Accessibility label, associated to adjusted rating stars. %@ is a decimal value from 0 to 5 that will only use a tenth (example: 3.5). */
 "Shopping.AdjustedRating.StarsAccessibilityLabel.v120" = "%@ από 5 αστέρια";
 
