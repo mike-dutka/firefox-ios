@@ -3856,6 +3856,7 @@
 		43284257293E0A3D001A9851 /* el */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = el; path = el.lproj/TabsTray.strings; sourceTree = "<group>"; };
 		432849BD2A52E48C008008A1 /* es-AR */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "es-AR"; path = "es-AR.lproj/CustomizeFirefoxHome.strings"; sourceTree = "<group>"; };
 		432849BE2A52E48C008008A1 /* es-AR */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "es-AR"; path = "es-AR.lproj/SelectCreditCard.strings"; sourceTree = "<group>"; };
+		432880E92E1BE3FA00212996 /* es-ES */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "es-ES"; path = "es-ES.lproj/WidgetIntents.strings"; sourceTree = "<group>"; };
 		43288E3629DAECDC00E19634 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/Alert.strings; sourceTree = "<group>"; };
 		43288E3729DAECDC00E19634 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/BiometricAuthentication.strings; sourceTree = "<group>"; };
 		43288E3829DAECDC00E19634 /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/EditCard.strings; sourceTree = "<group>"; };
@@ -4376,6 +4377,7 @@
 		43511A5E2CE221370073385F /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/LibraryPanel.strings; sourceTree = "<group>"; };
 		43511A5F2CE221370073385F /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/SearchEngineSelection.strings; sourceTree = "<group>"; };
 		435122BE2AEFC65300D1EF87 /* cy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = cy; path = cy.lproj/Shopping.strings; sourceTree = "<group>"; };
+		435131B32E1BE50A00D992EE /* ny */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ny; path = ny.lproj/WidgetIntents.strings; sourceTree = "<group>"; };
 		435142B32A24BFC6007D2550 /* hy-AM */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "hy-AM"; path = "hy-AM.lproj/DisplayCard.strings"; sourceTree = "<group>"; };
 		4351540E2A0BCAB300D5E2CC /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/FirefoxSync.strings; sourceTree = "<group>"; };
 		4351540F2A0BCAB300D5E2CC /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Upgrade.strings; sourceTree = "<group>"; };
@@ -4491,6 +4493,7 @@
 		435A4B622CE2245E007AFA24 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = sq.lproj/FxANotification.strings; sourceTree = "<group>"; };
 		435A4B632CE2245E007AFA24 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = sq.lproj/LibraryPanel.strings; sourceTree = "<group>"; };
 		435A4B642CE2245E007AFA24 /* sq */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = sq; path = sq.lproj/SearchEngineSelection.strings; sourceTree = "<group>"; };
+		435A69682E1BE5BA0028349C /* tzm */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = tzm; path = tzm.lproj/WidgetIntents.strings; sourceTree = "<group>"; };
 		435A759129E4285900778D0C /* pt-BR */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "pt-BR"; path = "pt-BR.lproj/Edit Card.strings"; sourceTree = "<group>"; };
 		435AC01A2A52E65800B0156A /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/CustomizeFirefoxHome.strings; sourceTree = "<group>"; };
 		435AC01B2A52E65800B0156A /* ru */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ru; path = ru.lproj/SelectCreditCard.strings; sourceTree = "<group>"; };
@@ -15681,6 +15684,9 @@
 				ab,
 				scn,
 				tg,
+				"es-ES",
+				ny,
+				tzm,
 			);
 			mainGroup = F84B21B51A090F8100AAB793;
 			packageReferences = (
@@ -24595,6 +24601,9 @@
 				431889CA2CD8E1A600365FD8 /* ab */,
 				4385A45A2D1980CD0003475A /* scn */,
 				43098FBC2D6CC2A9001D5142 /* tg */,
+				432880E92E1BE3FA00212996 /* es-ES */,
+				435131B32E1BE50A00D992EE /* ny */,
+				435A69682E1BE5BA0028349C /* tzm */,
 			);
 			name = WidgetIntents.intentdefinition;
 			sourceTree = "<group>";
@@ -25131,9 +25140,9 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEFINES_MODULE = NO;
+				DEVELOPMENT_TEAM = 5QKFZE2DQB;
 				EAGER_LINKING = NO;
 				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
-				DEVELOPMENT_TEAM = 5QKFZE2DQB;
 				GCC_WARN_INHIBIT_ALL_WARNINGS = YES;
 				INFOPLIST_FILE = "RustMozillaAppServices-Info.plist";
 				LOCALIZED_STRING_MACRO_NAMES = (
@@ -25620,15 +25629,11 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 5QKFZE2DQB;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 5QKFZE2DQB;
 				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
 				INFOPLIST_FILE = Extensions/ShareTo/Info.plist;
 				OTHER_SWIFT_FLAGS = "-DMOZ_CHANNEL_RELEASE -DMOZ_TARGET_SHARETO";
 				PRODUCT_BUNDLE_IDENTIFIER = "$(MOZ_BUNDLE_ID).$(PRODUCT_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = NO;
 			};
 			name = Firefox;
@@ -25646,15 +25651,10 @@
 			buildSettings = {
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = "";
-				PROVISIONING_PROFILE_SPECIFIER = "";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 5QKFZE2DQB;
-				PROVISIONING_PROFILE_SPECIFIER = "";
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 5QKFZE2DQB;
 				DEFINES_MODULE = NO;
+				DEVELOPMENT_TEAM = 5QKFZE2DQB;
 				ENABLE_TESTABILITY = YES;
 				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
 				GCC_WARN_INHIBIT_ALL_WARNINGS = YES;
@@ -25789,10 +25789,10 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 5QKFZE2DQB;
+				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				PRODUCT_NAME = L10nSnapshotTests;
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -25808,10 +25808,10 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 5QKFZE2DQB;
+				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				PRODUCT_NAME = L10nSnapshotTests;
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -26078,10 +26078,10 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 5QKFZE2DQB;
+				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.4;
 				PRODUCT_NAME = L10nSnapshotTests;
 				PROVISIONING_PROFILE_SPECIFIER = "";
-				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -26235,9 +26235,9 @@
 				CODE_SIGN_ENTITLEMENTS = "";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
+				DEFINES_MODULE = NO;
 				DEVELOPMENT_TEAM = 5QKFZE2DQB;
 				GCC_TREAT_WARNINGS_AS_ERRORS = NO;
-				DEFINES_MODULE = NO;
 				GCC_WARN_INHIBIT_ALL_WARNINGS = YES;
 				INFOPLIST_FILE = "Shared/Supporting Files/Info.plist";
 				LOCALIZED_STRING_MACRO_NAMES = (
