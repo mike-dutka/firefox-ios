@@ -7,7 +7,7 @@ import Foundation
 @testable import Redux
 
 struct FakeReduxState: StateType, Equatable {
-    var counter: Int = 0
+    var counter = 0
     var isInPrivateMode = false
 
     static let reducer: Reducer<Self> = { state, action in
@@ -19,6 +19,7 @@ struct FakeReduxState: StateType, Equatable {
             FakeReduxActionType.counterDecreased:
             return FakeReduxState(counter: action.counterValue ?? state.counter,
                                   isInPrivateMode: state.isInPrivateMode)
+
         case FakeReduxActionType.setPrivateModeTo:
             return FakeReduxState(counter: state.counter,
                                   isInPrivateMode: action.privateMode ?? state.isInPrivateMode)

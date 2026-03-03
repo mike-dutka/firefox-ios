@@ -43,13 +43,16 @@ final class PasswordGeneratorPasswordFieldView: UIView, ThemeApplicable, Notifia
         button.addTarget(self, action: #selector(self.refreshOnClick), for: .touchUpInside)
     }
 
-    var refreshPasswordButtonOnClick: (() -> Void)?
+    var refreshPasswordButtonOnClick: (@MainActor () -> Void)?
 
     convenience init(frame: CGRect, notificationCenter: NotificationProtocol = NotificationCenter.default) {
         self.init(frame: frame)
         self.notificationCenter = notificationCenter
-        setupNotifications(forObserver: self,
-                           observing: [.DynamicFontChanged])
+        startObservingNotifications(
+            withNotificationCenter: notificationCenter,
+            forObserver: self,
+            observing: [UIContentSizeCategory.didChangeNotification]
+        )
     }
 
     override init(frame: CGRect) {
@@ -57,8 +60,11 @@ final class PasswordGeneratorPasswordFieldView: UIView, ThemeApplicable, Notifia
         self.layer.borderWidth = UX.passwordFieldBorderWidth
         self.layer.cornerRadius = UX.passwordFieldCornerRadius
         self.accessibilityIdentifier = AccessibilityIdentifiers.PasswordGenerator.passwordField
-        setupNotifications(forObserver: self,
-                           observing: [.DynamicFontChanged])
+        startObservingNotifications(
+            withNotificationCenter: notificationCenter,
+            forObserver: self,
+            observing: [UIContentSizeCategory.didChangeNotification]
+        )
         setupLayout()
     }
 
@@ -145,8 +151,10 @@ final class PasswordGeneratorPasswordFieldView: UIView, ThemeApplicable, Notifia
 
     func handleNotifications(_ notification: Notification) {
         switch notification.name {
-        case .DynamicFontChanged:
-            applyDynamicFontChange()
+        case UIContentSizeCategory.didChangeNotification:
+            ensureMainThread {
+                self.applyDynamicFontChange()
+            }
         default: break
         }
     }

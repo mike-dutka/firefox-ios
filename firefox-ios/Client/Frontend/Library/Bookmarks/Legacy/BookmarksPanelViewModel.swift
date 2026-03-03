@@ -8,9 +8,19 @@ import Storage
 import Shared
 
 import class MozillaAppServices.BookmarkFolderData
+import class MozillaAppServices.BookmarkItemData
 import enum MozillaAppServices.BookmarkRoots
 
-class BookmarksPanelViewModel: BookmarksRefactorFeatureFlagProvider {
+let LocalizedRootBookmarkFolderStrings = [
+    BookmarkRoots.MenuFolderGUID: String.BookmarksFolderTitleMenu,
+    BookmarkRoots.ToolbarFolderGUID: String.BookmarksFolderTitleToolbar,
+    BookmarkRoots.UnfiledFolderGUID: String.BookmarksFolderTitleUnsorted,
+    BookmarkRoots.MobileFolderGUID: String.BookmarksFolderTitleMobile,
+    LocalDesktopFolder.localDesktopFolderGuid: String.Bookmarks.Menu.DesktopBookmarks
+]
+
+// FIXME: FXIOS-14162 Make BookmarksPanelViewModel actually Sendable
+final class BookmarksPanelViewModel: @unchecked Sendable {
     enum BookmarksSection: Int, CaseIterable {
         case bookmarks
     }
@@ -26,16 +36,19 @@ class BookmarksPanelViewModel: BookmarksRefactorFeatureFlagProvider {
     private var hasDesktopFolders = false
     private var bookmarksHandler: BookmarksHandler
     private var flashLastRowOnNextReload = false
+    private var mainQueue: DispatchQueueInterface
     private var logger: Logger
 
     /// By default our root folder is the mobile folder. Desktop folders are shown in the local desktop folders.
     init(profile: Profile,
          bookmarksHandler: BookmarksHandler,
          bookmarkFolderGUID: GUID = BookmarkRoots.MobileFolderGUID,
+         mainQueue: DispatchQueueInterface = DispatchQueue.main,
          logger: Logger = DefaultLogger.shared) {
         self.profile = profile
         self.bookmarksHandler = bookmarksHandler
         self.bookmarkFolderGUID = bookmarkFolderGUID
+        self.mainQueue = mainQueue
         self.logger = logger
     }
 
@@ -46,7 +59,7 @@ class BookmarksPanelViewModel: BookmarksRefactorFeatureFlagProvider {
         return true
     }
 
-    func reloadData(completion: @escaping () -> Void) {
+    func reloadData(completion: @escaping @Sendable () -> Void) {
         // Can be called while app backgrounded and the db closed, don't try to reload the data source in this case
         if profile.isShutdown {
             completion()
@@ -85,14 +98,61 @@ class BookmarksPanelViewModel: BookmarksRefactorFeatureFlagProvider {
         bookmarkNodes.insert(bookmarkNode, at: destinationIndexPath.row)
     }
 
+    func getSiteDetails(for indexPath: IndexPath, completion: @escaping @Sendable (Site?) -> Void) {
+        guard let bookmarkNode = bookmarkNodes[safe: indexPath.row],
+              let bookmarkItem = bookmarkNode as? BookmarkItemData
+        else {
+            logger.log("Could not get site details for indexPath \(indexPath)",
+                       level: .debug,
+                       category: .library)
+            completion(nil)
+            return
+        }
+
+        checkIfPinnedURL(bookmarkItem.url) { [weak self] isPinned in
+            guard let site = self?.createSite(isPinned: isPinned, bookmarkItem: bookmarkItem) else { return }
+            completion(site)
+        }
+    }
+
+    func createPinUnpinAction(
+        for site: Site,
+        isPinned: Bool,
+        successHandler: @MainActor @escaping (String) -> Void
+    ) -> PhotonRowActions {
+        return SingleActionViewModel(
+            title: isPinned ? .Bookmarks.Menu.RemoveFromShortcutsTitle : .AddToShortcutsActionTitle,
+            iconString: isPinned ? StandardImageIdentifiers.Large.pinSlash : StandardImageIdentifiers.Large.pin,
+            tapHandler: { [weak self] _ in
+                guard let profile = self?.profile, let logger = self?.logger else { return }
+                let action = isPinned
+                ? profile.pinnedSites.removeFromPinnedTopSites(site)
+                : profile.pinnedSites.addPinnedTopSite(site)
+
+                action.uponQueue(.main) { result in
+                    MainActor.assumeIsolated {
+                        if result.isSuccess {
+                            let message: String = isPinned
+                            ? .LegacyAppMenu.RemovePinFromShortcutsConfirmMessage
+                            : .LegacyAppMenu.AddPinToShortcutsConfirmMessage
+                            successHandler(message)
+                        } else {
+                            let logMessage = isPinned ? "Could not remove pinned site" : "Could not add pinne site"
+                            logger.log(logMessage, level: .debug, category: .library)
+                        }
+                    }
+                }
+            }
+        ).items
+    }
+
     // MARK: - Private
 
     /// Since we have a Local Desktop folder that isn't referenced in A-S under the mobile folder,
     /// we need to account for this when saving bookmark index in A-S. This is done by subtracting
     /// the Local Desktop Folder number of rows it takes to the actual index.
     func getNewIndex(from index: Int) -> Int {
-        guard bookmarkFolderGUID == BookmarkRoots.MobileFolderGUID, isBookmarkRefactorEnabled ?
-                                                                    hasDesktopFolders : true else {
+        guard bookmarkFolderGUID == BookmarkRoots.MobileFolderGUID, hasDesktopFolders else {
             return max(index, 0)
         }
 
@@ -100,7 +160,7 @@ class BookmarksPanelViewModel: BookmarksRefactorFeatureFlagProvider {
         return max(index - LocalDesktopFolder.numberOfRowsTaken, 0)
     }
 
-    private func setupMobileFolderData(completion: @escaping () -> Void) {
+    private func setupMobileFolderData(completion: @escaping @Sendable () -> Void) {
         bookmarksHandler
             .getBookmarksTree(rootGUID: BookmarkRoots.MobileFolderGUID, recursive: false)
             .uponQueue(.main) { result in
@@ -116,23 +176,7 @@ class BookmarksPanelViewModel: BookmarksRefactorFeatureFlagProvider {
                 self.bookmarkFolder = mobileFolder
                 self.bookmarkNodes = mobileFolder.fxChildren ?? []
 
-                // Create a local "Desktop bookmarks" folder only if there exists a bookmark in one of it's nested
-                // subfolders
-                self.bookmarksHandler.countBookmarksInTrees(folderGuids: BookmarkRoots.DesktopRoots.map { $0 }) { result in
-                    switch result {
-                    case .success(let bookmarkCount):
-                            if bookmarkCount > 0 || !self.isBookmarkRefactorEnabled {
-                                self.hasDesktopFolders = true
-                                let desktopFolder = LocalDesktopFolder()
-                                self.bookmarkNodes.insert(desktopFolder, at: 0)
-                            } else {
-                                self.hasDesktopFolders = false
-                            }
-                    case .failure(let error):
-                            self.logger.log("Error counting bookmarks: \(error)", level: .debug, category: .library)
-                    }
-                    completion()
-                }
+                self.createDesktopBookmarksFolder(completion: completion)
             }
     }
 
@@ -149,7 +193,7 @@ class BookmarksPanelViewModel: BookmarksRefactorFeatureFlagProvider {
     }
 
     /// Subfolder data case happens when we select a folder created by a user
-    private func setupSubfolderData(completion: @escaping () -> Void) {
+    private func setupSubfolderData(completion: @escaping @Sendable () -> Void) {
         bookmarksHandler.getBookmarksTree(rootGUID: bookmarkFolderGUID,
                                           recursive: false).uponQueue(.main) { result in
             guard let folder = result.successValue as? BookmarkFolderData else {
@@ -172,5 +216,53 @@ class BookmarksPanelViewModel: BookmarksRefactorFeatureFlagProvider {
     private func setErrorCase() {
         self.bookmarkFolder = nil
         self.bookmarkNodes = []
+    }
+
+    // Create a local "Desktop bookmarks" folder only if there exists a bookmark in one of it's nested
+    // subfolders
+    private func createDesktopBookmarksFolder(completion: @escaping @Sendable () -> Void) {
+        bookmarksHandler.countBookmarksInTrees(folderGuids: BookmarkRoots.DesktopRoots.map { $0 }) { result in
+            switch result {
+            case .success(let bookmarkCount):
+                if bookmarkCount > 0 {
+                    self.hasDesktopFolders = true
+                    let desktopFolder = LocalDesktopFolder()
+                    self.mainQueue.async {
+                        self.bookmarkNodes.insert(desktopFolder, at: 0)
+                    }
+                } else {
+                    self.hasDesktopFolders = false
+                }
+            case .failure(let error):
+                self.logger.log("Error counting bookmarks: \(error)", level: .debug, category: .library)
+            }
+            completion()
+        }
+    }
+
+    private func checkIfPinnedURL(
+        _ url: String,
+        queue: DispatchQueue = .main,
+        completion: @escaping @Sendable  (Bool) -> Void
+    ) {
+        profile.pinnedSites.isPinnedTopSite(url)
+            .uponQueue(queue) { result in
+                completion(result.successValue ?? false)
+            }
+    }
+
+    private func createSite(isPinned: Bool, bookmarkItem: BookmarkItemData) -> Site {
+        guard isPinned else {
+            return Site.createBasicSite(
+                url: bookmarkItem.url,
+                title: bookmarkItem.title,
+                isBookmarked: true
+            )
+        }
+        return Site.createPinnedSite(
+            url: bookmarkItem.url,
+            title: bookmarkItem.title,
+            isGooglePinnedTile: false
+        )
     }
 }

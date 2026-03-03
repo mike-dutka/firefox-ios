@@ -7,7 +7,7 @@ import WidgetKit
 import Combine
 
 struct TopSitesWidget: Widget {
-    private let kind: String = "Top Sites"
+    private let kind = "Top Sites"
 
      var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: TopSitesProvider()) { entry in
@@ -22,7 +22,7 @@ struct TopSitesWidget: Widget {
 
 struct TopSitesView: View {
     private struct UX {
-        static let widgetBackgroundColor = Color(red: 0.11, green: 0.11, blue: 0.13)
+        static let widgetBackgroundColor = Color("backgroundColor")
         static let emptySquareFillColor = Color(red: 0.85, green: 0.85, blue: 0.85, opacity: 0.3)
         static let itemCornerRadius: CGFloat = 5.0
         static let iconScale: CGFloat = 1.0
@@ -71,9 +71,16 @@ struct TopSitesView: View {
         Link(destination: linkToContainingApp("?url=\(url)", query: "widget-medium-topsites-open-url")) {
             Group {
                 if let image = entry.favicons[site.faviconImageCacheKey] {
-                    image
-                        .resizable()
-                        .scaledToFit()
+                    if #available(iOSApplicationExtension 18.0, *) {
+                        image
+                            .resizable()
+                            .widgetAccentedRenderingMode(.accentedDesaturated)
+                            .scaledToFit()
+                    } else {
+                        image
+                            .resizable()
+                            .scaledToFit()
+                    }
                 } else {
                     Rectangle()
                         .fill(UX.emptySquareFillColor)
@@ -99,6 +106,6 @@ struct TopSitesView: View {
 
     private func linkToContainingApp(_ urlSuffix: String = "", query: String) -> URL {
         let urlString = "\(scheme)://\(query)\(urlSuffix)"
-        return URL(string: urlString, invalidCharacters: false)!
+        return URL(string: urlString)!
     }
 }

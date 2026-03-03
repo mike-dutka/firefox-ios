@@ -12,9 +12,9 @@ import Combine
 import Licenses
 import DesignSystem
 
-class SettingsViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
+final class SettingsViewController: UIViewController, UITableViewDataSource, UITableViewDelegate {
     enum Section: String {
-        case defaultBrowser, general, privacy, usageData, crashReports, studies, dailyUsagePing, search, siri, integration, mozilla, secret
+        case defaultBrowser, general, privacy, usageData, crashReports, studies, rollouts, dailyUsagePing, search, siri, integration, mozilla, secret
 
         var headerText: String? {
             switch self {
@@ -23,6 +23,7 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
             case .privacy: return UIConstants.strings.toggleSectionPrivacy
             case .usageData: return nil
             case .studies: return nil
+            case .rollouts: return nil
             case .search: return UIConstants.strings.settingsSearchTitle
             case .siri: return UIConstants.strings.siriShortcutsTitle
             case .integration: return UIConstants.strings.toggleSectionSafari
@@ -39,12 +40,13 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
                 .general,
                 .privacy
                 ]
-            
+
             if TelemetryManager.shared.isTelemetryFeatureEnabled {
                 sections.append(contentsOf: [.studies, .usageData])
             }
 
             sections.append(contentsOf: [
+                .rollouts,
                 .dailyUsagePing,
                 .crashReports,
                 .search,
@@ -126,6 +128,8 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
         let blockFontsToggle = BlockerToggle(label: UIConstants.strings.labelBlockFonts, setting: SettingsToggle.blockFonts)
         let studiesSubtitle = String(format: UIConstants.strings.detailTextStudies, AppInfo.productName)
         let studiesToggle = BlockerToggle(label: UIConstants.strings.labelStudies, setting: SettingsToggle.studies, subtitle: studiesSubtitle)
+        let rolloutsSubtitle = String(format: UIConstants.strings.detailTextRollouts, AppInfo.productName)
+        let rolloutsToggle = BlockerToggle(label: UIConstants.strings.labelRollouts, setting: SettingsToggle.rollouts, subtitle: rolloutsSubtitle)
         let usageDataSubtitle = String(format: UIConstants.strings.detailTextSendUsageData, AppInfo.productName)
         let usageDataToggle = BlockerToggle(label: UIConstants.strings.labelSendAnonymousUsageData, setting: SettingsToggle.sendAnonymousUsageData, subtitle: usageDataSubtitle)
         let crashToggle = BlockerToggle(
@@ -155,6 +159,9 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
         }
         if let studiesIndex = getSectionIndex(Section.studies) {
             toggles[studiesIndex] = [0: studiesToggle]
+        }
+        if let rolloutsIndex = getSectionIndex(Section.rollouts) {
+            toggles[rolloutsIndex] = [0: rolloutsToggle]
         }
         if let dailyUsageIndex = getSectionIndex(.dailyUsagePing) {
             toggles[dailyUsageIndex] = [0: dailyUsageToggle]
@@ -318,23 +325,22 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
         switch sections[indexPath.section] {
         case .defaultBrowser:
             let defaultBrowserCell = SettingsTableViewCell(style: .subtitle, reuseIdentifier: "defaultBrowserCell")
-            defaultBrowserCell.textLabel?.text = String(format: UIConstants.strings.setAsDefaultBrowserLabel)
+            defaultBrowserCell.setConfiguration(text: String(format: UIConstants.strings.setAsDefaultBrowserLabel))
             defaultBrowserCell.accessibilityIdentifier = "settingsViewController.defaultBrowserCell"
             cell = defaultBrowserCell
         case .general:
             let themeCell = SettingsTableViewAccessoryCell(style: .value1, reuseIdentifier: "themeCell")
-            themeCell.labelText = String(format: UIConstants.strings.theme)
             themeCell.accessibilityIdentifier = "settingsViewController.themeCell"
-            themeCell.accessoryLabelText = labelTextForCurrentTheme
+            themeCell.setConfiguration(text: String(format: UIConstants.strings.theme), secondaryText: labelTextForCurrentTheme)
             cell = themeCell
         case .privacy:
             if indexPath.row == 0 {
                 let trackingCell = SettingsTableViewAccessoryCell(style: .value1, reuseIdentifier: "trackingCell")
-                trackingCell.labelText = String(format: UIConstants.strings.trackingProtectionLabel)
                 trackingCell.accessibilityIdentifier = "settingsViewController.trackingCell"
-                trackingCell.accessoryLabelText = Settings.getToggle(.trackingProtection) ?
+                let secondaryText = Settings.getToggle(.trackingProtection) ?
                     UIConstants.strings.settingsTrackingProtectionOn :
                     UIConstants.strings.settingsTrackingProtectionOff
+                trackingCell.setConfiguration(text: String(format: UIConstants.strings.trackingProtectionLabel), secondaryText: secondaryText)
                 cell = trackingCell
             } else {
                 cell = setupToggleCell(indexPath: indexPath, navigationController: navigationController)
@@ -343,6 +349,8 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
             cell = setupToggleCell(indexPath: indexPath, navigationController: navigationController)
         case .studies:
             cell = setupToggleCell(indexPath: indexPath, navigationController: navigationController)
+        case .rollouts:
+            cell = setupToggleCell(indexPath: indexPath, navigationController: navigationController)
         case .search:
             if indexPath.row < 2 {
                 let searchCell = SettingsTableViewAccessoryCell(style: .value1, reuseIdentifier: "accessoryCell")
@@ -350,9 +358,7 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
                 let (label, accessoryLabel, identifier) = indexPath.row == 0 ?
                     (UIConstants.strings.settingsSearchLabel, searchEngineManager.activeEngine.name, "SettingsViewController.searchCell")
                     : (UIConstants.strings.settingsAutocompleteSection, autocompleteLabel, "SettingsViewController.autocompleteCell")
-
-                searchCell.accessoryLabelText = accessoryLabel
-                searchCell.labelText = label
+                searchCell.setConfiguration(text: label, secondaryText: accessoryLabel)
                 searchCell.accessibilityIdentifier = identifier
                 cell = searchCell
             } else {
@@ -361,22 +367,22 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
         case .siri:
             let siriCell = SettingsTableViewAccessoryCell(style: .value1, reuseIdentifier: "accessoryCell")
             if indexPath.row == 0 {
-                siriCell.labelText = UIConstants.strings.eraseSiri
                 siriCell.accessibilityIdentifier = "settingsViewController.siriEraseCell"
                 SiriShortcuts().hasAddedActivity(type: .erase) { (result: Bool) in
-                    siriCell.accessoryLabelText = result ? UIConstants.strings.Edit : UIConstants.strings.addToSiri
+                    let secondaryText = result ? UIConstants.strings.Edit : UIConstants.strings.addToSiri
+                    siriCell.setConfiguration(text: UIConstants.strings.eraseSiri, secondaryText: secondaryText)
                 }
             } else if indexPath.row == 1 {
-                siriCell.labelText = UIConstants.strings.eraseAndOpenSiri
                 siriCell.accessibilityIdentifier = "settingsViewController.siriEraseAndOpenCell"
                 SiriShortcuts().hasAddedActivity(type: .eraseAndOpen) { (result: Bool) in
-                    siriCell.accessoryLabelText = result ? UIConstants.strings.Edit : UIConstants.strings.addToSiri
+                    let secondaryText = result ? UIConstants.strings.Edit : UIConstants.strings.addToSiri
+                    siriCell.setConfiguration(text: UIConstants.strings.eraseAndOpenSiri, secondaryText: secondaryText)
                 }
             } else {
-                siriCell.labelText = UIConstants.strings.openUrlSiri
                 siriCell.accessibilityIdentifier = "settingsViewController.siriOpenURLCell"
                 SiriShortcuts().hasAddedActivity(type: .openURL) { (result: Bool) in
-                    siriCell.accessoryLabelText = result ? UIConstants.strings.Edit : UIConstants.strings.add
+                    let secondaryText = result ? UIConstants.strings.Edit : UIConstants.strings.add
+                    siriCell.setConfiguration(text: UIConstants.strings.openUrlSiri, secondaryText: secondaryText)
                 }
             }
             cell = siriCell
@@ -384,21 +390,25 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
             cell = setupToggleCell(indexPath: indexPath, navigationController: navigationController)
         case .mozilla:
             if indexPath.row == 0 {
-                cell = SettingsTableViewCell(style: .subtitle, reuseIdentifier: "aboutCell")
-                cell.textLabel?.text = String(format: UIConstants.strings.aboutTitle, AppInfo.productName)
-                cell.accessibilityIdentifier = "settingsViewController.about"
+                let settingCell = SettingsTableViewCell(style: .subtitle, reuseIdentifier: "aboutCell")
+                settingCell.setConfiguration(text: String(format: UIConstants.strings.aboutTitle, AppInfo.productName))
+                settingCell.accessibilityIdentifier = "settingsViewController.about"
+                cell = settingCell
             } else if indexPath.row == 1 {
-                cell = SettingsTableViewCell(style: .subtitle, reuseIdentifier: "ratingCell")
-                cell.textLabel?.text = String(format: UIConstants.strings.ratingSetting, AppInfo.productName)
-                cell.accessibilityIdentifier = "settingsViewController.rateFocus"
+                let settingCell = SettingsTableViewCell(style: .subtitle, reuseIdentifier: "ratingCell")
+                settingCell.setConfiguration(text: String(format: UIConstants.strings.ratingSetting, AppInfo.productName))
+                settingCell.accessibilityIdentifier = "settingsViewController.rateFocus"
+                cell = settingCell
             } else {
-                cell = SettingsTableViewCell(style: .subtitle, reuseIdentifier: "licensesCell")
-                cell.textLabel?.text = UIConstants.strings.licenses
-                cell.accessibilityIdentifier = "settingsViewController.licenses"
+                let settingCell = SettingsTableViewCell(style: .subtitle, reuseIdentifier: "licensesCell")
+                settingCell.setConfiguration(text: UIConstants.strings.licenses)
+                settingCell.accessibilityIdentifier = "settingsViewController.licenses"
+                cell = settingCell
             }
         case .secret:
-            cell = SettingsTableViewCell(style: .subtitle, reuseIdentifier: "secretSettingsCell")
-            cell.textLabel?.text = "Internal Settings"
+            let settingCell = SettingsTableViewCell(style: .subtitle, reuseIdentifier: "secretSettingsCell")
+            settingCell.setConfiguration(text: "Internal Settings")
+            cell = settingCell
         case .crashReports:
             cell = setupToggleCell(indexPath: indexPath, navigationController: navigationController)
         case .dailyUsagePing:
@@ -421,6 +431,7 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
             return 2
         case .usageData: return 1
         case .studies: return 1
+        case .rollouts: return 1
         case .search: return 3
         case .siri: return 3
         case .integration: return 1
@@ -454,6 +465,7 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
                 (getSectionIndex(.usageData), #selector(tappedLearnMoreFooter)),
                 (getSectionIndex(.search), #selector(tappedLearnMoreSearchSuggestionsFooter)),
                 (getSectionIndex(.studies), #selector(tappedLearnMoreStudies)),
+                (getSectionIndex(.rollouts), #selector(tappedLearnMoreRollouts)),
                 (getSectionIndex(.crashReports), #selector(tappedLearnMoreCrashReports)),
                 (getSectionIndex(.dailyUsagePing), #selector(tappedLearnMoreDailyUsagePing))
             ]
@@ -480,7 +492,11 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
     }
 
     func tableView(_ tableView: UITableView, heightForHeaderInSection section: Int) -> CGFloat {
-        return sections[section] == .privacy ? 50 : 30
+        return UITableView.automaticDimension
+    }
+
+    func tableView(_ tableView: UITableView, heightForFooterInSection section: Int) -> CGFloat {
+        return UITableView.automaticDimension
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
@@ -576,10 +592,15 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
     }
 
     @objc
+    func tappedLearnMoreRollouts(gestureRecognizer: UIGestureRecognizer) {
+        tappedFooter(forSupportTopic: .rollouts)
+    }
+
+    @objc
     func tappedLearnMoreCrashReports() {
         tappedFooter(forSupportTopic: .mobileCrashReports)
     }
-    
+
     @objc
     func tappedLearnMoreDailyUsagePing() {
         tappedFooter(forSupportTopic: .usagePingSettingsMobile)
@@ -615,7 +636,7 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
             sender.isOn = false
             sender.isEnabled = false
             sender.alpha = 0.5
-            NimbusWrapper.shared.nimbus.globalUserParticipation = false
+            NimbusWrapper.shared.nimbus.experimentParticipation = false
             updateSetting(false, forToggle: .studies)
         }
 
@@ -652,10 +673,13 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
         } else if toggle.setting == .studies {
             // Ensure 'studies' is disabled if 'sendAnonymousUsageData' is turned off, even when 'studies' is being enabled.
             if sendAnonymousUsageDataToggle?.isOn == true {
-                NimbusWrapper.shared.nimbus.globalUserParticipation = sender.isOn
+                NimbusWrapper.shared.nimbus.experimentParticipation = sender.isOn
             } else {
                 disableAndTurnOffStudiesToggle(sender)
             }
+        } else if toggle.setting == .rollouts {
+            // Rollouts have their own independent toggle
+            NimbusWrapper.shared.nimbus.rolloutParticipation = sender.isOn
         } else if toggle.setting == .biometricLogin {
             TipManager.biometricTip = false
         } else if toggle.setting == .dailyUsagePing {
@@ -696,7 +720,13 @@ class SettingsViewController: UIViewController, UITableViewDataSource, UITableVi
 
 extension SettingsViewController: SearchSettingsViewControllerDelegate {
     func searchSettingsViewController(_ searchSettingsViewController: SearchSettingsViewController, didSelectEngine engine: SearchEngine) {
-        (tableView.cellForRow(at: IndexPath(row: 0, section: 0)) as? SettingsTableViewAccessoryCell)?.accessoryLabelText = engine.name
+        if let cell = tableView.cellForRow(at: IndexPath(row: 0, section: 0)) as? SettingsTableViewAccessoryCell {
+            var configuration = cell.defaultContentConfiguration()
+            let margins = configuration.directionalLayoutMargins
+            configuration.directionalLayoutMargins = NSDirectionalEdgeInsets(top: margins.top, leading: UIConstants.layout.settingsCellLeftInset, bottom: margins.bottom, trailing: margins.trailing)
+            configuration.secondaryText = engine.name
+            cell.contentConfiguration = configuration
+        }
     }
 }
 

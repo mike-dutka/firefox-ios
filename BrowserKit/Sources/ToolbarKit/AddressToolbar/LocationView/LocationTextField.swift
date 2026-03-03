@@ -7,6 +7,7 @@ import UIKit
 
 /// Delegate for the text field events. Since LocationTextField owns the UITextFieldDelegate,
 /// callers must use this instead.
+@MainActor
 protocol LocationTextFieldDelegate: AnyObject {
     func locationTextField(_ textField: LocationTextField, didEnterText text: String)
     func locationTextFieldShouldReturn(_ textField: LocationTextField) -> Bool
@@ -16,7 +17,7 @@ protocol LocationTextFieldDelegate: AnyObject {
     func locationTextFieldNeedsSearchReset(_ textField: UITextField)
 }
 
-class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
+final class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
     private var tintedClearImage: UIImage?
     private var clearButtonTintColor: UIColor?
 
@@ -50,6 +51,8 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
         keyboardType = .webSearch
         autocorrectionType = .no
         autocapitalizationType = .none
+        smartQuotesType = .no
+        smartDashesType = .no
         returnKeyType = .go
         tintAdjustmentMode = .normal
 
@@ -119,11 +122,11 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
         super.touchesBegan(touches, with: event)
     }
 
-    override open func caretRect(for position: UITextPosition) -> CGRect {
+    override public func caretRect(for position: UITextPosition) -> CGRect {
         return hideCursor ? CGRect.zero : super.caretRect(for: position)
     }
 
-    override open func setMarkedText(_ markedText: String?, selectedRange: NSRange) {
+    override public func setMarkedText(_ markedText: String?, selectedRange: NSRange) {
         isSettingMarkedText = true
         removeCompletion()
         super.setMarkedText(markedText, selectedRange: selectedRange)
@@ -155,13 +158,12 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
         tintColor = colors.layerSelectedText
         clearButtonTintColor = colors.iconPrimary
         markedTextStyle = [NSAttributedString.Key.backgroundColor: colors.layerAutofillText]
-        textColor = colors.textPrimary
 
-        attributedPlaceholder = NSAttributedString(
-            string: placeholder ?? "",
-            attributes: [NSAttributedString.Key.foregroundColor: colors.textSecondary]
-        )
-
+        // Force marked text to refresh with new style
+        if let markedRange = markedTextRange,
+           let markedText = text(in: markedRange) {
+            setMarkedText(markedText, selectedRange: .init())
+        }
         tintClearButton()
     }
 
@@ -290,6 +292,7 @@ class LocationTextField: UITextField, UITextFieldDelegate, ThemeApplicable {
     }
 
     func textFieldShouldClear(_ textField: UITextField) -> Bool {
+        text = ""
         removeCompletion()
         return autocompleteDelegate?.locationTextFieldShouldClear(self) ?? true
     }

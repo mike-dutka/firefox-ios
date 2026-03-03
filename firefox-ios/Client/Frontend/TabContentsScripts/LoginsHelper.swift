@@ -13,6 +13,7 @@ import struct MozillaAppServices.LoginEntry
 enum FocusFieldType: String, Codable {
     case username
     case password
+    case email
 }
 
 struct FieldFocusMessage: Codable {
@@ -22,7 +23,7 @@ struct FieldFocusMessage: Codable {
 
 struct LoginInjectionData: Codable {
     var requestId: String
-    var name: String = "RemoteLogins:loginsFound"
+    var name = "RemoteLogins:loginsFound"
     var logins: [LoginItem]
 }
 
@@ -32,14 +33,15 @@ struct LoginItem: Codable {
     var hostname: String
 }
 
-class LoginsHelper: TabContentScript, FeatureFlaggable {
+// TODO: FXIOS-13180 Make LoginsHelper actually sendable
+class LoginsHelper: @unchecked Sendable, TabContentScript, FeatureFlaggable {
     private weak var tab: Tab?
     private let profile: Profile
     private let theme: Theme
     private var loginAlert: SaveLoginAlert?
     private var loginAlertTimer: Timer?
     private var loginAlertTimeout: TimeInterval = 10
-    private var currentRequestId: String = ""
+    private var currentRequestId = ""
     private var logger: Logger = DefaultLogger.shared
 
     public var foundFieldValues: ((FocusFieldType, String) -> Void)?
@@ -76,7 +78,7 @@ class LoginsHelper: TabContentScript, FeatureFlaggable {
     }
 
     private func getOrigin(_ uriString: String, allowJS: Bool = false) -> String? {
-        guard let uri = URL(string: uriString, invalidCharacters: false),
+        guard let uri = URL(string: uriString),
               let scheme = uri.scheme, !scheme.isEmpty,
               let host = uri.host
         else {
@@ -136,27 +138,41 @@ class LoginsHelper: TabContentScript, FeatureFlaggable {
               let type = res["type"] as? String
         else { return }
 
-        if self.featureFlags.isFeatureEnabled(.passwordGenerator, checking: .buildOnly) {
-            if type == "generatePassword",
-                let tab = self.tab,
-                !tab.isPrivate,
-                profile.prefs.boolForKey("saveLogins") ?? true {
-                let userDefaults = UserDefaults.standard
-                let showPasswordGeneratorClosure = {
-                    let newAction = GeneralBrowserAction(
-                        frame: message.frameInfo,
-                        windowUUID: tab.windowUUID,
-                        actionType: GeneralBrowserActionType.showPasswordGenerator)
+        // NOTE(FXIOS-12024): This is added only to be able t oswitch between implementations inside the JS.
+        // Once we rollout the update for all users, this will be removed.
+        if type == "ready" {
+            LoginsHelper.setUpdatedPasswordEnabled(with: self.tab)
+            return
+        }
 
-                    store.dispatch(newAction)
-                }
-                if userDefaults.value(forKey: PrefsKeys.PasswordGeneratorShown) == nil {
-                    userDefaults.set(true, forKey: PrefsKeys.PasswordGeneratorShown)
-                    showPasswordGeneratorClosure()
-                } else {
-                    tab.webView?.accessoryView.useStrongPasswordClosure = showPasswordGeneratorClosure
-                    tab.webView?.accessoryView.reloadViewFor(.passwordGenerator)
-                }
+        if type == "clearAccessoryView" {
+            tab?.webView?.accessoryView.reloadViewFor(.standard)
+        }
+        let scriptEvaluator = WebKitPasswordGeneratorScriptEvaluator(webView: message.frameInfo.webView)
+        let frameContext = PasswordGeneratorFrameContext(origin: message.frameInfo.webView?.url?.origin,
+                                                         host: message.frameInfo.securityOrigin.host,
+                                                         scriptEvaluator: scriptEvaluator,
+                                                         frameInfo: message.frameInfo)
+
+        if type == "generatePassword",
+            let tab = self.tab,
+            !tab.isPrivate,
+            profile.prefs.boolForKey("saveLogins") ?? true {
+            let userDefaults = UserDefaults.standard
+            let showPasswordGeneratorClosure = {
+                let newAction = GeneralBrowserAction(
+                    frameContext: frameContext,
+                    windowUUID: tab.windowUUID,
+                    actionType: GeneralBrowserActionType.showPasswordGenerator)
+
+                store.dispatch(newAction)
+            }
+            if userDefaults.value(forKey: PrefsKeys.PasswordGeneratorShown) == nil {
+                userDefaults.set(true, forKey: PrefsKeys.PasswordGeneratorShown)
+                showPasswordGeneratorClosure()
+            } else {
+                tab.webView?.accessoryView.useStrongPasswordClosure = showPasswordGeneratorClosure
+                tab.webView?.accessoryView.reloadViewFor(.passwordGenerator)
             }
         }
 
@@ -189,6 +205,10 @@ class LoginsHelper: TabContentScript, FeatureFlaggable {
         // NOTE: This is a partial stub / placeholder
         // FXIOS-3856 will further enhance the logs into actual callback
         switch message.fieldType {
+        case .email:
+            logger.log("Parsed message email",
+                       level: .debug,
+                       category: .webview)
         case .username:
             logger.log("Parsed message username",
                        level: .debug,
@@ -212,32 +232,6 @@ class LoginsHelper: TabContentScript, FeatureFlaggable {
                        category: .webview)
             return nil
         }
-    }
-
-    class func replace(_ base: String, keys: [String], replacements: [String]) -> NSMutableAttributedString {
-        var ranges = [NSRange]()
-        var string = base
-        for (index, key) in keys.enumerated() {
-            let replace = replacements[index]
-            let range = string.range(of: key,
-                                     options: .literal,
-                                     range: nil,
-                                     locale: nil)!
-            string.replaceSubrange(range, with: replace)
-            let nsRange = NSRange(location: string.distance(from: string.startIndex, to: range.lowerBound),
-                                  length: replace.count)
-            ranges.append(nsRange)
-        }
-
-        var attributes = [NSAttributedString.Key: AnyObject]()
-        attributes[NSAttributedString.Key.font] = UIFont.systemFont(ofSize: 13, weight: UIFont.Weight.regular)
-        attributes[NSAttributedString.Key.foregroundColor] = UIColor.Photon.Grey60
-        let attr = NSMutableAttributedString(string: string, attributes: attributes)
-        let font = UIFont.systemFont(ofSize: 13, weight: UIFont.Weight.medium)
-        for range in ranges {
-            attr.addAttribute(NSAttributedString.Key.font, value: font, range: range)
-        }
-        return attr
     }
 
     func setCredentials(_ login: LoginEntry) {
@@ -270,11 +264,11 @@ class LoginsHelper: TabContentScript, FeatureFlaggable {
         }
     }
 
+    @MainActor
     private func promptSave(_ login: LoginEntry) {
         guard login.isValid.isSuccess else { return }
 
-        if self.featureFlags.isFeatureEnabled(.passwordGenerator, checking: .buildOnly) &&
-            profile.prefs.boolForKey("saveLogins") ?? true &&
+        if profile.prefs.boolForKey("saveLogins") ?? true &&
             tab?.isPrivate == false {
             clearStoredPasswordAfterGeneration(origin: login.hostname)
         }
@@ -318,6 +312,7 @@ class LoginsHelper: TabContentScript, FeatureFlaggable {
         show(alert)
     }
 
+    @MainActor
     private func promptUpdateFromLogin(login old: LoginRecord, toLogin new: LoginEntry) {
         guard new.isValid.isSuccess else { return }
 
@@ -357,6 +352,7 @@ class LoginsHelper: TabContentScript, FeatureFlaggable {
         show(alert)
     }
 
+    @MainActor
     private func show(_ alert: SaveLoginAlert) {
         loginAlert = alert
         loginAlert?.applyTheme(theme: theme)
@@ -375,9 +371,11 @@ class LoginsHelper: TabContentScript, FeatureFlaggable {
     }
 
     @objc
-    func timerDone() {
-        loginAlert?.shouldPersist = false
-        loginAlertTimer = nil
+    nonisolated func timerDone() {
+        ensureMainThread {
+            self.loginAlert?.shouldPersist = false
+            self.loginAlertTimer = nil
+        }
     }
 
     private func requestLogins(_ request: [String: Any], url: URL) {
@@ -385,22 +383,24 @@ class LoginsHelper: TabContentScript, FeatureFlaggable {
             // Even though we don't currently use these two fields,
             // verify that they were received as additional confirmation
             // that this is a valid request from LoginsHelper.js.
-            request["formOrigin"] as? String != nil,
-            request["actionOrigin"] as? String != nil
+            request["formOrigin"] is String,
+            request["actionOrigin"] is String
         else { return }
 
         currentRequestId = requestId
     }
 
+    @MainActor
     private func clearStoredPasswordAfterGeneration(origin: String) {
         if let windowUUID = self.tab?.windowUUID {
             let action = PasswordGeneratorAction(windowUUID: windowUUID,
                                                  actionType: PasswordGeneratorActionType.clearGeneratedPasswordForSite,
-                                                 origin: origin)
+                                                 loginEntryOrigin: origin)
             store.dispatch(action)
         }
     }
 
+    @MainActor
     public static func fillLoginDetails(with tab: Tab,
                                         loginData: LoginInjectionData) {
         guard let data = try? JSONEncoder().encode(loginData),
@@ -413,12 +413,21 @@ class LoginsHelper: TabContentScript, FeatureFlaggable {
                                      object: .loginsAutofilled)
     }
 
+    @MainActor
     public static func yieldFocusBackToField(with tab: Tab) {
         let jsFocusCallback = "window.__firefox__.logins.yieldFocusBackToField()"
         tab.webView?.evaluateJavascriptInDefaultContentWorld(jsFocusCallback)
     }
 
+    @MainActor
+    public static func setUpdatedPasswordEnabled(with tab: Tab?) {
+        guard let tab = tab else { return }
+        let jsUpdatedPasswordEnabled = "window.__firefox__.logins.isUpdatedPasswordManagerEnabled(true)"
+        tab.webView?.evaluateJavascriptInDefaultContentWorld(jsUpdatedPasswordEnabled)
+    }
+
     // MARK: Theming System
+    @MainActor
     private func applyTheme(for views: UIView...) {
         views.forEach { view in
             if let view = view as? ThemeApplicable {

@@ -8,29 +8,31 @@ import Common
 /// Stores your entire app state in the form of a single data structure.
 /// This state can only be modified by dispatching Actions to the store.
 /// Whenever the state of the store changes, the store will notify all store subscriber.
-public class Store<State: StateType>: DefaultDispatchStore {
+@MainActor
+public final class Store<State: StateType & Sendable>: DefaultDispatchStore {
     typealias SubscriptionType = SubscriptionWrapper<State>
 
-    public var state: State {
-        didSet {
-            subscriptions.forEach {
-                guard $0.subscriber != nil else {
-                    subscriptions.remove($0)
-                    return
-                }
-
-                $0.newValues(oldState: oldValue, newState: state)
-            }
-        }
-    }
+    private let logger: Logger
 
     private var reducer: Reducer<State>
     private var middlewares: [Middleware<State>]
     private var subscriptions: Set<SubscriptionType> = []
-    private var actionRunning = false
-    private let logger: Logger
+
     private var actionQueue: [Action] = []
     private var isProcessingActions = false
+
+    public var state: State {
+        didSet {
+            // Remove dead subscribers first to avoid modifying set during iteration
+            let deadSubscriptions = subscriptions.filter { $0.subscriber == nil }
+            subscriptions.subtract(deadSubscriptions)
+
+            // Now safely iterate through live subscriptions
+            subscriptions.forEach {
+                $0.newValues(oldState: oldValue, newState: state)
+            }
+        }
+    }
 
     public init(state: State,
                 reducer: @escaping Reducer<State>,
@@ -70,13 +72,11 @@ public class Store<State: StateType>: DefaultDispatchStore {
     }
 
     public func dispatch(_ action: Action) {
+        MainActor.assertIsolated("Expected to be called only on main actor.")
         logger.log("Dispatched action: \(action.debugDescription)", level: .info, category: .redux)
 
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self] in self?.dispatch(action) }
-            return
-        }
-
+        // We queue and process actions to ensure each single action completely passes through reducers and middlewares
+        // before the next action fires.
         actionQueue.append(action)
         processQueuedActions()
     }

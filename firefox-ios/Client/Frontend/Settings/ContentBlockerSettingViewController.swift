@@ -7,8 +7,7 @@ import Foundation
 import Shared
 import ComponentLibrary
 
-class ContentBlockerSettingViewController: SettingsTableViewController,
-                                           Notifiable {
+class ContentBlockerSettingViewController: SettingsTableViewController {
     private struct UX {
         static let buttonContentInsets = NSDirectionalEdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0)
     }
@@ -36,6 +35,10 @@ class ContentBlockerSettingViewController: SettingsTableViewController,
                 style: .plain,
                 target: self,
                 action: #selector(done))
+            if #available(iOS 26.0, *) {
+                let theme = themeManager.getCurrentTheme(for: windowUUID)
+                navigationItem.rightBarButtonItem?.tintColor = theme.colors.textPrimary
+            }
         }
     }
 
@@ -46,8 +49,11 @@ class ContentBlockerSettingViewController: SettingsTableViewController,
     override func viewDidLoad() {
         super.viewDidLoad()
         applyTheme()
-        setupNotifications(forObserver: self, observing: [UIContentSizeCategory.didChangeNotification])
-        linkButton.isHidden = currentBlockingStrength == .strict
+        startObservingNotifications(
+            withNotificationCenter: notificationCenter,
+            forObserver: self,
+            observing: [UIContentSizeCategory.didChangeNotification]
+        )
     }
 
     override func didRotate(from fromInterfaceOrientation: UIInterfaceOrientation) {
@@ -66,15 +72,15 @@ class ContentBlockerSettingViewController: SettingsTableViewController,
                     return option == self.currentBlockingStrength
                 },
                 onChecked: {
+                    let previousOption = self.currentBlockingStrength
+
                     self.currentBlockingStrength = option
                     self.prefs.setString(self.currentBlockingStrength.rawValue,
                                          forKey: ContentBlockingConfig.Prefs.StrengthKey)
                     TabContentBlocker.prefsChanged()
                     self.tableView.reloadData()
 
-                    self.linkButton.isHidden = option == .strict
-
-                    self.recordEventOnChecked(option: option)
+                    self.recordEventOnChecked(option: option, fromOption: previousOption)
                 })
 
             let uuid = windowUUID
@@ -132,17 +138,8 @@ class ContentBlockerSettingViewController: SettingsTableViewController,
         return sections
     }
 
-    private func recordEventOnChecked(option: BlockingStrength) {
-        let extras = [
-            TelemetryWrapper.EventExtraKey.preference.rawValue: "ETP-strength",
-            TelemetryWrapper.EventExtraKey.preferenceChanged.rawValue: option.rawValue
-        ]
-        TelemetryWrapper.recordEvent(
-            category: .action,
-            method: .change,
-            object: .setting,
-            extras: extras
-        )
+    private func recordEventOnChecked(option: BlockingStrength, fromOption: BlockingStrength) {
+        SettingsTelemetry().changedSetting("ETP-strength", to: option.rawValue, from: fromOption.rawValue)
 
         if option == .strict {
             TelemetryWrapper.recordEvent(
@@ -216,16 +213,16 @@ class ContentBlockerSettingViewController: SettingsTableViewController,
     }
 
     // MARK: - Notifiable
-    func handleNotifications(_ notification: Notification) {
+    override func handleNotifications(_ notification: Notification) {
+        super.handleNotifications(notification)
+
         switch notification.name {
         case UIContentSizeCategory.didChangeNotification:
-            tableView.reloadData()
+            ensureMainThread {
+                self.tableView.reloadData()
+            }
         default:
             break
         }
-    }
-
-    deinit {
-        notificationCenter.removeObserver(self)
     }
 }

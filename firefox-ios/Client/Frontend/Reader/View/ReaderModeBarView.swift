@@ -4,7 +4,6 @@
 
 import Common
 import UIKit
-import Shared
 
 enum ReaderModeBarButtonType {
     case markAsRead
@@ -33,6 +32,7 @@ enum ReaderModeBarButtonType {
         }
     }
 
+    @MainActor
     var image: UIImage? {
         let image = UIImage(named: imageName)?.withRenderingMode(.alwaysTemplate)
         image?.accessibilityLabel = localizedDescription
@@ -41,10 +41,11 @@ enum ReaderModeBarButtonType {
 }
 
 protocol ReaderModeBarViewDelegate: AnyObject {
+    @MainActor
     func readerModeBar(_ readerModeBar: ReaderModeBarView, didSelectButton buttonType: ReaderModeBarButtonType)
 }
 
-class ReaderModeBarView: UIView, AlphaDimmable, TopBottomInterchangeable, SearchBarLocationProvider {
+class ReaderModeBarView: UIView, AlphaDimmable, TopBottomInterchangeable, SearchBarLocationProvider, ThemeApplicable {
     private struct UX {
         static let buttonWidth: CGFloat = 80
     }
@@ -58,6 +59,12 @@ class ReaderModeBarView: UIView, AlphaDimmable, TopBottomInterchangeable, Search
     var readStatusButton: UIButton?
     var settingsButton: UIButton?
     var listStatusButton: UIButton?
+
+    lazy var toolbarHelper: ToolbarHelperInterface = ToolbarHelper()
+
+    private var toolbarLayoutType: ToolbarLayoutType? {
+        return FxNimbus.shared.features.toolbarRefactorFeature.value().layout
+    }
 
     @objc dynamic var buttonTintColor = UIColor.clear {
         didSet {
@@ -160,12 +167,14 @@ class ReaderModeBarView: UIView, AlphaDimmable, TopBottomInterchangeable, Search
             listStatusButton?.setImage(buttonType.image, for: .normal)
         }
     }
-}
 
-extension ReaderModeBarView: ThemeApplicable {
+    // MARK: - ThemeApplicable
     func applyTheme(theme: Theme) {
         let colors = theme.colors
-        backgroundColor = colors.layer1
+
+        let backgroundAlpha = toolbarHelper.glassEffectAlpha
+
+        backgroundColor = colors.layerSurfaceLow.withAlphaComponent(backgroundAlpha)
         buttonTintColor = colors.textPrimary
         contextStrokeColor = colors.textSecondary
     }

@@ -3,23 +3,23 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Common
-import MenuKit
 import XCTest
 
 @testable import Client
 
+@MainActor
 final class MainMenuCoordinatorTests: XCTestCase {
     private var mockRouter: MockRouter!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         DependencyHelperMock().bootstrapDependencies()
         mockRouter = MockRouter(navigationController: MockNavigationController())
     }
 
-    override func tearDown() {
-        AppContainer.shared.reset()
-        super.tearDown()
+    override func tearDown() async throws {
+        DependencyHelperMock().reset()
+        try await super.tearDown()
     }
 
     func testInitialState() {
@@ -40,27 +40,6 @@ final class MainMenuCoordinatorTests: XCTestCase {
         XCTAssertEqual(mockRouter.setRootViewControllerCalled, 1)
     }
 
-    func testShowDetailViewController() {
-        let subject = createSubject()
-
-        subject.start()
-        subject.showDetailViewController()
-
-        XCTAssertTrue(mockRouter.pushedViewController is MainMenuDetailsViewController)
-        XCTAssertEqual(mockRouter.pushCalled, 1)
-    }
-
-    func testDismissDetailViewController() {
-        let subject = createSubject()
-
-        subject.start()
-        subject.showDetailViewController()
-        subject.dismissDetailViewController()
-
-        XCTAssertTrue(mockRouter.rootViewController is MainMenuViewController)
-        XCTAssertEqual(mockRouter.popViewControllerCalled, 1)
-    }
-
     func testMainMenu_dismissFlow_callsRouterDismiss() throws {
         let subject = createSubject()
 
@@ -71,7 +50,7 @@ final class MainMenuCoordinatorTests: XCTestCase {
     }
 
     private func createSubject(
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) -> MainMenuCoordinator {
         let subject = MainMenuCoordinator(router: mockRouter, windowUUID: .XCTestDefaultUUID, profile: MockProfile())

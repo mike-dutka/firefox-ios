@@ -35,12 +35,12 @@ class PasswordGeneratorViewController: UIViewController, StoreSubscriber, Themea
 
     // MARK: - Properties
     var themeManager: ThemeManager
-    var themeObserver: NSObjectProtocol?
+    var themeListenerCancellable: Any?
     var notificationCenter: NotificationProtocol
     let windowUUID: WindowUUID
     var currentWindowUUID: UUID? { windowUUID }
     private var currentTab: Tab
-    private var currentFrame: WKFrameInfo
+    private var frameContext: PasswordGeneratorFrameContext?
 
     // MARK: - Views
 
@@ -58,13 +58,13 @@ class PasswordGeneratorViewController: UIViewController, StoreSubscriber, Themea
 
     private lazy var header: PasswordGeneratorHeaderView = .build()
 
-    private lazy var passwordField: PasswordGeneratorPasswordFieldView = .build { [weak self] view in
-        view.refreshPasswordButtonOnClick = {
-            guard let self else {return}
+    private lazy var passwordField: PasswordGeneratorPasswordFieldView = .build { view in
+        view.refreshPasswordButtonOnClick = { [weak self] in
+            guard let self else { return }
             store.dispatch(PasswordGeneratorAction(
                 windowUUID: self.windowUUID,
                 actionType: PasswordGeneratorActionType.userTappedRefreshPassword,
-                currentFrame: self.currentFrame)
+                frameContext: self.frameContext)
             )
         }
     }
@@ -77,23 +77,34 @@ class PasswordGeneratorViewController: UIViewController, StoreSubscriber, Themea
          themeManager: ThemeManager = AppContainer.shared.resolve(),
          notificationCenter: NotificationProtocol = NotificationCenter.default,
          currentTab: Tab,
-         currentFrame: WKFrameInfo) {
+         frameContext: PasswordGeneratorFrameContext) {
         self.windowUUID = windowUUID
         self.themeManager = themeManager
         self.notificationCenter = notificationCenter
         self.passwordGeneratorState = PasswordGeneratorState(windowUUID: windowUUID)
         self.currentTab = currentTab
-        self.currentFrame = currentFrame
+        self.frameContext = frameContext
         super.init(nibName: nil, bundle: nil)
         self.subscribeToRedux()
-        setupNotifications(forObserver: self,
-                           observing: [.DynamicFontChanged,
-                                       UIApplication.willResignActiveNotification,
-                                       UIApplication.didBecomeActiveNotification])
+        startObservingNotifications(
+            withNotificationCenter: notificationCenter,
+            forObserver: self,
+            observing: [UIContentSizeCategory.didChangeNotification,
+                        UIApplication.willResignActiveNotification,
+                        UIApplication.didBecomeActiveNotification]
+        )
     }
 
     deinit {
-        unsubscribeFromRedux()
+        // TODO: FXIOS-13097 This is a work around until we can leverage isolated deinits
+        guard Thread.isMainThread else {
+            assertionFailure("AddressBarPanGestureHandler was not deallocated on the main thread. Observer was not removed")
+            return
+        }
+
+        MainActor.assumeIsolated {
+            unsubscribeFromRedux()
+        }
     }
 
     required init?(coder: NSCoder) {
@@ -103,9 +114,9 @@ class PasswordGeneratorViewController: UIViewController, StoreSubscriber, Themea
     // MARK: - View Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        listenForThemeChange(view)
         configureUsePasswordButton()
         setupView()
+        listenForThemeChanges(withNotificationCenter: notificationCenter)
         applyTheme()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             UIAccessibility.post(notification: .screenChanged, argument: self.header)
@@ -170,7 +181,7 @@ class PasswordGeneratorViewController: UIViewController, StoreSubscriber, Themea
     func useButtonOnClick() {
         store.dispatch(PasswordGeneratorAction(windowUUID: windowUUID,
                                                actionType: PasswordGeneratorActionType.userTappedUsePassword,
-                                               currentFrame: currentFrame))
+                                               frameContext: frameContext))
         dismiss(animated: true)
     }
 
@@ -233,16 +244,29 @@ class PasswordGeneratorViewController: UIViewController, StoreSubscriber, Themea
     }
 
     func handleNotifications(_ notification: Notification) {
-        switch notification.name {
-        case .DynamicFontChanged:
-            applyDynamicFontChange()
-        case UIApplication.willResignActiveNotification:
-            store.dispatch(PasswordGeneratorAction(windowUUID: windowUUID,
-                                                   actionType: PasswordGeneratorActionType.hidePassword))
-        case UIApplication.didBecomeActiveNotification:
-            store.dispatch(PasswordGeneratorAction(windowUUID: windowUUID,
-                                                   actionType: PasswordGeneratorActionType.showPassword))
-        default: break
+        let name = notification.name
+        ensureMainThread {
+            switch name {
+            case UIContentSizeCategory.didChangeNotification:
+                ensureMainThread {
+                    self.applyDynamicFontChange()
+                }
+            case UIApplication.willResignActiveNotification:
+                store.dispatch(
+                    PasswordGeneratorAction(
+                        windowUUID: self.windowUUID,
+                        actionType: PasswordGeneratorActionType.hidePassword
+                    )
+                )
+            case UIApplication.didBecomeActiveNotification:
+                store.dispatch(
+                    PasswordGeneratorAction(
+                        windowUUID: self.windowUUID,
+                        actionType: PasswordGeneratorActionType.showPassword
+                    )
+                )
+            default: break
+            }
         }
     }
 }

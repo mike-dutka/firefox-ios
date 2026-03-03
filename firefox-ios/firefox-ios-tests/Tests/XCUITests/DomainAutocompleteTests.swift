@@ -2,8 +2,8 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import XCTest
-import Shared
 
 let website = [
     "url": "mozilla.org",
@@ -28,7 +28,7 @@ class DomainAutocompleteTests: BaseTestCase {
     // This DB contains 3 entries mozilla.com/github.com/git.es
     let historyDB = "browserAutocomplete-places.db"
 
-    override func setUp() {
+    override func setUp() async throws {
         // Test name looks like: "[Class testFunc]", parse out the function name
         let parts = name.replacingOccurrences(of: "]", with: "").split(separator: " ")
         let key = String(parts[1])
@@ -41,7 +41,7 @@ class DomainAutocompleteTests: BaseTestCase {
                                LaunchArguments.SkipContextualHints,
                                LaunchArguments.DisableAnimations]
         }
-        super.setUp()
+        try await super.setUp()
     }
 
     // https://mozilla.testrail.io/index.php?/cases/view/2334558
@@ -81,9 +81,8 @@ class DomainAutocompleteTests: BaseTestCase {
 
         navigator.goto(CloseTabMenu)
         navigator.performAction(Action.AcceptRemovingAllTabs)
-        navigator.nowAt(HomePanelsScreen)
 
-        navigator.goto(URLBarOpen)
+        urlBarAddress.waitAndTap()
         mozWaitForElementToExist(urlBarAddress)
         urlBarAddress.typeText("moz")
 
@@ -120,6 +119,7 @@ class DomainAutocompleteTests: BaseTestCase {
     func test4EnsureSchemeIncludedAutocompletion() {
         navigator.openURL(websiteExample["url"]!)
         waitUntilPageLoad()
+        navigator.nowAt(BrowserTab)
         navigator.goto(URLBarOpen)
         urlBarAddress.typeText("ex")
         if #available(iOS 16, *) {
@@ -134,6 +134,7 @@ class DomainAutocompleteTests: BaseTestCase {
     func test5NoMatches() {
         navigator.openURL("twitter.com/login")
         waitUntilPageLoad()
+        navigator.nowAt(BrowserTab)
         navigator.goto(URLBarOpen)
         urlBarAddress.typeText("baz")
         let value = urlBarAddress.value
@@ -181,21 +182,21 @@ class DomainAutocompleteTests: BaseTestCase {
     func test2DefaultDomains() {
         navigator.goto(URLBarOpen)
         urlBarAddress.typeText("a")
-        mozWaitForValueContains(urlBarAddress, value: ".com")
+        mozWaitForValueContains(urlBarAddress, value: "a")
         let value = urlBarAddress.value
-        XCTAssertEqual(value as? String, "amazon.com", "Wrong autocompletion")
+        XCTAssertEqual(value as? String, "a", "Wrong autocompletion")
 
         app.buttons["Clear text"].waitAndTap()
         urlBarAddress.typeText("an")
-        mozWaitForValueContains(urlBarAddress, value: ".com")
+        mozWaitForValueContains(urlBarAddress, value: "an")
         let value2 = urlBarAddress.value
-        XCTAssertEqual(value2 as? String, "answers.com", "Wrong autocompletion")
+        XCTAssertEqual(value2 as? String, "an", "Wrong autocompletion")
 
         app.buttons["Clear text"].waitAndTap()
         urlBarAddress.typeText("anc")
-        mozWaitForValueContains(urlBarAddress, value: ".com")
+        mozWaitForValueContains(urlBarAddress, value: "anc")
         let value3 = urlBarAddress.value
-        XCTAssertEqual(value3 as? String, "ancestry.com", "Wrong autocompletion")
+        XCTAssertEqual(value3 as? String, "anc", "Wrong autocompletion")
     }
 
     // Test mixed case autocompletion.

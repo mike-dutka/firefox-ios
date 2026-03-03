@@ -5,7 +5,6 @@
 import Foundation
 import Common
 import Shared
-import SiteImageView
 import ComponentLibrary
 import X509
 
@@ -39,11 +38,14 @@ class TrackingProtectionDetailsViewController: UIViewController, Themeable {
     private let telemetryWrapper = TrackingProtectionTelemetry()
 
     // MARK: - UI
-    private let scrollView: UIScrollView = .build { scrollView in }
+    private let scrollView: UIScrollView = .build { scrollView in
+        scrollView.accessibilityIdentifier = AccessibilityIdentifiers.EnhancedTrackingProtection.DetailsScreen.scrollView
+    }
+
     private let baseView: UIStackView = .build { stackView in
         stackView.axis = .vertical
         stackView.accessibilityIdentifier = AccessibilityIdentifiers.EnhancedTrackingProtection.DetailsScreen.containerView
-        stackView.distribution = .fillProportionally
+        stackView.distribution = .fill
     }
 
     private let headerView: NavigationHeaderView = .build { header in
@@ -52,7 +54,9 @@ class TrackingProtectionDetailsViewController: UIViewController, Themeable {
     private let connectionView: TrackingProtectionStatusView = .build { view in
         view.accessibilityIdentifier = AccessibilityIdentifiers.EnhancedTrackingProtection.DetailsScreen.connectionView
     }
-    private let verifiedByView: TrackingProtectionVerifiedByView = .build()
+    private let verifiedByView: TrackingProtectionVerifiedByView = .build { view in
+        view.accessibilityIdentifier = AccessibilityIdentifiers.EnhancedTrackingProtection.DetailsScreen.verifiedByView
+    }
 
     // MARK: See Certificates View
     private lazy var viewCertificatesButton: LinkButton = .build { button in
@@ -67,7 +71,7 @@ class TrackingProtectionDetailsViewController: UIViewController, Themeable {
     var model: TrackingProtectionDetailsModel
     var notificationCenter: NotificationProtocol
     var themeManager: ThemeManager
-    var themeObserver: NSObjectProtocol?
+    var themeListenerCancellable: Any?
     let windowUUID: WindowUUID
     var currentWindowUUID: UUID? { return windowUUID }
 
@@ -88,20 +92,17 @@ class TrackingProtectionDetailsViewController: UIViewController, Themeable {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        notificationCenter.removeObserver(self)
-    }
-
     override func viewDidLoad() {
         super.viewDidLoad()
         setupView()
+
+        listenForThemeChanges(withNotificationCenter: notificationCenter)
+        applyTheme()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         updateViewDetails()
-        listenForThemeChange(view)
-        applyTheme()
     }
 
     private func setupView() {
@@ -192,14 +193,21 @@ class TrackingProtectionDetailsViewController: UIViewController, Themeable {
 
     // MARK: Accessibility
     private func setupAccessibilityIdentifiers() {
+        typealias A11y = AccessibilityIdentifiers.EnhancedTrackingProtection.DetailsScreen
         view.accessibilityIdentifier = AccessibilityIdentifiers.EnhancedTrackingProtection.DetailsScreen.mainView
         headerView.setupAccessibility(
             closeButtonA11yLabel: .Menu.EnhancedTrackingProtection.AccessibilityLabels.CloseButton,
-            closeButtonA11yId: AccessibilityIdentifiers.EnhancedTrackingProtection.DetailsScreen.closeButton,
-            titleA11yId: AccessibilityIdentifiers.EnhancedTrackingProtection.DetailsScreen.titleLabel,
+            closeButtonA11yId: A11y.closeButton,
+            titleA11yId: A11y.titleLabel,
             backButtonA11yLabel: .Menu.EnhancedTrackingProtection.AccessibilityLabels.BackButton,
-            backButtonA11yId: AccessibilityIdentifiers.EnhancedTrackingProtection.DetailsScreen.backButton
+            backButtonA11yId: A11y.backButton
         )
+        connectionView.setupAccessibilityIdentifiers(
+            connectionImageA11yId: A11y.connectionImage,
+            connectionStatusLabelA11yId: A11y.connectionStatusLabel,
+            dividerViewA11yId: A11y.dividerView
+        )
+        verifiedByView.setupAccessibilityIdentifiers(verifiedByLabelA11yId: A11y.verifiedByLabel)
     }
 
     // MARK: View Transitions

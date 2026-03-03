@@ -22,19 +22,21 @@ private let DefaultParameters =
         minExitVelocity: 800,
         recenterAnimationDuration: 0.15)
 
+@MainActor
 protocol SwipeAnimatorDelegate: AnyObject {
     func swipeAnimator(_ animator: SwipeAnimator)
     func swipeAnimatorIsAnimateAwayEnabled(_ animator: SwipeAnimator) -> Bool
 }
 
-class SwipeAnimator: NSObject {
+@MainActor
+final class SwipeAnimator: NSObject {
     weak var delegate: SwipeAnimatorDelegate?
     weak var animatingView: UIView?
 
     private var prevOffset: CGPoint?
     private let params: SwipeAnimationParameters
 
-    private var panGestureRecogniser: UIPanGestureRecognizer?
+    private var panGestureRecognizer: UIPanGestureRecognizer?
 
     var containerCenter: CGPoint {
         guard let animatingView = self.animatingView else {
@@ -49,10 +51,10 @@ class SwipeAnimator: NSObject {
 
         super.init()
 
-        let panGestureRecogniser = UIPanGestureRecognizer(target: self, action: #selector(didPan))
-        panGestureRecogniser.delegate = self
-        animatingView.addGestureRecognizer(panGestureRecogniser)
-        self.panGestureRecogniser = panGestureRecogniser
+        let panGestureRecognizer = UIPanGestureRecognizer(target: self, action: #selector(didPan))
+        panGestureRecognizer.delegate = self
+        animatingView.addGestureRecognizer(panGestureRecognizer)
+        self.panGestureRecognizer = panGestureRecognizer
     }
 }
 

@@ -8,7 +8,7 @@ import XCTest
 
 @testable import Storage
 
-class MockRustRemoteTabs: RustRemoteTabs {
+class MockRustRemoteTabs: RustRemoteTabs, @unchecked Sendable {
     override public func getAll() -> Deferred<Maybe<[ClientRemoteTabs]>> {
         let url = "https://example.com"
         let title = "example"
@@ -18,13 +18,14 @@ class MockRustRemoteTabs: RustRemoteTabs {
                             title: title,
                             history: [URL(string: url)!],
                             lastUsed: Date.now(),
-                            icon: nil,
-                            inactive: false)
+                            icon: nil)
         let clientRemoteTab = ClientRemoteTabs(clientId: clientGUID,
                                                clientName: "testClient",
                                                deviceType: .mobile,
                                                lastModified: Int64(Date.now()),
-                                               remoteTabs: [tab.toRemoteTabRecord()])
+                                               remoteTabs: [tab.toRemoteTabRecord()],
+                                               tabGroups: [:],
+                                               windows: [:])
 
         let url2 = "https://example2.com"
         let title2 = "example2"
@@ -34,14 +35,15 @@ class MockRustRemoteTabs: RustRemoteTabs {
                              title: title2,
                              history: [URL(string: url2)!],
                              lastUsed: Date.now(),
-                             icon: nil,
-                             inactive: false)
+                             icon: nil)
 
         let clientRemoteTab2 = ClientRemoteTabs(clientId: clientGUID2,
                                                 clientName: "testClient2",
                                                 deviceType: .mobile,
                                                 lastModified: Int64(Date.now()),
-                                                remoteTabs: [tab2.toRemoteTabRecord()])
+                                                remoteTabs: [tab2.toRemoteTabRecord()],
+                                                tabGroups: [:],
+                                                windows: [:])
         return deferMaybe([clientRemoteTab, clientRemoteTab2])
     }
 }
@@ -86,8 +88,7 @@ class RustRemoteTabsTests: XCTestCase {
             title: title,
             history: [URL(string: url)!],
             lastUsed: Date.now(),
-            icon: nil,
-            inactive: false
+            icon: nil
         )
 
         let count = tabs.setLocalTabs(localTabs: [tab])

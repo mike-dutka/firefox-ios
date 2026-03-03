@@ -5,22 +5,23 @@
 import XCTest
 @testable import Client
 
+@MainActor
 final class ShareSheetCoordinatorTests: XCTestCase {
     private var parentCoordinator: MockParentCoordinator!
     private var mockRouter: MockRouter!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         DependencyHelperMock().bootstrapDependencies()
         LegacyFeatureFlagsManager.shared.initializeDeveloperFeatures(with: MockProfile())
         parentCoordinator = MockParentCoordinator()
     }
 
-    override func tearDown() {
-        super.tearDown()
+    override func tearDown() async throws {
         parentCoordinator = nil
         mockRouter = nil
         DependencyHelperMock().reset()
+        try await super.tearDown()
     }
 
     func testStart_presentUIActivityViewController() {

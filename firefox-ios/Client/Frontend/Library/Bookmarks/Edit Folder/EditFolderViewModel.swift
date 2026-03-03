@@ -7,7 +7,8 @@ import Foundation
 import MozillaAppServices
 import Shared
 
-class EditFolderViewModel {
+// FIXME: FXIOS-14160 Make EditFolderViewModel actually Sendable
+class EditFolderViewModel: @unchecked Sendable {
     private let profile: Profile
     private let logger: Logger
     private let parentFolder: FxBookmarkNode
@@ -58,6 +59,7 @@ class EditFolderViewModel {
         return isFolderSelected && !isFolderCollapsed
     }
 
+    @MainActor
     func selectFolder(_ folder: Folder) {
         isFolderCollapsed.toggle()
         if isFolderCollapsed {
@@ -71,8 +73,7 @@ class EditFolderViewModel {
 
     private func getFolderStructure(_ selectedFolder: Folder) {
         Task { @MainActor [weak self] in
-            guard let currentGuid = self?.folder?.guid else { return }
-            let folders = await self?.folderFetcher.fetchFolders(excludedGuids: [currentGuid])
+            let folders = await self?.folderFetcher.fetchFolders(excludedGuids: [self?.folder?.guid ?? ""])
             guard let folders else { return }
             self?.folderStructures = folders
             self?.onFolderStatusUpdate?()

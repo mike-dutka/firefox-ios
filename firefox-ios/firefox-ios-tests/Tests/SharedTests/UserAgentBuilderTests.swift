@@ -39,18 +39,21 @@ final class UserAgentBuilderTests: XCTestCase {
         return XCTAssertEqual(agent, "FXIOS1 iPhone12 Apple 5 New details 14.090")
     }
 
+    @MainActor
     func testDefaultMobileUserAgent() {
         let builder = UserAgentBuilder.defaultMobileUserAgent()
-        let systemInfo = "(\(UIDevice.current.model); CPU iPhone OS \(UIDevice.current.systemVersion.replacingOccurrences(of: ".", with: "_")) like Mac OS X)"
-        let extensions = "FxiOS/\(AppInfo.appVersion)  \(UserAgent.uaBitMobile) \(UserAgent.uaBitSafari)"
+        let device = UIDevice.current.model
+        let system = device == "iPad" ? "CPU" : "CPU iPhone"
+        let systemInfo = "(\(device); \(system) OS 18_7 like Mac OS X)"
+        let extensions = "FxiOS/\(AppInfo.appVersion) \(UserAgent.uaBitMobile) \(UserAgent.uaBitSafari)"
         let testAgent = "\(UserAgent.product) \(systemInfo) \(UserAgent.platform) \(UserAgent.platformDetails) \(extensions)"
         XCTAssertEqual(builder.userAgent(), testAgent)
     }
 
     func testDefaultDesktopUserAgent() {
         let builder = UserAgentBuilder.defaultDesktopUserAgent()
-        let systemInfo = "(Macintosh; Intel Mac OS X 10.15)"
-        let extensions = "FxiOS/\(AppInfo.appVersion) \(UserAgent.uaBitSafari)"
+        let systemInfo = "(Macintosh; Intel Mac OS X 10_15_7)"
+        let extensions = "Version/18.6 Safari/605.1.15"
         let testAgent = "\(UserAgent.product) \(systemInfo) \(UserAgent.platform) \(UserAgent.platformDetails) \(extensions)"
         XCTAssertEqual(builder.userAgent(), testAgent)
     }

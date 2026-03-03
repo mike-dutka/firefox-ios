@@ -9,15 +9,20 @@ class URLValidationTests: BaseTestCase {
                     "www.mozilla.org/en-US", "https://www.mozilla.org/", "https://www.mozilla.org/en", "https://www.mozilla.org/en-US"]
     let urlHttpTypes = ["http://example.com", "http://example.com/"]
     let urlField = XCUIApplication().textFields[AccessibilityIdentifiers.Browser.AddressToolbar.searchTextField]
+    var browserScreen: BrowserScreen!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         continueAfterFailure = true
         navigator.goto(SearchSettings)
         app.tables.switches["Show Search Suggestions"].waitAndTap()
-        scrollToElement(app.tables.switches["FirefoxSuggestShowNonSponsoredSuggestions"])
-        app.tables.switches["FirefoxSuggestShowNonSponsoredSuggestions"].waitAndTap()
+        // Skip FirefoxSuggest setting for FirefoxBeta and Firefox
+        if isFennec {
+            scrollToElement(app.tables.switches["FirefoxSuggestShowNonSponsoredSuggestions"])
+            app.tables.switches["FirefoxSuggestShowNonSponsoredSuggestions"].waitAndTap()
+        }
         navigator.goto(NewTabScreen)
+        browserScreen = BrowserScreen(app: app)
     }
 
     // https://mozilla.testrail.io/index.php?/cases/view/2460854
@@ -26,23 +31,21 @@ class URLValidationTests: BaseTestCase {
         for url in urlTypes {
             navigator.openURL(url)
             waitUntilPageLoad()
-            mozWaitForElementToExist(app.buttons["Menu"])
-            XCTAssertTrue(app.otherElements.staticTexts.elementContainingText("Mozilla").exists)
-            mozWaitForValueContains(urlField, value: "mozilla.org")
+            browserScreen.assertMozillaPageLoaded(urlField: urlField)
             clearURL()
         }
 
         for url in urlHttpTypes {
             navigator.openURL(url)
             waitUntilPageLoad()
-            mozWaitForElementToExist(app.otherElements.staticTexts["Example Domain"])
-            mozWaitForValueContains(urlField, value: "example.com")
+            browserScreen.assertExampleDomainLoaded(urlField: urlField)
             clearURL()
         }
     }
 
     private func clearURL() {
+        navigator.nowAt(BrowserTab)
         navigator.goto(URLBarOpen)
-        app.buttons["Clear text"].waitAndTap()
+        browserScreen.clearURL()
     }
 }

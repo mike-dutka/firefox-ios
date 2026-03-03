@@ -3,15 +3,17 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
+import Common
 @testable import Client
 
-class MockSearchEngineProvider: SearchEngineProvider {
+class MockSearchEngineProvider: SearchEngineProvider, @unchecked Sendable {
     var unorderedEngines: (([OpenSearchEngine]) -> Void)?
 
     var mockEngines: [OpenSearchEngine] = [
         OpenSearchEngine(
             engineID: "ATester",
             shortName: "ATester",
+            telemetrySuffix: nil,
             image: UIImage(),
             searchTemplate: "http://firefox.com/find?q={searchTerms}",
             suggestTemplate: nil,
@@ -20,6 +22,7 @@ class MockSearchEngineProvider: SearchEngineProvider {
         OpenSearchEngine(
             engineID: "BTester",
             shortName: "BTester",
+            telemetrySuffix: nil,
             image: UIImage(),
             searchTemplate: "http://firefox.com/find?q={searchTerms}",
             suggestTemplate: nil,
@@ -28,6 +31,7 @@ class MockSearchEngineProvider: SearchEngineProvider {
         OpenSearchEngine(
             engineID: "CTester",
             shortName: "CTester",
+            telemetrySuffix: nil,
             image: UIImage(),
             searchTemplate: "http://firefox.com/find?q={searchTerms}",
             suggestTemplate: nil,
@@ -36,6 +40,7 @@ class MockSearchEngineProvider: SearchEngineProvider {
         OpenSearchEngine(
             engineID: "DTester",
             shortName: "DTester",
+            telemetrySuffix: nil,
             image: UIImage(),
             searchTemplate: "http://firefox.com/find?q={searchTerms}",
             suggestTemplate: nil,
@@ -44,6 +49,7 @@ class MockSearchEngineProvider: SearchEngineProvider {
         OpenSearchEngine(
             engineID: "ETester",
             shortName: "ETester",
+            telemetrySuffix: nil,
             image: UIImage(),
             searchTemplate: "http://firefox.com/find?q={searchTerms}",
             suggestTemplate: nil,
@@ -52,6 +58,7 @@ class MockSearchEngineProvider: SearchEngineProvider {
         OpenSearchEngine(
             engineID: "FTester",
             shortName: "FTester",
+            telemetrySuffix: nil,
             image: UIImage(),
             searchTemplate: "http://firefox.com/find?q={searchTerms}",
             suggestTemplate: nil,
@@ -64,14 +71,13 @@ class MockSearchEngineProvider: SearchEngineProvider {
     }
 
     func getOrderedEngines(customEngines: [OpenSearchEngine],
-                           orderedEngineNames: [String]?,
-                           completion: @escaping ([OpenSearchEngine]) -> Void) {
-        completion(mockEngines)
+                           engineOrderingPrefs: SearchEnginePrefs,
+                           prefsMigrator: any SearchEnginePreferencesMigrator,
+                           completion: @escaping SearchEngineCompletion) {
+        ensureMainThread {
+            completion(engineOrderingPrefs, self.mockEngines)
+        }
     }
 
-    func getUnorderedBundledEnginesFor(locale: Locale,
-                                       possibleLanguageIdentifier: [String],
-                                       completion: @escaping ([OpenSearchEngine]) -> Void) {
-        unorderedEngines = completion
-    }
+    let preferencesVersion: SearchEngineOrderingPrefsVersion = .v1
 }

@@ -12,6 +12,7 @@ struct ImageIdentifiers {
     public static let badgeMask = "badge-mask"
     public static let firefoxFavicon = "faviconFox"
     public static let foxConfirmation = "foxConfirmation"
+    public static let foxDefaultBrowser = "foxDefaultBrowser"
     public static let homeHeaderLogoBall = "fxHomeHeaderLogoBall"
     public static let homeHeaderLogoText = "fxHomeHeaderLogoText"
     public static let homepagePocket = "homepage-pocket"
@@ -30,12 +31,21 @@ struct ImageIdentifiers {
     public static let noBookmarksInRoot = "noBookmarksInRoot"
     public static let qrCodeScanBorder = "qrcode-scanBorder"
     public static let qrCodeScanLine = "qrcode-scanLine"
-    public static let shoppingNoAnalysisImage = "shoppingNoAnalysisImage"
-    public static let shoppingOptInCardImage = "shoppingOptInCardImage"
     public static let signinSync = "signin-sync"
     public static let syncOpenTab = "sync_open_tab"
     public static let radioButtonNotSelected = "radioButtonNotSelected"
     public static let radioButtonSelected = "radioButtonSelected"
+
+    public struct Appearance {
+        public static let automaticBrowserThemeGradient = "automaticBrowserThemeGradient"
+        public static let lightBrowserThemeGradient = "lightBrowserThemeGradient"
+        public static let darkBrowserThemeGradient = "darkBrowserThemeGradient"
+    }
+
+    public struct AddressBar {
+        public static let addressBarIllustrationBottom = "addressBarIllustrationBottom"
+        public static let addressBarIllustrationTop = "addressBarIllustrationTop"
+    }
 
     public struct Onboarding {
         public struct HeaderImages {
@@ -48,6 +58,12 @@ struct ImageIdentifiers {
             public static let theming = "onboardingThemeing"
             public static let toolbar = "onboardingToolbar"
             public static let customizeFirefox = "onboardingFoxyWindow"
+            public static let syncWithIcons = "onboardingSyncWithIcons"
+            public static let trackers = "onboardingTrackers"
+            public static let syncWithIconsJapan = "onboardingSyncWithIconsJapan"
+            public static let trackersJapan = "onboardingTrackersJapan"
+            public static let syncWithIconsBrandRefresh = "onboardingSyncWithIconsBrandRefresh"
+            public static let trackersBrandRefresh = "onboardingTrackersBrandRefresh"
         }
 
         public struct MultipleChoiceButtonImages {
@@ -56,6 +72,11 @@ struct ImageIdentifiers {
             public static let themeLight = "onboardingThemeLight"
             public static let toolbarTop = "onboardingToolbarIconTop"
             public static let toolbarBottom = "onboardingToolbarIconBottom"
+            public static let themeSystemJapan = "onboardingThemeSystemJapan"
+            public static let themeDarkJapan = "onboardingThemeDarkJapan"
+            public static let themeLightJapan = "onboardingThemeLightJapan"
+            public static let toolbarTopJapan = "onboardingToolbarIconTopJapan"
+            public static let toolbarBottomJapan = "onboardingToolbarIconBottomJapan"
         }
 
         public struct ChallengeTheDefault {
@@ -74,5 +95,9 @@ struct ImageIdentifiers {
         public static let protectionAlert = "protectionPanelAlert"
         public static let protectionOff = "protectionPanelOff"
         public static let protectionOn = "protectionPanelOn"
+    }
+
+    public struct Translations {
+        public static let translationActive = "translateActive"
     }
 }

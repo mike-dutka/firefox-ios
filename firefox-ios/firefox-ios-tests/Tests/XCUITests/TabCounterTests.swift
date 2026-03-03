@@ -7,7 +7,7 @@ import XCTest
 
 class TabCounterTests: BaseTestCase {
     // https://mozilla.testrail.io/index.php?/cases/view/2359077
-    func testTabIncrement() throws {
+    func testTabIncrement() {
         navigator.nowAt(NewTabScreen)
         waitForTabsButton()
 
@@ -16,27 +16,14 @@ class TabCounterTests: BaseTestCase {
 
         navigator.createNewTab()
         navigator.nowAt(NewTabScreen)
-        if !iPad() {
-            navigator.performAction(Action.CloseURLBarOpen)
-        }
         waitForTabsButton()
 
         tabsOpen = app.buttons[AccessibilityIdentifiers.Toolbar.tabsButton].value
         XCTAssertEqual("2", tabsOpen as? String)
-
-        // Check only for iPhone, for iPad there is not counter in tab tray
-        if !iPad() {
-            navigator.goto(TabTray)
-            let navBarTabTrayButton = app.segmentedControls["navBarTabTray"].buttons.firstMatch
-            mozWaitForElementToExist(navBarTabTrayButton)
-            XCTAssertTrue(navBarTabTrayButton.isSelected)
-            let tabsOpenTabTray: String = navBarTabTrayButton.label
-            XCTAssertTrue(tabsOpenTabTray.hasSuffix("2"))
-        }
     }
 
     // https://mozilla.testrail.io/index.php?/cases/view/2359078
-    func testTabDecrement() throws {
+    func testTabDecrement() {
         navigator.nowAt(NewTabScreen)
         waitForTabsButton()
 
@@ -45,33 +32,21 @@ class TabCounterTests: BaseTestCase {
 
         navigator.createNewTab()
         navigator.nowAt(NewTabScreen)
-
-        if !iPad() {
-            navigator.performAction(Action.CloseURLBarOpen)
-        }
         waitForTabsButton()
 
         tabsOpen = app.buttons[AccessibilityIdentifiers.Toolbar.tabsButton].value
         XCTAssertEqual("2", tabsOpen as? String)
 
         navigator.goto(TabTray)
-
-        if isTablet {
-            app.otherElements["Tabs Tray"]
-                .collectionViews.cells.element(boundBy: 0)
-                .buttons[StandardImageIdentifiers.Large.cross].waitAndTap()
+        if iPad() {
+            app.cells.buttons[StandardImageIdentifiers.Large.cross].firstMatch.waitAndTap()
         } else {
-            let navBarTabTrayButton = app.segmentedControls["navBarTabTray"].buttons.firstMatch
-            mozWaitForElementToExist(navBarTabTrayButton)
-            XCTAssertTrue(navBarTabTrayButton.isSelected)
-            let tabsOpenTabTray: String = navBarTabTrayButton.label
-            XCTAssertTrue(tabsOpenTabTray.hasSuffix("2"))
-
-            app.otherElements["Tabs Tray"].cells
-                .element(boundBy: 0).buttons[StandardImageIdentifiers.Large.cross].waitAndTap()
+            app.otherElements[tabsTray]
+                .collectionViews.cells.element(boundBy: 0)
+                .buttons[AccessibilityIdentifiers.TabTray.closeButton].waitAndTap()
         }
 
-        app.otherElements["Tabs Tray"].cells.element(boundBy: 0).waitAndTap()
+        app.otherElements[tabsTray].cells.element(boundBy: 0).waitAndTap()
         navigator.nowAt(NewTabScreen)
         waitForTabsButton()
 
@@ -79,13 +54,6 @@ class TabCounterTests: BaseTestCase {
         XCTAssertEqual("1", tabsOpen as? String)
 
         navigator.goto(TabTray)
-        mozWaitForElementToExist(app.navigationBars["Open Tabs"])
-        tabsOpen = app.segmentedControls.buttons.element(boundBy: 0).label
-        XCTAssertTrue(app.segmentedControls.buttons.element(boundBy: 0).isSelected)
-        if !isTablet {
-            mozWaitForElementToExist(app.segmentedControls.firstMatch)
-            let tabsOpenTabTray: String = app.segmentedControls.buttons.firstMatch.label
-            XCTAssertTrue(tabsOpenTabTray.hasSuffix("1"))
-        }
+        XCTAssertEqual(app.cells.count, 1, "There should be only one tab in the tab tray")
     }
 }

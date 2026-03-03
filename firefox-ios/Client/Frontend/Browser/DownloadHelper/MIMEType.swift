@@ -11,6 +11,7 @@ struct MIMEType {
     static let GIF = "image/gif"
     static let JavaScript = "text/javascript"
     static let JPEG = "image/jpeg"
+    static let JSON = "application/json"
     static let HTML = "text/html"
     static let OctetStream = "application/octet-stream"
     static let Passbook = "application/vnd.apple.pkpass"
@@ -23,6 +24,7 @@ struct MIMEType {
     static let Reality = "model/vnd.reality"
     static let OpenDocument = "application/msword"
     static let MicrosoftWord = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    static let WASM = "application/wasm"
 
     private static let webViewViewableTypes: [String] = [
         MIMEType.Bitmap,
@@ -35,19 +37,8 @@ struct MIMEType {
         MIMEType.WebP
     ]
 
-    private static let downloadableTypes: [String] = [
-        MIMEType.PDF,
-        MIMEType.OpenDocument,
-        MIMEType.MicrosoftWord
-    ]
-
     static func canShowInWebView(_ mimeType: String) -> Bool {
         return webViewViewableTypes.contains(mimeType.lowercased())
-    }
-
-    static func canBeDownloaded(_ mimeType: String?) -> Bool {
-        guard let mimeType else { return false }
-        return downloadableTypes.contains(mimeType.lowercased())
     }
 
     static func mimeTypeFromFileExtension(_ fileExtension: String) -> String {

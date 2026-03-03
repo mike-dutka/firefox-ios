@@ -37,13 +37,17 @@ Object.defineProperty(window.__firefox__, "download", {
         }
 
         var blob = this.response;
-
+        
+        const header = xhr.getResponseHeader("Content-Disposition");
+        const fileName = header ? header.split("filename=")?.[1] : getLastPathComponent(url);
+      
         blobToBase64String(blob, function(base64String) {
           webkit.messageHandlers.downloadManager.postMessage({
-            url: url,
+            url,
             mimeType: blob.type,
             size: blob.size,
-            base64String: base64String
+            base64String,
+            fileName
           });
         });
       };
@@ -59,4 +63,11 @@ Object.defineProperty(window.__firefox__, "download", {
 });
 }
 
-
+document.addEventListener("click", (event) => {
+  if (event.target.localName == "a" && event.target.hasAttribute("download")) {
+    event.preventDefault();
+    // The APP_ID_TOKEN is a unique identifier associated with the app used by scripts to verify the *app*
+    // (not JS on the web) is calling into them.
+    window.__firefox__.download(event.target.href, APP_ID_TOKEN, event.target.download)
+  }
+})

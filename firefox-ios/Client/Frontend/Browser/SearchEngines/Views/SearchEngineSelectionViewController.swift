@@ -3,9 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Common
-import ComponentLibrary
 import UIKit
-import Shared
 import Redux
 import UnifiedSearchKit
 
@@ -17,7 +15,7 @@ class SearchEngineSelectionViewController: UIViewController,
     // MARK: - Properties
     var notificationCenter: NotificationProtocol
     var themeManager: ThemeManager
-    var themeObserver: NSObjectProtocol?
+    var themeListenerCancellable: Any?
     var currentWindowUUID: UUID? { return windowUUID }
 
     weak var coordinator: SearchEngineSelectionCoordinator?
@@ -52,7 +50,15 @@ class SearchEngineSelectionViewController: UIViewController,
     }
 
     deinit {
-        unsubscribeFromRedux()
+        // TODO: FXIOS-13097 This is a work around until we can leverage isolated deinits
+        guard Thread.isMainThread else {
+            assertionFailure("AddressBarPanGestureHandler was not deallocated on the main thread. Observer was not removed")
+            return
+        }
+
+        MainActor.assumeIsolated {
+            unsubscribeFromRedux()
+        }
     }
 
     override func viewDidLoad() {
@@ -62,7 +68,9 @@ class SearchEngineSelectionViewController: UIViewController,
         popoverPresentationController?.delegate = self // For iPad setup
 
         setupView()
-        listenForThemeChange(view)
+
+        listenForThemeChanges(withNotificationCenter: notificationCenter)
+        applyTheme()
 
         store.dispatch(
             SearchEngineSelectionAction(

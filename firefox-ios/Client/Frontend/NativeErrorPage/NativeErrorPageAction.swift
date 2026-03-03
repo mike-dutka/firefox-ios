@@ -5,7 +5,9 @@
 import Redux
 import Common
 
-final class NativeErrorPageAction: Action {
+struct NativeErrorPageAction: Action {
+    let windowUUID: WindowUUID
+    let actionType: ActionType
     let networkError: NSError?
     let nativePageErrorModel: ErrorPageModel?
 
@@ -15,15 +17,17 @@ final class NativeErrorPageAction: Action {
         windowUUID: WindowUUID,
         actionType: any ActionType
     ) {
+        self.windowUUID = windowUUID
+        self.actionType = actionType
         self.networkError = networkError
         self.nativePageErrorModel = nativePageErrorModel
-        super.init(windowUUID: windowUUID, actionType: actionType)
     }
 }
 
 enum NativeErrorPageActionType: ActionType {
     case receivedError
     case errorPageLoaded
+    case bypassCertificateWarning
 }
 
 enum NativeErrorPageMiddlewareActionType: ActionType {

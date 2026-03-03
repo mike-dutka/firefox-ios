@@ -46,6 +46,15 @@ class LoginListViewModel: ObservableObject {
                 guard let recordHostnameURL = URL(string: login.hostname) else { return false }
                 return recordHostnameURL.baseDomain == tabURL.baseDomain
             }
+            self.logins.sort {
+                guard let login0 = URL(string: $0.hostname) else {
+                    return false
+                }
+                guard let login1 = URL(string: $1.hostname) else {
+                    return false
+                }
+                return login0.host == tabURL.host && login1.host != tabURL.host
+            }
         } catch {
             self.logger.log("Error fetching logins",
                             level: .warning,
@@ -55,7 +64,7 @@ class LoginListViewModel: ObservableObject {
     }
 }
 
-class MockLogger: Logger {
+class MockLogger: Logger, @unchecked Sendable {
     var crashedLastLaunch = false
     var savedMessage: String?
     var savedLevel: LoggerLevel?
@@ -72,7 +81,7 @@ class MockLogger: Logger {
              category: LoggerCategory,
              extra: [String: String]? = nil,
              description: String? = nil,
-             file: String = #file,
+             file: String = #filePath,
              function: String = #function,
              line: Int = #line) {
         savedMessage = message

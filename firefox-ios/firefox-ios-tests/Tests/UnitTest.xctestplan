@@ -13,11 +13,6 @@
       "targets" : [
         {
           "containerPath" : "container:..\/BrowserKit",
-          "identifier" : "Common",
-          "name" : "Common"
-        },
-        {
-          "containerPath" : "container:..\/BrowserKit",
           "identifier" : "ComponentLibrary",
           "name" : "ComponentLibrary"
         },
@@ -90,6 +85,46 @@
           "containerPath" : "container:Client.xcodeproj",
           "identifier" : "2FCAE2191ABB51F800877008",
           "name" : "Storage"
+        },
+        {
+          "containerPath" : "container:..\/BrowserKit",
+          "identifier" : "ActionExtensionKit",
+          "name" : "ActionExtensionKit"
+        },
+        {
+          "containerPath" : "container:..\/BrowserKit",
+          "identifier" : "JWTKit",
+          "name" : "JWTKit"
+        },
+        {
+          "containerPath" : "container:..\/BrowserKit",
+          "identifier" : "Shared",
+          "name" : "Shared"
+        },
+        {
+          "containerPath" : "container:..\/BrowserKit",
+          "identifier" : "SummarizeKit",
+          "name" : "SummarizeKit"
+        },
+        {
+          "containerPath" : "container:..\/BrowserKit",
+          "identifier" : "OnboardingKit",
+          "name" : "OnboardingKit"
+        },
+        {
+          "containerPath" : "container:..\/BrowserKit",
+          "identifier" : "VoiceSearchKit",
+          "name" : "VoiceSearchKit"
+        },
+        {
+          "containerPath" : "container:..\/BrowserKit",
+          "identifier" : "UnifiedSearchKit",
+          "name" : "UnifiedSearchKit"
+        },
+        {
+          "containerPath" : "container:..\/BrowserKit",
+          "identifier" : "Common",
+          "name" : "Common"
         }
       ]
     }
@@ -97,62 +132,33 @@
   "testTargets" : [
     {
       "target" : {
-        "containerPath" : "container:Client.xcodeproj",
-        "identifier" : "2FA436041ABB83B4008031D1",
-        "name" : "AccountTests"
+        "containerPath" : "container:..\/BrowserKit",
+        "identifier" : "ActionExtensionKitTests",
+        "name" : "ActionExtensionKitTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:..\/BrowserKit",
+        "identifier" : "OnboardingKitTests",
+        "name" : "OnboardingKitTests"
       }
     },
     {
       "skippedTests" : [
-        "ContentBlockerTests",
-        "ETPCoverSheetTests",
-        "GleanPlumbMessageManagerTests\/testManagerOnMessagePressed_withMalformedURL()",
-        "HistoryHighlightsDataAdaptorTests",
-        "HistoryHighlightsDataAdaptorTests\/testReloadDataOnNotification()",
-        "HistoryHighlightsTests",
-        "IntroViewControllerTests\/testBasicSetupReturnsExpectedItems()",
-        "RustSyncManagerTests\/testGetEnginesAndKeys()",
-        "RustSyncManagerTests\/testGetEnginesAndKeysWithNoKey()",
-        "RustSyncManagerTests\/testUpdateEnginePrefs_addressesDisabled()",
-        "RustSyncManagerTests\/testUpdateEnginePrefs_addressesEnabled()",
-        "RustSyncManagerTests\/testUpdateEnginePrefs_bookmarksEnabled()",
-        "ShortcutRouteTests\/testOpenLastBookmarkShortcutWithInvalidUrl()",
-        "TabManagerTests\/testDeleteSelectedTab()",
-        "TabManagerTests\/testPrivatePreference_togglePBMDeletesPrivate()",
-        "TabToolbarHelperTests\/testTelemetryForSiteMenu()",
-        "TestFavicons\/testFaviconFetcherParse()",
-        "VersionSettingTests",
-        "VersionSettingTests\/testCopyAppVersion()"
+        "SummarizeViewModelTests"
       ],
       "target" : {
-        "containerPath" : "container:Client.xcodeproj",
-        "identifier" : "F84B21D21A090F8100AAB793",
-        "name" : "ClientTests"
+        "containerPath" : "container:..\/BrowserKit",
+        "identifier" : "SummarizeKitTests",
+        "name" : "SummarizeKitTests"
       }
     },
     {
       "target" : {
-        "containerPath" : "container:Client.xcodeproj",
-        "identifier" : "E6F9650B1B2F1CF20034B023",
-        "name" : "SharedTests"
-      }
-    },
-    {
-      "skippedTests" : [
-        "RustLoginsTests\/testUpdateLogin()",
-        "TestBrowserDB\/testMovesDB()"
-      ],
-      "target" : {
-        "containerPath" : "container:Client.xcodeproj",
-        "identifier" : "2FCAE2231ABB51F800877008",
-        "name" : "StorageTests"
-      }
-    },
-    {
-      "target" : {
-        "containerPath" : "container:Client.xcodeproj",
-        "identifier" : "E69DB07C1E97DEA9008A67E6",
-        "name" : "SyncTelemetryTests"
+        "containerPath" : "container:..\/BrowserKit",
+        "identifier" : "ComponentLibraryTests",
+        "name" : "ComponentLibraryTests"
       }
     },
     {
@@ -172,29 +178,8 @@
     {
       "target" : {
         "containerPath" : "container:..\/BrowserKit",
-        "identifier" : "CommonTests",
-        "name" : "CommonTests"
-      }
-    },
-    {
-      "target" : {
-        "containerPath" : "container:..\/BrowserKit",
-        "identifier" : "SiteImageViewTests",
-        "name" : "SiteImageViewTests"
-      }
-    },
-    {
-      "target" : {
-        "containerPath" : "container:..\/BrowserKit",
-        "identifier" : "WebEngineTests",
-        "name" : "WebEngineTests"
-      }
-    },
-    {
-      "target" : {
-        "containerPath" : "container:..\/BrowserKit",
-        "identifier" : "TabDataStoreTests",
-        "name" : "TabDataStoreTests"
+        "identifier" : "MenuKitTests",
+        "name" : "MenuKitTests"
       }
     },
     {
@@ -212,6 +197,38 @@
       }
     },
     {
+      "skippedTests" : [
+        "RustLoginsTests\/testUpdateLogin()",
+        "TestBrowserDB\/testMovesDB()"
+      ],
+      "target" : {
+        "containerPath" : "container:Client.xcodeproj",
+        "identifier" : "2FCAE2231ABB51F800877008",
+        "name" : "StorageTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:..\/BrowserKit",
+        "identifier" : "JWTKitTests",
+        "name" : "JWTKitTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:..\/BrowserKit",
+        "identifier" : "TabDataStoreTests",
+        "name" : "TabDataStoreTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:..\/BrowserKit",
+        "identifier" : "VoiceSearchKitTests",
+        "name" : "VoiceSearchKitTests"
+      }
+    },
+    {
       "target" : {
         "containerPath" : "container:..\/BrowserKit",
         "identifier" : "ContentBlockingGeneratorTests",
@@ -220,9 +237,108 @@
     },
     {
       "target" : {
+        "containerPath" : "container:Client.xcodeproj",
+        "identifier" : "E69DB07C1E97DEA9008A67E6",
+        "name" : "SyncTelemetryTests"
+      }
+    },
+    {
+      "skippedTests" : [
+        "BrowserViewControllerWebViewDelegateTests\/testWebViewDidFinishNavigation_takeScreenshotWhenTabIsSelected()",
+        "ContentBlockerTests",
+        "ETPCoverSheetTests",
+        "GleanPlumbMessageManagerTests\/testManagerGetMessage()",
+        "GleanPlumbMessageManagerTests\/testManagerGetMessageExceptIfAnySome()",
+        "GleanPlumbMessageManagerTests\/testManagerGetMessage_experiments_controlMessages()",
+        "GleanPlumbMessageManagerTests\/testManagerGetMessage_experiments_exposureEvents()",
+        "GleanPlumbMessageManagerTests\/testManagerGetMessage_experiments_malformedControlMessages()",
+        "GleanPlumbMessageManagerTests\/testManagerGetMessage_experiments_multiplControlMessages()",
+        "GleanPlumbMessageManagerTests\/testManagerGetMessage_happyPath_byMultipleTriggers()",
+        "GleanPlumbMessageManagerTests\/testManagerGetMessage_happyPath_bySurface()",
+        "GleanPlumbMessageManagerTests\/testManagerGetMessage_happyPath_byTrigger()",
+        "GleanPlumbMessageManagerTests\/testManagerGetMessages_happyPath_withNoAction()",
+        "GleanPlumbMessageManagerTests\/testManagerOnMessageDismissed()",
+        "GleanPlumbMessageManagerTests\/testManagerOnMessageDisplayed()",
+        "GleanPlumbMessageManagerTests\/testManagerOnMessagePressed_linkWithEmbeddedParam()",
+        "GleanPlumbMessageManagerTests\/testManagerOnMessagePressed_linkWithEmbeddedParamAndOneActionParam()",
+        "GleanPlumbMessageManagerTests\/testManagerOnMessagePressed_linkWithOneParam()",
+        "GleanPlumbMessageManagerTests\/testManagerOnMessagePressed_linkWithScheme()",
+        "GleanPlumbMessageManagerTests\/testManagerOnMessagePressed_withMalformedURL()",
+        "HistoryHighlightsDataAdaptorTests",
+        "HistoryHighlightsDataAdaptorTests\/testReloadDataOnNotification()",
+        "HistoryHighlightsTests",
+        "IntroViewControllerTests\/testBasicSetupReturnsExpectedItems()",
+        "OnboardingTelemetryUtilityTests\/testSendOnboardingCardView_WelcomeCard_Success()",
+        "RustSyncManagerTests\/testGetEnginesAndKeys()",
+        "RustSyncManagerTests\/testGetEnginesAndKeysWithNoKey()",
+        "RustSyncManagerTests\/testUpdateEnginePrefs_addressesDisabled()",
+        "RustSyncManagerTests\/testUpdateEnginePrefs_addressesEnabled()",
+        "RustSyncManagerTests\/testUpdateEnginePrefs_bookmarksEnabled()",
+        "ShareTelemetryTests",
+        "ShortcutRouteTests\/testOpenLastBookmarkShortcutWithInvalidUrl()",
+        "TabManagerTests\/testDeleteSelectedTab()",
+        "TabManagerTests\/testPrivatePreference_togglePBMDeletesPrivate()",
+        "TabManagerTests\/testRestoreScreenshotsForTabs()",
+        "TabManagerTests\/testRestoreTabs()",
+        "TabManagerTests\/testRestoreTabsForced()",
+        "TabManagerTests\/testRestoreTabs_whenDeeplinkTabNil_selectsPreviousSelectedTabData()",
+        "TabManagerTests\/testRestoreTabs_whenDeeplinkTabNotNil_selectsDeeplinkTab()",
+        "TabManagerTests\/testRestoreTabs_whenDeeplinkTabPresent()",
+        "TabManagerTests\/testRestoreTabs_whenDeeplinkTabPresent_doesnAddDepplinkTabMultipleTimes()",
+        "TabManagerTests\/testRestoreTabs_whenDeeplinkTabPresent_withSameURLAsRestoredTab()",
+        "TabToolbarHelperTests\/testTelemetryForSiteMenu()",
+        "TelemetryWrapperTests\/test_error_cpuExceptionIsCalled()",
+        "TelemetryWrapperTests\/test_loginWithEmail_GleanIsCalled()",
+        "TestFavicons\/testFaviconFetcherParse()",
+        "VersionSettingTests",
+        "VersionSettingTests\/testCopyAppVersion()"
+      ],
+      "target" : {
+        "containerPath" : "container:Client.xcodeproj",
+        "identifier" : "F84B21D21A090F8100AAB793",
+        "name" : "ClientTests"
+      }
+    },
+    {
+      "target" : {
         "containerPath" : "container:..\/BrowserKit",
-        "identifier" : "MenuKitTests",
-        "name" : "MenuKitTests"
+        "identifier" : "CommonTests",
+        "name" : "CommonTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:Client.xcodeproj",
+        "identifier" : "2FA436041ABB83B4008031D1",
+        "name" : "AccountTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:..\/BrowserKit",
+        "identifier" : "SiteImageViewTests",
+        "name" : "SiteImageViewTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:Client.xcodeproj",
+        "identifier" : "E6F9650B1B2F1CF20034B023",
+        "name" : "SharedTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:..\/BrowserKit",
+        "identifier" : "WebEngineTests",
+        "name" : "WebEngineTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:..\/MozillaRustComponents",
+        "identifier" : "MozillaRustComponentsTests",
+        "name" : "MozillaRustComponentsTests"
       }
     }
   ],

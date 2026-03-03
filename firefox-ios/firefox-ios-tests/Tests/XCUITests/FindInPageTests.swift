@@ -3,9 +3,20 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import XCTest
-import Common
 
 class FindInPageTests: BaseTestCase {
+    var browserScreen: BrowserScreen!
+    var findInPageScreen: FindInPageScreen!
+
+    private func navigateToOpenFindInPage(openSite: String) {
+        navigator.openURL(openSite)
+        waitUntilPageLoad()
+        navigator.nowAt(BrowserTab)
+        navigator.goto(BrowserTabMenu)
+
+        navigator.goto(FindInPage)
+    }
+
     private func openFindInPageFromMenu(openSite: String) {
         navigator.openURL(openSite)
         waitUntilPageLoad()
@@ -31,9 +42,7 @@ class FindInPageTests: BaseTestCase {
     func testFindInLargeDoc() {
         navigator.openURL("http://localhost:\(serverPort)/test-fixture/find-in-page-test.html")
         waitUntilPageLoad()
-        // Workaround until FxSGraph is fixed to allow the previous way with goto
         navigator.nowAt(BrowserTab)
-
         mozWaitForElementToNotExist(app.staticTexts["Fennec pasted from XCUITests-Runner"])
         navigator.goto(FindInPage)
 
@@ -52,52 +61,31 @@ class FindInPageTests: BaseTestCase {
     // https://mozilla.testrail.io/index.php?/cases/view/2306851
     // Smoketest
     func testFindFromMenu() {
+        browserScreen = BrowserScreen(app: app)
+        findInPageScreen = FindInPageScreen(app: app)
+        let searchTerm = "Book"
         userState.url = path(forTestPage: "test-mozilla-book.html")
-        openFindInPageFromMenu(openSite: userState.url!)
+        navigateToOpenFindInPage(openSite: userState.url!)
 
-        // Enter some text to start finding
-        if #available(iOS 16, *) {
-            app.searchFields["find.searchField"].typeText("Book")
-        } else {
-            app.textFields["FindInPage.searchField"].typeText("Book")
-        }
+        findInPageScreen.waitForFindInPageBarToAppear()
+        findInPageScreen.searchForText(searchTerm)
 
-        // Once there are matches, test previous/next buttons
-        if #available(iOS 16, *) {
-            mozWaitForElementToExist(app.staticTexts["1 of 6"])
-            XCTAssertTrue(app.staticTexts["1 of 6"].exists)
-        }
+        findInPageScreen.assertResultsCountIsDisplayed("1 of 6")
 
-        let nextInPageResultButton = app.buttons[AccessibilityIdentifiers.FindInPage.findNextButton]
-        nextInPageResultButton.waitAndTap()
-        if #available(iOS 16, *) {
-            mozWaitForElementToExist(app.staticTexts["2 of 6"])
-            XCTAssertTrue(app.staticTexts["2 of 6"].exists)
-        }
+        findInPageScreen.tapNextResult()
+        findInPageScreen.assertResultsCountIsDisplayed("2 of 6")
 
-        nextInPageResultButton.waitAndTap()
-        if #available(iOS 16, *) {
-            mozWaitForElementToExist(app.staticTexts["3 of 6"])
-            XCTAssertTrue(app.staticTexts["3 of 6"].exists)
-        }
+        findInPageScreen.tapNextResult()
+        findInPageScreen.assertResultsCountIsDisplayed("3 of 6")
 
-        let previousInPageResultButton = app.buttons[AccessibilityIdentifiers.FindInPage.findPreviousButton]
-        previousInPageResultButton.waitAndTap()
+        findInPageScreen.tapPreviousResult()
+        findInPageScreen.assertResultsCountIsDisplayed("2 of 6")
 
-        if #available(iOS 16, *) {
-            mozWaitForElementToExist(app.staticTexts["2 of 6"])
-            XCTAssertTrue(app.staticTexts["2 of 6"].exists)
-        }
+        findInPageScreen.tapPreviousResult()
+        findInPageScreen.assertResultsCountIsDisplayed("1 of 6")
 
-        previousInPageResultButton.waitAndTap()
-        if #available(iOS 16, *) {
-            mozWaitForElementToExist(app.staticTexts["1 of 6"])
-            XCTAssertTrue(app.staticTexts["1 of 6"].exists)
-        }
-
-        // Tapping on close dismisses the search bar
         navigator.goto(BrowserTab)
-        mozWaitForElementToNotExist(app.textFields["Book"])
+        findInPageScreen.assertSearchBarDisappeared(searchKeyword: searchTerm)
     }
 
     // https://mozilla.testrail.io/index.php?/cases/view/2323705
@@ -119,7 +107,6 @@ class FindInPageTests: BaseTestCase {
     // https://mozilla.testrail.io/index.php?/cases/view/2323714
     func testFindInPageTwoWordsSearchLargeDoc() {
         navigator.openURL("http://localhost:\(serverPort)/test-fixture/find-in-page-test.html")
-        // Workaround until FxSGraph is fixed to allow the previous way with goto
         waitUntilPageLoad()
         navigator.nowAt(BrowserTab)
         navigator.goto(FindInPage)
@@ -197,7 +184,7 @@ class FindInPageTests: BaseTestCase {
         // Going to tab tray and back to the website hides the search field.
         navigator.goto(TabTray)
 
-        app.cells.staticTexts["The Book of Mozilla"].firstMatch.waitAndTap()
+        app.cells.elementContainingText("The Book of Mozilla").waitAndTap()
         XCTAssertFalse(app.searchFields["find.searchField"].exists)
         XCTAssertFalse(app.buttons[AccessibilityIdentifiers.FindInPage.findNextButton].exists)
         XCTAssertFalse(app.buttons[AccessibilityIdentifiers.FindInPage.findPreviousButton].exists)
@@ -217,20 +204,28 @@ class FindInPageTests: BaseTestCase {
         mozWaitForElementToExist(app.menuItems["Copy"])
         // Find in page is correctly launched, bar with text pre-filled and
         // the buttons to find next and previous
-        while !app.menuItems["Find in Page"].exists {
-            if #available(iOS 16, *) {
+        if #available(iOS 26, *) {
+            while !app.buttons["Find in Page"].exists {
                 app.buttons["Forward"].firstMatch.waitAndTap()
-            } else {
-                app.menuItems["show.next.items.menu.button"].waitAndTap()
+                mozWaitForElementToExist(app.collectionViews.firstMatch)
             }
-            mozWaitForElementToExist(app.menuItems.firstMatch)
-            if #available(iOS 16, *) {
-                mozWaitForElementToExist(app.buttons["Forward"])
-            } else {
-                mozWaitForElementToExist(app.menuItems["show.next.items.menu.button"])
+            app.buttons["Find in Page"].waitAndTap()
+        } else {
+            while !app.menuItems["Find in Page"].exists {
+                if #available(iOS 16, *) {
+                    app.buttons["Forward"].firstMatch.waitAndTap()
+                } else {
+                    app.menuItems["show.next.items.menu.button"].waitAndTap()
+                }
+                mozWaitForElementToExist(app.menuItems.firstMatch)
+                if #available(iOS 16, *) {
+                    mozWaitForElementToExist(app.buttons["Forward"])
+                } else {
+                    mozWaitForElementToExist(app.menuItems["show.next.items.menu.button"])
+                }
             }
+            app.menuItems["Find in Page"].waitAndTap()
         }
-        app.menuItems["Find in Page"].waitAndTap()
         if #available(iOS 16, *) {
             mozWaitForElementToExist(app.searchFields[textToFind])
         } else {

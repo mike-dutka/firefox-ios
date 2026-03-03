@@ -3,16 +3,15 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Redux
-import Shared
 import Common
 
-struct MicrosurveyState: ScreenState, Equatable {
+struct MicrosurveyState: ScreenState {
     var windowUUID: WindowUUID
     var shouldDismiss: Bool
     var showPrivacy: Bool
 
     init(appState: AppState, uuid: WindowUUID) {
-        guard let microsurveyState = store.state.screenState(
+        guard let microsurveyState = appState.screenState(
             MicrosurveyState.self,
             for: .microsurvey,
             window: uuid

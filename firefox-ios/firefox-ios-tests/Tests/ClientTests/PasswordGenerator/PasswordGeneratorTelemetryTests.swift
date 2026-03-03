@@ -3,35 +3,37 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Glean
-import Redux
 import XCTest
 
 @testable import Client
 
 final class PasswordGeneratorTelemetryTests: XCTestCase {
-    let telemetry = PasswordGeneratorTelemetry()
-    override func setUp() {
-        super.setUp()
-        // Due to changes allow certain custom pings to implement their own opt-out
-        // independent of Glean, custom pings may need to be registered manually in
-        // tests in order to puth them in a state in which they can collect data.
-        Glean.shared.registerPings(GleanMetrics.Pings.shared)
-        Glean.shared.resetGlean(clearStores: true)
-        DependencyHelperMock().bootstrapDependencies()
+    var gleanWrapper: MockGleanWrapper!
+
+    override func setUp() async throws {
+        try await super.setUp()
+        gleanWrapper = MockGleanWrapper()
+        await DependencyHelperMock().bootstrapDependencies()
     }
 
-    override func tearDown() {
-        DependencyHelperMock().reset()
-        super.tearDown()
+    override func tearDown() async throws {
+        gleanWrapper = nil
+        try await super.tearDown()
     }
 
     func testShowPasswordGeneratorDialog() {
-        telemetry.passwordGeneratorDialogShown()
-        testCounterMetricRecordingSuccess(metric: GleanMetrics.PasswordGenerator.shown)
+        let subject = createSubject(gleanWrapper: gleanWrapper)
+        subject.passwordGeneratorDialogShown()
+        XCTAssertEqual(gleanWrapper.incrementCounterCalled, 1)
     }
 
     func testUsePasswordButtonPressed() {
-        telemetry.usePasswordButtonPressed()
-        testCounterMetricRecordingSuccess(metric: GleanMetrics.PasswordGenerator.filled)
+        let subject = createSubject(gleanWrapper: gleanWrapper)
+        subject.usePasswordButtonPressed()
+        XCTAssertEqual(gleanWrapper.incrementCounterCalled, 1)
+    }
+
+    private func createSubject(gleanWrapper: GleanWrapper) -> PasswordGeneratorTelemetry {
+        PasswordGeneratorTelemetry(gleanWrapper: gleanWrapper)
     }
 }

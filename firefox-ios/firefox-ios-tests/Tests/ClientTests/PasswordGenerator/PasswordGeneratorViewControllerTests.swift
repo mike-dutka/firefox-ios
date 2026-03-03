@@ -10,27 +10,28 @@ import Common
 final class PasswordGeneratorViewControllerTests: XCTestCase {
     let windowUUID: WindowUUID = .XCTestDefaultUUID
 
-    override func setUp() {
-        super.setUp()
-        DependencyHelperMock().bootstrapDependencies()
+    override func setUp() async throws {
+        try await super.setUp()
+        await DependencyHelperMock().bootstrapDependencies()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         DependencyHelperMock().reset()
-        super.tearDown()
+        try await super.tearDown()
     }
 
+    @MainActor
     func testPasswordGeneratorViewController_simpleCreation_hasNoLeaks() {
         let mockProfile = MockProfile()
         let currentTab = Tab(profile: mockProfile, windowUUID: windowUUID)
-        let URL = URL(string: "https://foo.com")!
-        let webView = WKWebViewMock(URL)
-        let currentFrame = WKFrameInfoMock(webView: webView, frameURL: URL, isMainFrame: true)
-        let passwordGeneratorViewController = PasswordGeneratorViewController(
-            windowUUID: windowUUID,
-            currentTab: currentTab,
-            currentFrame: currentFrame
-        )
+        let mockEvaluator = MockPasswordGeneratorScriptEvaluator()
+        let frameContext = PasswordGeneratorFrameContext(origin: "https://foo.com",
+                                                         host: "foo.com",
+                                                         scriptEvaluator: mockEvaluator,
+                                                         frameInfo: nil)
+        let passwordGeneratorViewController = PasswordGeneratorViewController(windowUUID: windowUUID,
+                                                                              currentTab: currentTab,
+                                                                              frameContext: frameContext)
         trackForMemoryLeaks(passwordGeneratorViewController)
     }
 }

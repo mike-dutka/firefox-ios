@@ -5,9 +5,15 @@
 import Foundation
 import MozillaAppServices
 
-class MockLoginProvider: LoginProvider {
+class MockLoginProvider: LoginProvider, SyncLoginProvider, @unchecked Sendable {
     var searchLoginsWithQueryCalledCount = 0
     var addLoginCalledCount = 0
+    var getStoredKeyCalledCount = 0
+    var registerWithSyncManagerCalled = 0
+    var verifyLoginsCalled = 0
+    var loginsVerified = true
+    var reportPreSyncKeyRetrievalFailureCalled = 0
+
     func searchLoginsWithQuery(
         _ query: String?,
         completionHandler: @escaping (
@@ -32,5 +38,23 @@ class MockLoginProvider: LoginProvider {
     ) {
         addLoginCalledCount += 1
         completionHandler(.success(nil))
+    }
+
+    func getStoredKey(completion: @Sendable @escaping (Result<String, NSError>) -> Void) {
+        getStoredKeyCalledCount += 1
+        return completion(.success("test encryption key"))
+    }
+
+    func registerWithSyncManager() {
+        registerWithSyncManagerCalled += 1
+    }
+
+    func verifyLogins(completionHandler: @escaping (Bool) -> Void) {
+        verifyLoginsCalled += 1
+        completionHandler(loginsVerified)
+    }
+
+    func reportPreSyncKeyRetrievalFailure(err: String) {
+        reportPreSyncKeyRetrievalFailureCalled += 1
     }
 }

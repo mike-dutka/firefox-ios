@@ -5,7 +5,6 @@
 import Common
 import ComponentLibrary
 import Foundation
-import Shared
 import Storage
 import UIKit
 
@@ -15,6 +14,7 @@ class CreditCardBottomSheetViewController: UIViewController,
                                            BottomSheetChild,
                                            Themeable {
     // MARK: UX
+    @MainActor
     struct UX {
         static let containerPadding: CGFloat = 18.0
         static let tableMargin: CGFloat = 0
@@ -35,7 +35,7 @@ class CreditCardBottomSheetViewController: UIViewController,
 
     var notificationCenter: NotificationProtocol
     var themeManager: ThemeManager
-    var themeObserver: NSObjectProtocol?
+    var themeListenerCancellable: Any?
     private var viewModel: CreditCardBottomSheetViewModel
     let windowUUID: WindowUUID
     var currentWindowUUID: UUID? { windowUUID }
@@ -94,6 +94,7 @@ class CreditCardBottomSheetViewController: UIViewController,
 
     private var contentViewHeightConstraint: NSLayoutConstraint?
     private var contentWidthConstraint: NSLayoutConstraint?
+    private var glassEffectView: UIVisualEffectView?
 
     // MARK: - Initializers
     init(viewModel: CreditCardBottomSheetViewModel,
@@ -124,23 +125,21 @@ class CreditCardBottomSheetViewController: UIViewController,
     // MARK: View Lifecycle
     override func viewDidLoad() {
         super.viewDidLoad()
-        listenForThemeChange(view)
+
         addSubviews()
         setupView()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+
+        listenForThemeChanges(withNotificationCenter: notificationCenter)
         applyTheme()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         updateConstraints()
-    }
-
-    deinit {
-        notificationCenter.removeObserver(self)
     }
 
     // MARK: View Setup
@@ -370,8 +369,49 @@ class CreditCardBottomSheetViewController: UIViewController,
     // MARK: Themable
     func applyTheme() {
         let currentTheme = themeManager.getCurrentTheme(for: windowUUID).colors
-        view.backgroundColor = currentTheme.layer1
+
+        if #available(iOS 26.0, *) {
+            setupGlassEffect()
+            view.backgroundColor = .clear
+        } else {
+            view.backgroundColor = currentTheme.layer1
+        }
+
         cardTableView.reloadData()
+    }
+
+    @available(iOS 26.0, *)
+    private func setupGlassEffect() {
+        // Only add glass effect if it doesn't already exist
+        guard glassEffectView == nil else { return }
+
+        let effectView = UIVisualEffectView()
+
+        #if canImport(FoundationModels)
+        let glassEffect = UIGlassEffect()
+        glassEffect.isInteractive = true
+        effectView.effect = glassEffect
+        #else
+        effectView.effect = UIBlurEffect(style: .systemUltraThinMaterial)
+        #endif
+
+        effectView.layer.cornerRadius = UX.yesButtonCornerRadius
+        effectView.clipsToBounds = true
+        effectView.translatesAutoresizingMaskIntoConstraints = false
+
+        // Add glass effect to the main view instead of contentView
+        view.backgroundColor = .clear
+        contentView.backgroundColor = .clear
+        view.insertSubview(effectView, at: 0)
+
+        NSLayoutConstraint.activate([
+            effectView.topAnchor.constraint(equalTo: view.topAnchor),
+            effectView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            effectView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            effectView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+
+        glassEffectView = effectView
     }
 
     // MARK: Telemetry

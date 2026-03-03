@@ -8,16 +8,21 @@ import XCTest
 
 @testable import Client
 
-class ThemeSettingsControllerTests: XCTestCase {
+class ThemeSettingsControllerTests: XCTestCase, StoreTestUtility {
     let windowUUID: WindowUUID = .XCTestDefaultUUID
-    override func setUp() {
-        super.setUp()
+    var mockStore: MockStoreForMiddleware<AppState>!
+    var appState: AppState!
+
+    override func setUp() async throws {
+        try await super.setUp()
         DependencyHelperMock().bootstrapDependencies()
+        setupStore()
     }
 
-    override func tearDown() {
-        super.tearDown()
+    override func tearDown() async throws {
         DependencyHelperMock().reset()
+        resetStore()
+        try await super.tearDown()
     }
 
     func testUseSystemAppearance_WithRedux() {
@@ -118,7 +123,7 @@ class ThemeSettingsControllerTests: XCTestCase {
     }
 
     // MARK: - Private
-    private func createSubject(file: StaticString = #file,
+    private func createSubject(file: StaticString = #filePath,
                                line: UInt = #line) -> ThemeSettingsController {
         let subject = ThemeSettingsController(windowUUID: .XCTestDefaultUUID)
         let action = ScreenAction(windowUUID: .XCTestDefaultUUID,
@@ -133,5 +138,33 @@ class ThemeSettingsControllerTests: XCTestCase {
         let themeSwitch = UISwitch(frame: .zero)
         themeSwitch.isOn = isOn
         return themeSwitch
+    }
+
+    // MARK: StoreTestUtility
+    func setupAppState() -> Client.AppState {
+        let appState = AppState(
+            activeScreens: ActiveScreensState(
+                screens: [
+                    .themeSettings(
+                        ThemeSettingsState(
+                            windowUUID: .XCTestDefaultUUID
+                        )
+                    )
+                ]
+            )
+        )
+        self.appState = appState
+        return appState
+    }
+
+    func setupStore() {
+        StoreTestUtilityHelper.setupStore(
+            with: setupAppState(),
+            middlewares: [ThemeManagerMiddleware().themeManagerProvider]
+        )
+    }
+
+    func resetStore() {
+        StoreTestUtilityHelper.resetStore()
     }
 }

@@ -25,7 +25,9 @@ private let CertErrors = [
 
 // Error codes copied from Gecko. The ints corresponding to these codes were determined
 // by inspecting the NSError in each of these cases.
-private let CertErrorCodes = [
+// TODO: This legacy constant should eventually be removed in favor of CertErrorCodes
+// in NativeErrorPageHelper.swift once ErrorPageHelper is fully replaced.
+private let LegacyCertErrorCodes = [
     -9813: "SEC_ERROR_UNKNOWN_ISSUER",
     -9814: "SEC_ERROR_EXPIRED_CERTIFICATE",
     -9843: "SSL_ERROR_BAD_CERT_DOMAIN",
@@ -148,7 +150,7 @@ private func cfErrorToName(_ err: CFNetworkErrors) -> String {
     }
 }
 
-class ErrorPageHandler: InternalSchemeResponse, FeatureFlaggable {
+final class ErrorPageHandler: InternalSchemeResponse, FeatureFlaggable {
     static let path = InternalURL.Path.errorpage.rawValue
     // When nativeErrorPage feature flag is true, only create
     // html page with gray background similar to homepage or private homepage.
@@ -161,7 +163,8 @@ class ErrorPageHandler: InternalSchemeResponse, FeatureFlaggable {
         return NativeErrorPageFeatureFlag().isNICErrorPageEnabled
     }
 
-    func response(forRequest request: URLRequest) -> (URLResponse, Data)? {
+    @MainActor
+    func response(forRequest request: URLRequest, useOldErrorPage: Bool) -> (URLResponse, Data)? {
         guard let url = request.url,
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               let code = components.valueForQuery("code"),
@@ -174,15 +177,15 @@ class ErrorPageHandler: InternalSchemeResponse, FeatureFlaggable {
             CFNetworkErrors.cfurlErrorNotConnectedToInternet.rawValue
         )
 
-        if isNativeErrorPageEnabled {
-            return responseForNativeErrorPage(request: request)
-        } else if isNICErrorPageEnabled && (errCode == noInternetErrorCode) {
+        // Only handle No internet access because other cases show about:blank page
+        if isNICErrorPageEnabled && (errCode == noInternetErrorCode) && !useOldErrorPage {
             return responseForNativeErrorPage(request: request)
         } else {
             return responseForErrorWebPage(request: request)
         }
     }
 
+    @MainActor
     func responseForNativeErrorPage(request: URLRequest) -> (URLResponse, Data)? {
         guard let url = request.url else { return nil }
         let response = InternalSchemeHandler.response(forUrl: url)
@@ -198,6 +201,7 @@ class ErrorPageHandler: InternalSchemeResponse, FeatureFlaggable {
         return (response, data)
     }
 
+    @MainActor
     func responseForErrorWebPage(request: URLRequest) -> (URLResponse, Data)? {
         guard let requestUrl = request.url,
               let originalUrl = InternalURL(requestUrl)?.originalURLFromErrorPage
@@ -287,6 +291,7 @@ class ErrorPageHelper {
         self.logger = logger
     }
 
+    @MainActor
     func loadPage(_ error: NSError, forUrl url: URL, inWebView webView: WKWebView) {
         guard var components = URLComponents(string: "\(InternalURL.baseUrl)/\(ErrorPageHandler.path)" ) else { return }
 
@@ -318,7 +323,7 @@ class ErrorPageHelper {
             let encodedCert = (SecCertificateCopyData(cert) as Data).base64EncodedString
             queryItems.append(URLQueryItem(name: "badcert", value: encodedCert))
 
-            let certError = CertErrorCodes[certErrorCode] ?? ""
+            let certError = LegacyCertErrorCodes[certErrorCode] ?? ""
             queryItems.append(URLQueryItem(name: "certerror", value: String(certError)))
         }
 
@@ -360,22 +365,25 @@ extension ErrorPageHelper: TabContentScript {
         didReceiveScriptMessage message: WKScriptMessage
     ) {
         guard let errorURL = message.frameInfo.request.url,
-            let internalUrl = InternalURL(errorURL),
-            internalUrl.isErrorPage,
-            let originalURL = internalUrl.originalURLFromErrorPage,
-            let res = message.body as? [String: String],
-            let type = res["type"] else { return }
+              let internalUrl = InternalURL(errorURL),
+              internalUrl.isErrorPage,
+              let originalURL = internalUrl.originalURLFromErrorPage,
+              let res = message.body as? [String: String],
+              let type = res["type"] else {
+            return
+        }
 
         switch type {
         case MessageOpenInSafari:
             UIApplication.shared.open(originalURL, options: [:])
         case MessageCertVisitOnce:
+            // User taps "visit anyway" for an untrusted connection
             if let cert = certFromErrorURL(errorURL),
                 let host = originalURL.host {
                 let origin = "\(host):\(originalURL.port ?? 443)"
                 certStore?.addCertificate(cert, forOrigin: origin)
+                // Note: webview.reload will not change the error URL back to the original URL
                 message.webView?.replaceLocation(with: originalURL)
-                // webview.reload will not change the error URL back to the original URL
             }
         default:
             assertionFailure("Unknown error message")

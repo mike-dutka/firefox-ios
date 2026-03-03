@@ -4,14 +4,13 @@
 
 import Foundation
 import Redux
-import Shared
 import Common
 
-struct OnboardingViewControllerState: ScreenState, Equatable {
+struct OnboardingViewControllerState: ScreenState {
     let windowUUID: WindowUUID
 
     init(appState: AppState, uuid: WindowUUID) {
-        guard let introState = store.state.screenState(
+        guard let introState = appState.screenState(
             OnboardingViewControllerState.self,
             for: .onboardingViewController,
             window: uuid)

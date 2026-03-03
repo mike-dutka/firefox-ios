@@ -3,7 +3,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
-import Shared
 import Common
 import MozillaAppServices
 
@@ -13,7 +12,7 @@ enum JexlError: Error {
     case unknownJexl
 }
 
-class MockNimbusTargetingHelper: NimbusTargetingHelperProtocol {
+final class MockNimbusTargetingHelper: NimbusTargetingHelperProtocol, @unchecked Sendable {
     func evalJexl(expression: String) throws -> Bool {
         switch expression {
         case "true": return true
@@ -21,9 +20,26 @@ class MockNimbusTargetingHelper: NimbusTargetingHelperProtocol {
         default: throw JexlError.unknownJexl
         }
     }
+
+    func evalJexlDebug(expression: String) throws -> String {
+        switch expression {
+        case "true":
+            return """
+            {"success": true, "result": true}
+            """
+        case "false":
+            return """
+            {"success": true, "result": false}
+            """
+        default:
+            return """
+            {"success": false, "error": "Unknown JEXL expression"}
+            """
+        }
+    }
 }
 
-class MockNimbusStringHelper: NimbusStringHelperProtocol {
+final class MockNimbusStringHelper: NimbusStringHelperProtocol, @unchecked Sendable {
     func stringFormat(template: String, uuid: String?) -> String {
         if let uuid = uuid {
             return template.replacingOccurrences(of: "{uuid}", with: uuid)
@@ -41,7 +57,7 @@ class MockNimbusStringHelper: NimbusStringHelperProtocol {
     }
 }
 
-class MockNimbusMessagingHelperUtility: NimbusMessagingHelperUtilityProtocol {
+final class MockNimbusMessagingHelperUtility: NimbusMessagingHelperUtilityProtocol {
     required init(logger: Logger = DefaultLogger.shared) { }
 
     func createNimbusMessagingHelper() -> NimbusMessagingHelperProtocol? {

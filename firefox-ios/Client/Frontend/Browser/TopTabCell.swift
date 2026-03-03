@@ -13,7 +13,7 @@ class TopTabCell: UICollectionViewCell, ThemeApplicable, ReusableCell, FeatureFl
         static let faviconSize: CGFloat = 20
         static let faviconCornerRadius: CGFloat = 2
         static let tabTitlePadding: CGFloat = 10
-        static let tabNudge: CGFloat = 1 // Nudge the favicon and close button by 1px
+        static let tabTitlePaddingVersion: CGFloat = 14
 
         // MARK: - Tab Appearance Constants
         static let tabCornerRadius: CGFloat = 8
@@ -34,6 +34,8 @@ class TopTabCell: UICollectionViewCell, ThemeApplicable, ReusableCell, FeatureFl
     var isSelectedTab = false
 
     weak var delegate: TopTabCellDelegate?
+
+    private var windowUUID: WindowUUID?
 
     // MARK: - UI Elements
     let cellBackground: UIView = .build { view in
@@ -57,7 +59,7 @@ class TopTabCell: UICollectionViewCell, ThemeApplicable, ReusableCell, FeatureFl
     let favicon: FaviconImageView = .build { _ in }
 
     let closeButton: UIButton = .build { button in
-        button.setImage(UIImage.templateImageNamed(StandardImageIdentifiers.Large.cross), for: [])
+        button.configuration = .plain()
         button.configuration?.contentInsets = NSDirectionalEdgeInsets(top: UX.verticalPadding,
                                                                       leading: UX.tabTitlePadding,
                                                                       bottom: UX.verticalPadding,
@@ -76,6 +78,7 @@ class TopTabCell: UICollectionViewCell, ThemeApplicable, ReusableCell, FeatureFl
 
     func configureLegacyCellWith(tab: Tab, isSelected selected: Bool, theme: Theme) {
         isSelectedTab = selected
+        windowUUID = tab.windowUUID
 
         titleText.text = tab.getTabTrayTitle()
         accessibilityLabel = getA11yTitleLabel(tab: tab)
@@ -87,7 +90,11 @@ class TopTabCell: UICollectionViewCell, ThemeApplicable, ReusableCell, FeatureFl
                                                 self.titleText.text ?? "")
         closeButton.showsLargeContentViewer = true
         closeButton.largeContentTitle = .TopSitesRemoveButtonLargeContentTitle
-        closeButton.largeContentImage = UIImage.templateImageNamed(StandardImageIdentifiers.Large.cross)
+        closeButton.configuration?.image = UIImage.templateImageNamed(StandardImageIdentifiers.Medium.cross)
+        closeButton.configuration?.contentInsets = NSDirectionalEdgeInsets(top: UX.verticalPadding,
+                                                                           leading: UX.tabTitlePaddingVersion,
+                                                                           bottom: UX.verticalPadding,
+                                                                           trailing: UX.tabTitlePaddingVersion)
         closeButton.scalesLargeContentImage = true
 
         let hideCloseButton = frame.width < UX.closeButtonThreshold && !selected
@@ -122,8 +129,7 @@ class TopTabCell: UICollectionViewCell, ThemeApplicable, ReusableCell, FeatureFl
         titleText.textColor = colors.textPrimary
         closeButton.tintColor = colors.textPrimary
 
-        let isToolbarRefactorEnabled = featureFlags.isFeatureEnabled(.toolbarRefactor, checking: .buildOnly)
-        let backgroundColor = isToolbarRefactorEnabled ? colors.actionTabActive : colors.layer2
+        let backgroundColor = colors.actionTabActive
         cellBackground.backgroundColor = backgroundColor
         cellBackground.layer.shadowColor = colors.shadowDefault.cgColor
         cellBackground.isHidden = false
@@ -135,10 +141,9 @@ class TopTabCell: UICollectionViewCell, ThemeApplicable, ReusableCell, FeatureFl
         titleText.textColor = colors.textPrimary
         closeButton.tintColor = colors.textPrimary
 
-        let isToolbarRefactorEnabled = featureFlags.isFeatureEnabled(.toolbarRefactor, checking: .buildOnly)
-        cellBackground.backgroundColor = isToolbarRefactorEnabled ? colors.actionTabInactive : .clear
+        cellBackground.backgroundColor = .clear
         cellBackground.layer.shadowColor = UIColor.clear.cgColor
-        cellBackground.isHidden = isToolbarRefactorEnabled ? false : true
+        cellBackground.isHidden = false
     }
 
     func applyTheme(theme: Theme) {
@@ -162,7 +167,7 @@ class TopTabCell: UICollectionViewCell, ThemeApplicable, ReusableCell, FeatureFl
                 cellBackground.centerXAnchor.constraint(equalTo: centerXAnchor),
                 cellBackground.centerYAnchor.constraint(equalTo: centerYAnchor),
 
-                favicon.centerYAnchor.constraint(equalTo: centerYAnchor, constant: UX.tabNudge),
+                favicon.centerYAnchor.constraint(equalTo: centerYAnchor),
                 favicon.widthAnchor.constraint(equalToConstant: UX.faviconSize),
                 favicon.heightAnchor.constraint(equalToConstant: UX.faviconSize),
                 favicon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: UX.tabTitlePadding),
@@ -178,9 +183,9 @@ class TopTabCell: UICollectionViewCell, ThemeApplicable, ReusableCell, FeatureFl
                     constant: UX.tabTitlePadding
                 ),
 
-                closeButton.centerYAnchor.constraint(equalTo: centerYAnchor, constant: UX.tabNudge),
+                closeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
                 closeButton.widthAnchor.constraint(equalTo: heightAnchor, constant: -UX.tabTitlePadding),
-                closeButton.heightAnchor.constraint(equalTo: heightAnchor),
+                closeButton.heightAnchor.constraint(equalTo: heightAnchor, constant: -UX.tabTitlePadding),
                 closeButton.trailingAnchor.constraint(equalTo: trailingAnchor),
             ]
         )
@@ -192,9 +197,9 @@ class TopTabCell: UICollectionViewCell, ThemeApplicable, ReusableCell, FeatureFl
         let baseName = tab.getTabTrayTitle()
 
         if isSelectedTab, !tab.getTabTrayTitle().isEmpty {
-            return baseName + ". " + String.TabTrayCurrentlySelectedTabAccessibilityLabel
+            return baseName + ". " + String.TabsTray.TabTrayCurrentlySelectedTabAccessibilityLabel
         } else if isSelectedTab {
-            return String.TabTrayCurrentlySelectedTabAccessibilityLabel
+            return String.TabsTray.TabTrayCurrentlySelectedTabAccessibilityLabel
         } else {
             return baseName
         }

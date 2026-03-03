@@ -5,15 +5,6 @@
 import UIKit
 
 extension UIStackView {
-    public func toggleStackViewVisibility(show: Bool) {
-        guard show else {
-            self.isHidden = true
-            return
-        }
-
-        UIView.animate(withDuration: 0.1, animations: { self.isHidden = false })
-    }
-
     public func addArrangedViewToTop(_ view: UIView, animated: Bool = true, completion: (() -> Void)? = nil) {
         insertArrangedView(view, position: 0, animated: animated, completion: completion)
     }
@@ -48,8 +39,6 @@ extension UIStackView {
                                    animateClosure: @escaping () -> Void,
                                    animated: Bool = true,
                                    completion: (() -> Void)?) {
-        view.layoutIfNeeded()
-
         UIView.animate(
             withDuration: animated ? 0.25 : 0,
             animations: {

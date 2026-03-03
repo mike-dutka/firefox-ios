@@ -5,9 +5,10 @@
 import Foundation
 import Glean
 
-protocol GleanWrapper {
+protocol GleanWrapper: Sendable {
     func handleDeeplinkUrl(url: URL)
     func setUpload(isEnabled: Bool)
+    func enableTestingMode()
 
     // MARK: Glean Metrics
 
@@ -16,10 +17,14 @@ protocol GleanWrapper {
     func recordEvent<NoExtras>(for metric: EventMetricType<NoExtras>) where NoExtras: EventExtras
     func incrementCounter(for metric: CounterMetricType)
     func recordString(for metric: StringMetricType, value: String)
-    func recordLabel(for metric: LabeledMetricType<CounterMetricType>, label: String)
+    func incrementLabeledCounter(for metric: LabeledMetricType<CounterMetricType>, label: String)
     func setBoolean(for metric: BooleanMetricType, value: Bool)
     func recordQuantity(for metric: QuantityMetricType, value: Int64)
-    func recordUrl(for metric: UrlMetricType, value: String)
+    func recordLabel(for metric: LabeledMetricType<StringMetricType>, label: String, value: String)
+    func recordLabeledQuantity(for metric: LabeledMetricType<QuantityMetricType>, label: String, value: Int64)
+    func recordUrl(for metric: UrlMetricType, value: URL)
+    func recordDatetime(for metric: DatetimeMetricType, value: Date)
+    func recordUUID(for metric: UuidMetricType, value: UUID)
 
     func incrementNumerator(for metric: RateMetricType, amount: Int32)
     func incrementDenominator(for metric: RateMetricType, amount: Int32)
@@ -53,10 +58,16 @@ struct DefaultGleanWrapper: GleanWrapper {
         glean.setCollectionEnabled(isEnabled)
     }
 
+    func enableTestingMode() {
+        glean.enableTestingMode()
+    }
+
     // MARK: Glean Metrics
 
-    func recordEvent<ExtraObject>(for metric: EventMetricType<ExtraObject>,
-                                  extras: EventExtras) where ExtraObject: EventExtras {
+    func recordEvent<ExtraObject>(
+        for metric: EventMetricType<ExtraObject>,
+        extras: EventExtras
+    ) where ExtraObject: EventExtras {
         if let castedExtras = extras as? ExtraObject {
             metric.record(castedExtras)
         } else {
@@ -76,7 +87,7 @@ struct DefaultGleanWrapper: GleanWrapper {
         metric.set(value)
     }
 
-    func recordLabel(for metric: LabeledMetricType<CounterMetricType>, label: String) {
+    func incrementLabeledCounter(for metric: LabeledMetricType<CounterMetricType>, label: String) {
         metric[label].add()
     }
 
@@ -88,7 +99,23 @@ struct DefaultGleanWrapper: GleanWrapper {
         metric.set(value)
     }
 
-    func recordUrl(for metric: UrlMetricType, value: String) {
+    func recordLabel(for metric: LabeledMetricType<StringMetricType>, label: String, value: String) {
+        metric[label].set(value)
+    }
+
+    func recordLabeledQuantity(for metric: LabeledMetricType<QuantityMetricType>, label: String, value: Int64) {
+        metric[label].set(value)
+    }
+
+    func recordUrl(for metric: UrlMetricType, value: URL) {
+        metric.set(url: value)
+    }
+
+    func recordDatetime(for metric: DatetimeMetricType, value: Date) {
+        metric.set(value)
+    }
+
+    func recordUUID(for metric: UuidMetricType, value: UUID) {
         metric.set(value)
     }
 

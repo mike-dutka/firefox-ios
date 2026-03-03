@@ -5,21 +5,24 @@
 import XCTest
 
 class HomeButtonTests: BaseTestCase {
-    override func tearDown() {
+    override func tearDown() async throws {
         XCUIDevice.shared.orientation = .portrait
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // https://mozilla.testrail.io/index.php?/cases/view/2306925
     func testGoHome() throws {
         navigator.openURL(path(forTestPage: "test-mozilla-org.html"), waitForLoading: true)
-        app.buttons[AccessibilityIdentifiers.Toolbar.addNewTabButton].waitAndTap()
-        navigator.nowAt(NewTabScreen)
+        waitUntilPageLoad()
+        navigator.nowAt(BrowserTab)
+        navigator.performAction(Action.GoToHomePage)
+        navigator.nowAt(URLBarOpen)
         waitForTabsButton()
         if !iPad() {
             XCTAssertEqual(app.buttons[AccessibilityIdentifiers.Toolbar.searchButton].label, "Search")
         }
         navigator.openURL(path(forTestPage: "test-mozilla-book.html"), waitForLoading: true)
+        waitUntilPageLoad()
         mozWaitForElementToExist(app.buttons[AccessibilityIdentifiers.Toolbar.addNewTabButton])
 
         XCUIDevice.shared.orientation = .landscapeRight
@@ -34,7 +37,8 @@ class HomeButtonTests: BaseTestCase {
         waitUntilPageLoad()
 
         // Switch to Homepage by taping the home button
-        app.buttons[AccessibilityIdentifiers.Toolbar.addNewTabButton].waitAndTap()
+        navigator.nowAt(BrowserTab)
+        navigator.performAction(Action.GoToHomePage)
 
         validateHomePageAndKeyboardRaisedUp(showKeyboard: true)
     }

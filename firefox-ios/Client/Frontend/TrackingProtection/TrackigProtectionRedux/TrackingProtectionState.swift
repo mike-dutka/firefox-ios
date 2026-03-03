@@ -5,9 +5,8 @@
 import Foundation
 import Redux
 import Common
-import Shared
 
-struct TrackingProtectionState: StateType, Equatable, ScreenState {
+struct TrackingProtectionState: ScreenState {
     enum NavType {
         case home
         case back
@@ -33,7 +32,7 @@ struct TrackingProtectionState: StateType, Equatable, ScreenState {
 
     init(appState: AppState,
          uuid: WindowUUID) {
-        guard let trackingProtectionState = store.state.screenState(
+        guard let trackingProtectionState = appState.screenState(
             TrackingProtectionState.self,
             for: .trackingProtection,
             window: uuid
@@ -90,7 +89,9 @@ struct TrackingProtectionState: StateType, Equatable, ScreenState {
     }
 
     static let reducer: Reducer<TrackingProtectionState> = { state, action in
-        guard action.windowUUID == .unavailable || action.windowUUID == state.windowUUID else { return state }
+        guard action.windowUUID == .unavailable || action.windowUUID == state.windowUUID else {
+            return defaultState(from: state)
+        }
 
         switch action.actionType {
         case TrackingProtectionMiddlewareActionType.clearCookies:

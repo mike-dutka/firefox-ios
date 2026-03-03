@@ -18,25 +18,23 @@ enum CreditCardSettingsState: String, Equatable, CaseIterable {
     case list = "List"
 }
 
-class CreditCardSettingsViewModel {
+// FIXME: FXIOS-14006 Class is not thread safe
+final class CreditCardSettingsViewModel: @unchecked Sendable {
     var autofill: RustAutofill?
     var profile: Profile
     let windowUUID: WindowUUID
-    var appAuthenticator: AppAuthenticationProtocol?
 
-    lazy var cardInputViewModel = CreditCardInputViewModel(profile: profile)
+    lazy var cardInputViewModel = CreditCardInputViewModel(profile: profile, creditCardProvider: profile.autofill)
     lazy var toggleModel = ToggleModel(isEnabled: isAutofillEnabled, delegate: self)
     var tableViewModel = CreditCardTableViewModel()
 
     public init(profile: Profile,
-                windowUUID: WindowUUID,
-                appAuthenticator: AppAuthenticationProtocol = AppAuthenticator()
+                windowUUID: WindowUUID
     ) {
         self.profile = profile
         self.windowUUID = windowUUID
         guard let profile = profile as? BrowserProfile else { return }
         self.autofill = profile.autofill
-        self.appAuthenticator = appAuthenticator
 
         tableViewModel.toggleModel = toggleModel
     }
@@ -67,14 +65,15 @@ class CreditCardSettingsViewModel {
         }
     }
 
-    func getCreditCardList(_ completionHandler: @escaping ([CreditCard]?) -> Void) {
+    func getCreditCardList(_ completionHandler: @escaping @Sendable ([CreditCard]?) -> Void) {
         autofill?.listCreditCards(completion: { creditCards, error in
             guard let cards = creditCards,
                   error == nil else {
                 completionHandler(nil)
                 return
             }
-            self.updateCreditCardsList(creditCards: cards)
+            let sortedCards = cards.sorted { $0.timeCreated > $1.timeCreated }
+            self.updateCreditCardsList(creditCards: sortedCards)
             completionHandler(creditCards)
         })
     }

@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import Common
 import UIKit
 import Glean
 import Sentry
@@ -21,7 +22,7 @@ enum AppPhase {
 }
 
 @UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
+final class AppDelegate: UIResponder, UIApplicationDelegate {
     private lazy var authenticationManager = AuthenticationManager()
     @Published private var appPhase: AppPhase = .notRunning
 
@@ -98,11 +99,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 switch state {
                 case .loggedin:
                     self.hidePrivacyProtectionWindow()
-                    break
 
                 case .loggedout:
                     self.showPrivacyProtectionWindow()
-                    break
 
                 case .canceled:
                     break
@@ -292,7 +291,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             browserViewController.submit(url: url, source: .action)
             GleanMetrics.Siri.openFavoriteSite.record()
         case "EraseIntent":
-            guard userActivity.interaction?.intent as? EraseIntent != nil else { return false }
+            guard userActivity.interaction?.intent is EraseIntent else { return false }
             browserViewController.resetBrowser()
             GleanMetrics.Siri.eraseInBackground.record()
         default: break
@@ -340,7 +339,7 @@ extension AppDelegate {
         }
         return environment
     }
-    
+
     private var releaseName: String {
         return "\(AppInfo.bundleIdentifier)@\(AppInfo.appVersion)"
     }
@@ -364,6 +363,14 @@ extension AppDelegate {
 // MARK: - Telemetry & Tooling setup
 extension AppDelegate {
     func setupTelemetry() {
+        let channel = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" ? "testflight" : "release"
+        let configuration = Configuration(channel: channel)
+
+        Glean.shared.initialize(
+            uploadEnabled: TelemetryManager.shared.isGleanEnabled,
+            configuration: configuration,
+            buildInfo: GleanMetrics.GleanBuild.info
+        )
         let activeSearchEngine = SearchEngineManager(prefs: UserDefaults.standard).activeEngine
         let defaultSearchEngineProvider = activeSearchEngine.isCustom ? "custom" : activeSearchEngine.name
         GleanMetrics.Search.defaultEngine.set(defaultSearchEngineProvider)
@@ -385,19 +392,10 @@ extension AppDelegate {
         if TelemetryManager.shared.isNewTosEnabled {
             gleanUsageReportingMetricsService.start()
         } else {
-            gleanUsageReportingMetricsService.unsetUsageProfileId()
+            gleanUsageReportingMetricsService.lifecycleObserver.profileIdentifier.unsetUsageProfileId()
         }
 
         Glean.shared.registerPings(GleanMetrics.Pings.shared)
-
-        let channel = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt" ? "testflight" : "release"
-        let configuration = Configuration(channel: channel)
-
-        Glean.shared.initialize(
-            uploadEnabled: TelemetryManager.shared.isGleanEnabled,
-            configuration: configuration,
-            buildInfo: GleanMetrics.GleanBuild.info
-        )
 
         let url = URL(string: "firefox://", invalidCharacters: false)!
         // Send "at startup" telemetry

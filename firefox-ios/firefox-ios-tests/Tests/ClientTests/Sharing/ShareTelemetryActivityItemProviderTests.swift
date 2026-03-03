@@ -9,6 +9,7 @@ import Glean
 
 @testable import Client
 
+@MainActor
 final class ShareTelemetryActivityItemProviderTests: XCTestCase {
     let testMessage = "Test message"
     let testSubtitle = "Test subtitle"
@@ -32,7 +33,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
         let mockGleanWrapper = MockGleanWrapper()
 
         let shareTelemetryActivityItemProvider = ShareTelemetryActivityItemProvider(
-            shareType: testShareType,
+            shareTypeName: testShareType.typeName,
             shareMessage: testShareMessage,
             gleanWrapper: mockGleanWrapper
         )
@@ -43,7 +44,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
 
         XCTAssertTrue(itemForActivity is NSNull, "Should never share content")
         XCTAssertEqual(mockGleanWrapper.recordEventCalled, 1)
-        XCTAssertNotNil(mockGleanWrapper.savedEvents?.first as? EventMetricType<GleanMetrics.ShareSheet.SharedToExtra>)
+        XCTAssertNotNil(mockGleanWrapper.savedEvents.first as? EventMetricType<GleanMetrics.ShareSheet.SharedToExtra>)
     }
 
     func testWithShareType_hasShareMessage_callTelemetryOnly() throws {
@@ -53,7 +54,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
         let mockGleanWrapper = MockGleanWrapper()
 
         let shareTelemetryActivityItemProvider = ShareTelemetryActivityItemProvider(
-            shareType: testShareType,
+            shareTypeName: testShareType.typeName,
             shareMessage: testShareMessage,
             gleanWrapper: mockGleanWrapper
         )
@@ -64,7 +65,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
 
         XCTAssertTrue(itemForActivity is NSNull, "Should never share content")
         XCTAssertEqual(mockGleanWrapper.recordEventCalled, 1)
-        XCTAssertNotNil(mockGleanWrapper.savedEvents?.first as? EventMetricType<GleanMetrics.ShareSheet.SharedToExtra>)
+        XCTAssertNotNil(mockGleanWrapper.savedEvents.first as? EventMetricType<GleanMetrics.ShareSheet.SharedToExtra>)
     }
 
     // MARK: - Sent from Firefox experiment
@@ -84,7 +85,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
         UserDefaults.standard.set(testUserOptIn, forKey: PrefsKeys.NimbusUserEnabledFeatureTestsOverride)
 
         let shareTelemetryActivityItemProvider = ShareTelemetryActivityItemProvider(
-            shareType: testShareType,
+            shareTypeName: testShareType.typeName,
             shareMessage: testShareMessage,
             gleanWrapper: mockGleanWrapper
         )
@@ -92,7 +93,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
             createStubActivityViewController(),
             itemForActivityType: testActivityType
         )
-        let eventExtra = try XCTUnwrap(mockGleanWrapper.savedExtras as? GleanMetrics.ShareSheet.SharedToExtra)
+        let eventExtra = try XCTUnwrap(mockGleanWrapper.savedExtras.first as? GleanMetrics.ShareSheet.SharedToExtra)
 
         XCTAssertTrue(itemForActivity is NSNull, "Should never share content")
         XCTAssertEqual(mockGleanWrapper.recordEventCalled, 1)
@@ -115,7 +116,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
         UserDefaults.standard.set(testUserOptIn, forKey: PrefsKeys.NimbusUserEnabledFeatureTestsOverride)
 
         let shareTelemetryActivityItemProvider = ShareTelemetryActivityItemProvider(
-            shareType: testShareType,
+            shareTypeName: testShareType.typeName,
             shareMessage: testShareMessage,
             gleanWrapper: mockGleanWrapper
         )
@@ -123,7 +124,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
             createStubActivityViewController(),
             itemForActivityType: testActivityType
         )
-        let eventExtra = try XCTUnwrap(mockGleanWrapper.savedExtras as? GleanMetrics.ShareSheet.SharedToExtra)
+        let eventExtra = try XCTUnwrap(mockGleanWrapper.savedExtras.first as? GleanMetrics.ShareSheet.SharedToExtra)
 
         XCTAssertTrue(itemForActivity is NSNull, "Should never share content")
         XCTAssertEqual(mockGleanWrapper.recordEventCalled, 1)
@@ -146,7 +147,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
         UserDefaults.standard.set(testUserOptIn, forKey: PrefsKeys.NimbusUserEnabledFeatureTestsOverride)
 
         let shareTelemetryActivityItemProvider = ShareTelemetryActivityItemProvider(
-            shareType: testShareType,
+            shareTypeName: testShareType.typeName,
             shareMessage: testShareMessage,
             gleanWrapper: mockGleanWrapper
         )
@@ -154,7 +155,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
             createStubActivityViewController(),
             itemForActivityType: testActivityType
         )
-        let eventExtra = try XCTUnwrap(mockGleanWrapper.savedExtras as? GleanMetrics.ShareSheet.SharedToExtra)
+        let eventExtra = try XCTUnwrap(mockGleanWrapper.savedExtras.first as? GleanMetrics.ShareSheet.SharedToExtra)
 
         XCTAssertTrue(itemForActivity is NSNull, "Should never share content")
         XCTAssertEqual(mockGleanWrapper.recordEventCalled, 1)
@@ -177,7 +178,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
         UserDefaults.standard.set(testUserOptIn, forKey: PrefsKeys.NimbusUserEnabledFeatureTestsOverride)
 
         let shareTelemetryActivityItemProvider = ShareTelemetryActivityItemProvider(
-            shareType: testShareType,
+            shareTypeName: testShareType.typeName,
             shareMessage: testShareMessage,
             gleanWrapper: mockGleanWrapper
         )
@@ -185,7 +186,7 @@ final class ShareTelemetryActivityItemProviderTests: XCTestCase {
             createStubActivityViewController(),
             itemForActivityType: testActivityType
         )
-        let eventExtra = try XCTUnwrap(mockGleanWrapper.savedExtras as? GleanMetrics.ShareSheet.SharedToExtra)
+        let eventExtra = try XCTUnwrap(mockGleanWrapper.savedExtras.first as? GleanMetrics.ShareSheet.SharedToExtra)
 
         XCTAssertTrue(itemForActivity is NSNull, "Should never share content")
         XCTAssertEqual(mockGleanWrapper.recordEventCalled, 1)

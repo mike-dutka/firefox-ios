@@ -4,17 +4,20 @@
 
 import UIKit
 import Common
-import Shared
 import Redux
 
 import enum MozillaAppServices.VisitType
 
 protocol RemoteTabsPanelDelegate: AnyObject {
+    @MainActor
     func presentFirefoxAccountSignIn()
+
+    @MainActor
     func presentFxAccountSettings()
 }
 
 protocol RemoteTabsClientAndTabsDataSourceDelegate: AnyObject {
+    @MainActor
     func remoteTabsClientAndTabsDataSourceDidSelectURL(_ url: URL, visitType: VisitType)
 }
 
@@ -22,19 +25,28 @@ class RemoteTabsPanel: UIViewController,
                        Themeable,
                        RemoteTabsClientAndTabsDataSourceDelegate,
                        RemoteTabsEmptyViewDelegate,
-                       StoreSubscriber {
+                       StoreSubscriber,
+                       FeatureFlaggable,
+                       TabTrayThemeable,
+                       Notifiable {
     typealias SubscriberStateType = RemoteTabsPanelState
 
     // MARK: - Properties
 
     private(set) var state: RemoteTabsPanelState
-    var tableViewController: RemoteTabsTableViewController
+    var tabsDisplayViewController: RemoteTabsViewController
     weak var remoteTabsDelegate: RemoteTabsPanelDelegate?
 
     var themeManager: ThemeManager
-    var themeObserver: NSObjectProtocol?
+    var themeListenerCancellable: Any?
     var notificationCenter: NotificationProtocol
     private let windowUUID: WindowUUID
+    private var isTabTrayUIExperimentsEnabled: Bool {
+        return featureFlags.isFeatureEnabled(.tabTrayUIExperiments, checking: .buildOnly)
+        && UIDevice.current.userInterfaceIdiom != .pad
+    }
+
+    private lazy var statusBarBackground: UIView = .build()
 
     // MARK: - Initializer
 
@@ -46,17 +58,34 @@ class RemoteTabsPanel: UIViewController,
         self.state = RemoteTabsPanelState(windowUUID: windowUUID)
         self.themeManager = themeManager
         self.notificationCenter = notificationCenter
-        self.tableViewController = RemoteTabsTableViewController(state: state, windowUUID: windowUUID)
+        self.tabsDisplayViewController = RemoteTabsViewController(state: state, windowUUID: windowUUID)
 
         super.init(nibName: nil, bundle: nil)
 
-        self.tableViewController.remoteTabsPanel = self
+        self.tabsDisplayViewController.remoteTabsPanel = self
+
+        startObservingNotifications(
+            withNotificationCenter: notificationCenter,
+            forObserver: self,
+            observing: [
+                .ProfileDidStartSyncing,
+                .ProfileDidFinishSyncing
+            ]
+        )
     }
 
     required init?(coder aDecoder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     deinit {
-        unsubscribeFromRedux()
+        // TODO: FXIOS-13097 This is a work around until we can leverage isolated deinits
+        guard Thread.isMainThread else {
+            assertionFailure("AddressBarPanGestureHandler was not deallocated on the main thread. Observer was not removed")
+            return
+        }
+
+        MainActor.assumeIsolated {
+            unsubscribeFromRedux()
+        }
     }
 
     var currentWindowUUID: UUID? { return windowUUID }
@@ -85,32 +114,77 @@ class RemoteTabsPanel: UIViewController,
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        listenForThemeChange(view)
         setupLayout()
         subscribeToRedux()
+
+        listenForThemeChanges(withNotificationCenter: notificationCenter)
         applyTheme()
     }
 
     private func setupLayout() {
         navigationController?.setNavigationBarHidden(true, animated: false)
-        tableViewController.view.translatesAutoresizingMaskIntoConstraints = false
-        addChild(tableViewController)
-        view.addSubview(tableViewController.view)
-        tableViewController.didMove(toParent: self)
+        tabsDisplayViewController.view.translatesAutoresizingMaskIntoConstraints = false
+        addChild(tabsDisplayViewController)
+        view.addSubview(tabsDisplayViewController.view)
+        tabsDisplayViewController.didMove(toParent: self)
 
-        NSLayoutConstraint.activate([
-            tableViewController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            tableViewController.view.topAnchor.constraint(equalTo: view.topAnchor),
-            tableViewController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableViewController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-        ])
+        if isTabTrayUIExperimentsEnabled {
+            view.addSubview(statusBarBackground)
+
+            NSLayoutConstraint.activate([
+                tabsDisplayViewController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                tabsDisplayViewController.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+                tabsDisplayViewController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                tabsDisplayViewController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+                statusBarBackground.topAnchor.constraint(equalTo: view.topAnchor),
+                statusBarBackground.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                statusBarBackground.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                statusBarBackground.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                tabsDisplayViewController.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                tabsDisplayViewController.view.topAnchor.constraint(equalTo: view.topAnchor),
+                tabsDisplayViewController.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                tabsDisplayViewController.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            ])
+        }
     }
 
+    // MARK: - Themeable
+
     func applyTheme() {
-        let theme = themeManager.getCurrentTheme(for: windowUUID)
+        let theme = retrieveTheme()
         view.backgroundColor = theme.colors.layer4
-        tableViewController.tableView.backgroundColor =  theme.colors.layer3
-        tableViewController.tableView.separatorColor = theme.colors.borderPrimary
+        tabsDisplayViewController.tableView.backgroundColor = theme.colors.layer3
+        tabsDisplayViewController.tableView.separatorColor = theme.colors.borderPrimary
+        statusBarBackground.backgroundColor = theme.colors.layer3
+    }
+
+    var shouldUsePrivateOverride: Bool {
+        return featureFlags.isFeatureEnabled(.feltPrivacySimplifiedUI, checking: .buildOnly)
+    }
+
+    var shouldBeInPrivateTheme: Bool {
+        return false
+    }
+
+    // MARK: - TabTrayThemeable
+
+    func retrieveTheme() -> Theme {
+        if shouldUsePrivateOverride {
+            return themeManager.resolvedTheme(with: false)
+        } else {
+            return themeManager.getCurrentTheme(for: windowUUID)
+        }
+    }
+
+    func applyTheme(_ theme: Theme) {
+        view.backgroundColor = theme.colors.layer4
+        tabsDisplayViewController.tableView.backgroundColor = theme.colors.layer3
+        tabsDisplayViewController.tableView.separatorColor = theme.colors.borderPrimary
+        statusBarBackground.backgroundColor = theme.colors.layer3
     }
 
     // MARK: - Redux
@@ -144,7 +218,7 @@ class RemoteTabsPanel: UIViewController,
             guard let self else { return }
 
             self.state = state
-            tableViewController.newState(state: state)
+            tabsDisplayViewController.newState(state: state)
         }
     }
 
@@ -175,10 +249,6 @@ class RemoteTabsPanel: UIViewController,
     }
 
     func remotePanelDidRequestToOpenInNewTab(_ url: URL, isPrivate: Bool) {
-        handleOpenSelectedURL(url)
-    }
-
-    func remotePanel(didSelectURL url: URL, visitType: VisitType) {
         handleOpenSelectedURL(url)
     }
 
@@ -217,5 +287,26 @@ class RemoteTabsPanel: UIViewController,
         store.dispatch(action)
 
         refreshTabs(useCache: true)
+    }
+
+    // MARK: - Notifiable
+    func handleNotifications(_ notification: Notification) {
+        switch notification.name {
+        case .ProfileDidStartSyncing:
+            ensureMainThread {
+                if self.state.refreshState == .idle {
+                    let action = RemoteTabsPanelAction(clientAndTabs: [],
+                                                       devices: nil,
+                                                       windowUUID: self.windowUUID,
+                                                       actionType: RemoteTabsPanelActionType.syncDidBegin)
+                    store.dispatch(action)
+                }
+            }
+        case .ProfileDidFinishSyncing:
+            ensureMainThread {
+                self.refreshTabs()
+            }
+        default: return
+        }
     }
 }

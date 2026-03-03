@@ -4,10 +4,10 @@
 
 import Foundation
 
-public enum AppBuildChannel: String {
-    case release = "RELEASE"
-    case beta = "BETA"
-    case developer = "FENNEC"
+public enum AppBuildChannel: String, Sendable {
+    case release
+    case beta
+    case developer
 
     // Used for unknown cases
     case other

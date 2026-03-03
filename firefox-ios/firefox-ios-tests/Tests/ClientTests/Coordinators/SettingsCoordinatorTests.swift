@@ -5,15 +5,17 @@
 import XCTest
 
 @testable import Client
+import SwiftUI
 
+@MainActor
 final class SettingsCoordinatorTests: XCTestCase {
     private var mockRouter: MockRouter!
     private var wallpaperManager: WallpaperManagerMock!
     private var delegate: MockSettingsCoordinatorDelegate!
     private var mockSettingsVC: MockAppSettingsScreen!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         DependencyHelperMock().bootstrapDependencies()
         LegacyFeatureFlagsManager.shared.initializeDeveloperFeatures(with: MockProfile())
         self.mockRouter = MockRouter(navigationController: MockNavigationController())
@@ -22,13 +24,13 @@ final class SettingsCoordinatorTests: XCTestCase {
         self.mockSettingsVC = MockAppSettingsScreen()
     }
 
-    override func tearDown() {
-        super.tearDown()
+    override func tearDown() async throws {
         self.mockRouter = nil
         self.wallpaperManager = nil
         self.delegate = nil
         self.mockSettingsVC = nil
         DependencyHelperMock().reset()
+        try await super.tearDown()
     }
 
     func testEmptyChildren_whenCreated() {
@@ -108,7 +110,7 @@ final class SettingsCoordinatorTests: XCTestCase {
         subject.start(with: .theme)
 
         XCTAssertEqual(mockRouter.pushCalled, 1)
-        XCTAssertTrue(mockRouter.pushedViewController is ThemeSettingsController)
+        XCTAssertTrue(mockRouter.pushedViewController is UIHostingController<AppearanceSettingsView>)
     }
 
     func testWallpaperSettingsRoute_cannotBeShown_showsWallpaperSettingsPage() throws {
@@ -143,10 +145,10 @@ final class SettingsCoordinatorTests: XCTestCase {
     func testTabsSettingsRoute_showsTabsSettingsPage() throws {
         let subject = createSubject()
 
-        subject.start(with: .tabs)
+        subject.start(with: .browser)
 
         XCTAssertEqual(mockRouter.pushCalled, 1)
-        XCTAssertTrue(mockRouter.pushedViewController is TabsSettingsViewController)
+        XCTAssertTrue(mockRouter.pushedViewController is BrowsingSettingsViewController)
     }
 
     func testToolbarSettingsRoute_showsToolbarSettingsPage() throws {
@@ -155,7 +157,7 @@ final class SettingsCoordinatorTests: XCTestCase {
         subject.start(with: .toolbar)
 
         XCTAssertEqual(mockRouter.pushCalled, 1)
-        XCTAssertTrue(mockRouter.pushedViewController is SearchBarSettingsViewController)
+        XCTAssertTrue(mockRouter.pushedViewController is UIHostingController<AddressBarSettingsView>)
     }
 
     func testTopSitesSettingsRoute_showsTopSitesSettingsPage() throws {
@@ -174,6 +176,15 @@ final class SettingsCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(mockRouter.pushCalled, 0)
         XCTAssertNil(mockRouter.pushedViewController)
+    }
+
+    func testAppIconSettingsRoute_showsAppIconSelectionPage() throws {
+        let subject = createSubject()
+
+        subject.start(with: .appIcon)
+
+        XCTAssertEqual(mockRouter.pushCalled, 1)
+        XCTAssertTrue(mockRouter.pushedViewController is UIHostingController<AppIconSelectionView>)
     }
 
     // MARK: - Delegate
@@ -327,15 +338,6 @@ final class SettingsCoordinatorTests: XCTestCase {
         XCTAssertTrue(mockRouter.pushedViewController is HomePageSettingViewController)
     }
 
-    func testGeneralSettingsDelegate_pushedMailApp() {
-        let subject = createSubject()
-
-        subject.pressedMailApp()
-
-        XCTAssertEqual(mockRouter.pushCalled, 1)
-        XCTAssertTrue(mockRouter.pushedViewController is OpenWithSettingsViewController)
-    }
-
     func testGeneralSettingsDelegate_pushedNewTab() {
         let subject = createSubject()
 
@@ -369,16 +371,7 @@ final class SettingsCoordinatorTests: XCTestCase {
         subject.pressedToolbar()
 
         XCTAssertEqual(mockRouter.pushCalled, 1)
-        XCTAssertTrue(mockRouter.pushedViewController is SearchBarSettingsViewController)
-    }
-
-    func testGeneralSettingsDelegate_pushedTabs() {
-        let subject = createSubject()
-
-        subject.pressedTabs()
-
-        XCTAssertEqual(mockRouter.pushCalled, 1)
-        XCTAssertTrue(mockRouter.pushedViewController is TabsSettingsViewController)
+        XCTAssertTrue(mockRouter.pushedViewController is UIHostingController<AddressBarSettingsView>)
     }
 
     func testGeneralSettingsDelegate_pushedTheme() {
@@ -387,10 +380,48 @@ final class SettingsCoordinatorTests: XCTestCase {
         subject.pressedTheme()
 
         XCTAssertEqual(mockRouter.pushCalled, 1)
-        XCTAssertTrue(mockRouter.pushedViewController is ThemeSettingsController)
+        XCTAssertTrue(mockRouter.pushedViewController is UIHostingController<AppearanceSettingsView>)
+    }
+
+    func testGeneralSettingsDelegate_pushedSummarizeSettings() {
+        let subject = createSubject()
+
+        subject.pressedSummarize()
+
+        XCTAssertEqual(mockRouter.pushCalled, 1)
+        XCTAssertTrue(mockRouter.pushedViewController is SummarizeSettingsViewController)
+    }
+
+    func testGeneralSettingsDelegate_pushedTranslationSettings() {
+        let subject = createSubject()
+
+        subject.pressedTranslation()
+
+        XCTAssertEqual(mockRouter.pushCalled, 1)
+        XCTAssertTrue(mockRouter.pushedViewController is TranslationSettingsViewController)
+    }
+
+    // MARK: - BrowsingSettingsDelegate
+
+    func testBrowsingSettingsDelegate_pushedMailApp() {
+        let subject = createSubject()
+
+        subject.pressedMailApp()
+
+        XCTAssertEqual(mockRouter.pushCalled, 1)
+        XCTAssertTrue(mockRouter.pushedViewController is OpenWithSettingsViewController)
     }
 
     // MARK: - PrivacySettingsDelegate
+
+    func testAutofillPasswordSettingsRoute_pushAutofillPassword() throws {
+        let subject = createSubject()
+
+        subject.pressedAutoFillsPasswords()
+
+        XCTAssertEqual(mockRouter.pushCalled, 1)
+        XCTAssertTrue(mockRouter.pushedViewController is AutoFillPasswordSettingsViewController)
+    }
 
     func testPrivacySettingsDelegate_handleCreditCardRoute() {
         let subject = createSubject()
@@ -537,6 +568,7 @@ final class SettingsCoordinatorTests: XCTestCase {
             router: mockRouter,
             wallpaperManager: wallpaperManager,
             tabManager: MockTabManager(),
+            relayController: MockRelayController(),
             gleanUsageReportingMetricsService: MockGleanUsageReportingMetricsService(
                 profile: MockProfile()
             )

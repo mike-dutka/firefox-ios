@@ -4,16 +4,15 @@
 
 import Foundation
 import Redux
-import Shared
 import Common
 
-struct PasswordGeneratorState: ScreenState, Equatable {
+struct PasswordGeneratorState: ScreenState {
     var windowUUID: WindowUUID
     var password: String
     var passwordHidden: Bool
 
     init(appState: AppState, uuid: WindowUUID) {
-        guard let passwordGeneratorState = store.state.screenState(
+        guard let passwordGeneratorState = appState.screenState(
             PasswordGeneratorState.self,
             for: .passwordGenerator,
             window: uuid

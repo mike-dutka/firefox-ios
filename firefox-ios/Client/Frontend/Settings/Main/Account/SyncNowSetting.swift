@@ -6,7 +6,8 @@ import Common
 import Foundation
 import Shared
 
-class SyncNowSetting: WithAccountSetting {
+class SyncNowSetting: WithAccountSetting,
+                      Notifiable {
     private weak var settingsDelegate: AccountSettingsDelegate?
     private var notificationCenter: NotificationProtocol
 
@@ -27,14 +28,13 @@ class SyncNowSetting: WithAccountSetting {
         self.notificationCenter = notificationCenter
         super.init(settings: settings)
 
-        notificationCenter.addObserver(self,
-                                       selector: #selector(stopRotateSyncIcon),
-                                       name: .ProfileDidFinishSyncing,
-                                       object: nil)
-    }
-
-    deinit {
-        notificationCenter.removeObserver(self)
+        startObservingNotifications(
+            withNotificationCenter: notificationCenter,
+            forObserver: self,
+            observing: [
+                .ProfileDidFinishSyncing
+            ]
+        )
     }
 
     private lazy var timestampFormatter: DateFormatter = {
@@ -68,15 +68,19 @@ class SyncNowSetting: WithAccountSetting {
     }
 
     func startRotateSyncIcon() {
-        DispatchQueue.main.async {
-            self.imageView.layer.add(self.continuousRotateAnimation, forKey: "rotateKey")
-        }
+        self.imageView.layer.add(self.continuousRotateAnimation, forKey: "rotateKey")
     }
 
-    @objc
     func stopRotateSyncIcon() {
-        DispatchQueue.main.async {
-            self.imageView.layer.removeAllAnimations()
+        self.imageView.layer.removeAllAnimations()
+    }
+
+    // MARK: Notifiable
+    func handleNotifications(_ notification: Notification) {
+        guard notification.name == .ProfileDidFinishSyncing else { return }
+
+        ensureMainThread {
+            self.stopRotateSyncIcon()
         }
     }
 
@@ -193,6 +197,7 @@ class SyncNowSetting: WithAccountSetting {
 
     override func onConfigureCell(_ cell: UITableViewCell, theme: Theme) {
         super.onConfigureCell(cell, theme: theme)
+
         cell.textLabel?.attributedText = title
         cell.textLabel?.numberOfLines = 0
         cell.textLabel?.lineBreakMode = .byWordWrapping
@@ -224,6 +229,13 @@ class SyncNowSetting: WithAccountSetting {
         }
         cell.accessoryType = accessoryType
         cell.isUserInteractionEnabled = !(profile?.syncManager?.isSyncing ?? false) && DeviceInfo.hasConnectivity()
+
+        configureImageCell(for: cell)
+    }
+
+    private func configureImageCell(for cell: UITableViewCell) {
+        // Reset imageview to avoid showing wrong image
+        cell.imageView?.image = nil
 
         // Animation that loops continuously until stopped
         continuousRotateAnimation.fromValue = 0.0

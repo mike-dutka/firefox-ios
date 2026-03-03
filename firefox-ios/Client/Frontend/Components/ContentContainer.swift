@@ -6,27 +6,23 @@ import UIKit
 
 enum ContentType {
     case homepage
-    case legacyHomepage
     case privateHomepage
     case nativeErrorPage
     case webview
 }
 
+@MainActor
 protocol ContentContainable: UIViewController {
     var contentType: ContentType { get }
 }
 
 /// A container for view controllers, currently used to embed content in BrowserViewController
-class ContentContainer: UIView {
+class ContentContainer: UIView, FeatureFlaggable {
     private var type: ContentType?
-    private var contentController: ContentContainable?
+    private(set) var contentController: ContentContainable?
 
-    var contentView: UIView? {
+    var contentView: Screenshotable? {
         return contentController?.view
-    }
-
-    var hasLegacyHomepage: Bool {
-        return type == .legacyHomepage
     }
 
     var hasPrivateHomepage: Bool {
@@ -35,6 +31,10 @@ class ContentContainer: UIView {
 
     var hasHomepage: Bool {
         return type == .homepage
+    }
+
+    var hasAnyHomepage: Bool {
+        return hasHomepage || hasPrivateHomepage
     }
 
     var hasWebView: Bool {
@@ -51,8 +51,6 @@ class ContentContainer: UIView {
     /// - Returns: True when we can add the view controller to the container
     func canAdd(content: ContentContainable) -> Bool {
         switch type {
-        case .legacyHomepage:
-            return !(content is LegacyHomepageViewController)
         case .nativeErrorPage:
             return !(content is NativeErrorPageViewController)
         case .homepage:

@@ -5,8 +5,6 @@
 import Foundation
 import UIKit
 import Common
-import Shared
-import ComponentLibrary
 
 class TrackingProtectionStatusView: UIView {
     private struct UX {
@@ -43,7 +41,7 @@ class TrackingProtectionStatusView: UIView {
 
     // MARK: View Setup
     private func setupView() {
-        layer.cornerRadius = TPMenuUX.UX.viewCornerRadius
+        layer.cornerRadius = TPMenuUX.UX.newStyleCornerRadius
         layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         layer.masksToBounds = true
 
@@ -81,6 +79,16 @@ class TrackingProtectionStatusView: UIView {
     func configure(image: UIImage?, statusText: String?) {
         connectionImage.image = image
         connectionStatusLabel.text = statusText
+    }
+
+    func setupAccessibilityIdentifiers(
+        connectionImageA11yId: String,
+        connectionStatusLabelA11yId: String,
+        dividerViewA11yId: String
+    ) {
+        connectionImage.accessibilityIdentifier = connectionImageA11yId
+        connectionStatusLabel.accessibilityIdentifier = connectionStatusLabelA11yId
+        dividerView.accessibilityIdentifier = dividerViewA11yId
     }
 
     // MARK: ThemeApplicable

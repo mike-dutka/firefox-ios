@@ -8,7 +8,8 @@ import Foundation
 import Shared
 
 // Sync setting that shows the current Firefox Account status.
-class AccountStatusSetting: WithAccountSetting {
+class AccountStatusSetting: WithAccountSetting,
+                            Notifiable {
     private weak var settingsDelegate: AccountSettingsDelegate?
     private var notificationCenter: NotificationProtocol
 
@@ -19,19 +20,20 @@ class AccountStatusSetting: WithAccountSetting {
         self.settingsDelegate = settingsDelegate
         super.init(settings: settings)
 
-        notificationCenter.addObserver(self,
-                                       selector: #selector(updateAccount),
-                                       name: .FirefoxAccountProfileChanged,
-                                       object: nil)
+        startObservingNotifications(
+            withNotificationCenter: notificationCenter,
+            forObserver: self,
+            observing: [
+                .FirefoxAccountProfileChanged
+            ]
+        )
     }
 
-    deinit {
-        notificationCenter.removeObserver(self)
-    }
+    // MARK: Notifiable
+    func handleNotifications(_ notification: Notification) {
+        guard notification.name == .FirefoxAccountProfileChanged else { return }
 
-    @objc
-    func updateAccount(notification: Notification) {
-        DispatchQueue.main.async {
+        ensureMainThread {
             self.settings.tableView.reloadData()
         }
     }
@@ -88,14 +90,16 @@ class AccountStatusSetting: WithAccountSetting {
                 .tinted(withColor: theme.colors.iconPrimary)
 
             guard let str = RustFirefoxAccounts.shared.userProfile?.avatarUrl,
-                  let actionIconUrl = URL(string: str, invalidCharacters: false)
+                  let actionIconUrl = URL(string: str)
             else { return }
 
             GeneralizedImageFetcher().getImageFor(url: actionIconUrl) { image in
                 guard let avatar = image else { return }
 
-                imageView.image = avatar.createScaled(CGSize(width: 30, height: 30))
-                    .withRenderingMode(.alwaysOriginal)
+                DispatchQueue.main.async {
+                    imageView.image = avatar.createScaled(CGSize(width: 30, height: 30))
+                        .withRenderingMode(.alwaysOriginal)
+                }
             }
         }
     }

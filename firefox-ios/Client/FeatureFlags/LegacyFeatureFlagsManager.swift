@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import Shared
 import Common
 
 // MARK: - Protocol
@@ -11,6 +10,13 @@ protocol FeatureFlaggable {}
 extension FeatureFlaggable {
     var featureFlags: LegacyFeatureFlagsManager {
         return LegacyFeatureFlagsManager.shared
+    }
+
+    @MainActor
+    var isHomepageStoriesScrollDirectionCustomized: Bool {
+        let scrollDirection: ScrollDirection = featureFlags
+            .getCustomState(for: .homepageStoriesScrollDirection) ?? .baseline
+        return scrollDirection != .baseline && UIDevice.current.userInterfaceIdiom == .phone
     }
 }
 
@@ -27,7 +33,8 @@ enum FlaggableFeatureCheckOptions {
     case userOnly
 }
 
-class LegacyFeatureFlagsManager: HasNimbusFeatureFlags {
+// FIXME: FXIOS-13986 Make truly thread safe
+class LegacyFeatureFlagsManager: HasNimbusFeatureFlags, @unchecked Sendable {
     /// This Singleton should only be accessed directly in places where the
     /// `FeatureFlaggable` is not available. Otherwise, access to the feature
     /// flags system should be done through the protocol, giving access to the
@@ -69,7 +76,7 @@ class LegacyFeatureFlagsManager: HasNimbusFeatureFlags {
 
     /// Allows us to override nimbus feature flags for a specific build using the debug menu
     private func getNimbusOrDebugSetting(with feature: NimbusFlaggableFeature) -> Bool {
-        #if MOZ_CHANNEL_BETA || MOZ_CHANNEL_FENNEC
+        #if MOZ_CHANNEL_beta || MOZ_CHANNEL_developer
         return feature.isDebugEnabled(using: nimbusFlags)
         #else
         return feature.isNimbusEnabled(using: nimbusFlags)
@@ -88,12 +95,16 @@ class LegacyFeatureFlagsManager: HasNimbusFeatureFlags {
 
         switch featureID {
         case .searchBarPosition: return SearchBarPosition(rawValue: userSetting) as? T
+        case .startAtHome: return StartAtHome(rawValue: userSetting) as? T
+        case .homepageStoriesScrollDirection: return ScrollDirection(rawValue: userSetting) as? T
         }
     }
 
     private func convertCustomIDToStandard(_ featureID: NimbusFeatureFlagWithCustomOptionsID) -> NimbusFeatureFlagID {
         switch featureID {
         case .searchBarPosition: return .bottomSearchBar
+        case .startAtHome: return .startAtHome
+        case .homepageStoriesScrollDirection: return .homepageStoriesScrollDirection
         }
     }
 
@@ -108,7 +119,7 @@ class LegacyFeatureFlagsManager: HasNimbusFeatureFlags {
         guard let profile else { return }
 
         let feature = NimbusFlaggableFeature(withID: featureID, and: profile)
-        #if MOZ_CHANNEL_BETA || MOZ_CHANNEL_FENNEC
+        #if MOZ_CHANNEL_beta || MOZ_CHANNEL_developer
         if isDebug {
             feature.setDebugPreference(to: desiredState)
         } else {
@@ -134,6 +145,12 @@ class LegacyFeatureFlagsManager: HasNimbusFeatureFlags {
             if let option = desiredState as? SearchBarPosition {
                 feature.setUserPreference(to: option.rawValue)
             }
+        case .startAtHome:
+            if let option = desiredState as? StartAtHome {
+                feature.setUserPreference(to: option.rawValue)
+            }
+        default:
+            break
         }
     }
 
@@ -157,12 +174,9 @@ class LegacyFeatureFlagsManager: HasNimbusFeatureFlags {
                                                enabledFor: [.developer])
         coreFeatures[.useMockData] = useMockData
 
-        let useStagingContileAPI = CoreFlaggableFeature(withID: .useStagingContileAPI,
-                                                        enabledFor: [.developer])
-        let useStagingFakespotAPI = CoreFlaggableFeature(withID: .useStagingFakespotAPI,
-                                                         enabledFor: [])
+        let useStagingUnifiedAdsAPI = CoreFlaggableFeature(withID: .useStagingUnifiedAdsAPI,
+                                                           enabledFor: [.developer])
 
-        coreFeatures[.useStagingContileAPI] = useStagingContileAPI
-        coreFeatures[.useStagingFakespotAPI] = useStagingFakespotAPI
+        coreFeatures[.useStagingUnifiedAdsAPI] = useStagingUnifiedAdsAPI
     }
 }

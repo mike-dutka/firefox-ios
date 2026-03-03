@@ -2,9 +2,10 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import Common
 import Foundation
-import UIKit
 import Glean
+import UIKit
 import Shared
 
 enum UsageReason: String, Equatable {
@@ -49,24 +50,29 @@ final class GleanUsageReporting: GleanUsageReportingApi {
 
     private func setUsageConstantValues() {
         GleanMetrics.Usage.os.set("iOS")
-        GleanMetrics.Usage.osVersion.set(UIDevice.current.systemVersion)
+        GleanMetrics.Usage.osVersion.set(UIDeviceDetails.systemVersion)
         GleanMetrics.Usage.appDisplayVersion.set(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")
         GleanMetrics.Usage.appBuild.set(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "")
         GleanMetrics.Usage.appChannel.set(AppConstants.buildChannel.rawValue)
         if let date = InstallationUtils.inferredDateInstalledOn {
             GleanMetrics.Usage.firstRunDate.set(date)
         }
+        let managedConfig = UserDefaults.standard.dictionary(forKey: "com.apple.configuration.managed")
+        let isManaged = (managedConfig != nil) ? true : false
+        GleanMetrics.Usage.isManagedDevice.set(isManaged)
+        TermsOfUseTelemetry.setUsageMetrics()
     }
 }
 
-class GleanLifecycleObserver {
+// TODO: FXIOS-14156 - GleanLifecycleObserver shouldn't be @unchecked Sendable
+class GleanLifecycleObserver: Notifiable, @unchecked Sendable {
     let gleanUsageReportingApi: GleanUsageReportingApi
     private var isObserving = false
-    private let notificationCenter: NotificationCenter
+    private let notificationCenter: NotificationProtocol
 
     init(
         gleanUsageReportingApi: GleanUsageReportingApi = GleanUsageReporting(),
-        notificationCenter: NotificationCenter = .default
+        notificationCenter: NotificationProtocol = NotificationCenter.default
     ) {
         self.gleanUsageReportingApi = gleanUsageReportingApi
         self.notificationCenter = notificationCenter
@@ -76,46 +82,39 @@ class GleanLifecycleObserver {
         guard !isObserving else { return }
         isObserving = true
 
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(appWillEnterForeground),
-            name: UIApplication.willEnterForegroundNotification,
-            object: nil
-        )
+        startObservingNotifications(withNotificationCenter: notificationCenter,
+                                    forObserver: self,
+                                    observing: [UIApplication.willEnterForegroundNotification,
+                                                UIApplication.didEnterBackgroundNotification])
 
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(appDidEnterBackground),
-            name: UIApplication.didEnterBackgroundNotification,
-            object: nil
-        )
+        // Handle the case where the app is already in the foreground when the observer is started
+        handleForegroundEvent()
     }
 
     func stopObserving() {
         guard isObserving else { return }
         isObserving = false
 
-        notificationCenter.removeObserver(
-            self,
-            name: UIApplication.willEnterForegroundNotification,
-            object: nil
-        )
-
-        notificationCenter.removeObserver(
-            self,
-            name: UIApplication.didEnterBackgroundNotification,
-            object: nil
-        )
+        stopObservingNotifications(withNotificationCenter: notificationCenter,
+                                   forObserver: self,
+                                   observing: [UIApplication.willEnterForegroundNotification,
+                                               UIApplication.didEnterBackgroundNotification])
     }
 
-    @objc
-    private func appWillEnterForeground(notification: NSNotification) {
-        handleForegroundEvent()
-    }
+    // MARK: Notifiable
 
-    @objc
-    private func appDidEnterBackground(notification: NSNotification) {
-        handleBackgroundEvent()
+    func handleNotifications(_ notification: Notification) {
+        let name = notification.name
+        ensureMainThread {
+            switch name {
+            case UIApplication.willEnterForegroundNotification:
+                self.handleForegroundEvent()
+            case UIApplication.didEnterBackgroundNotification:
+                self.handleBackgroundEvent()
+            default:
+                break
+            }
+        }
     }
 
     func handleForegroundEvent() {

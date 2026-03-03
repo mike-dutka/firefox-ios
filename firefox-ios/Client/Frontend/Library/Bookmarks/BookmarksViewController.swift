@@ -10,10 +10,11 @@ import SiteImageView
 
 import MozillaAppServices
 
-class BookmarksViewController: SiteTableViewController,
-                               LibraryPanel,
-                               CanRemoveQuickActionBookmark,
-                               UITableViewDropDelegate {
+final class BookmarksViewController: SiteTableViewController,
+                                     LibraryPanel,
+                                     CanRemoveQuickActionBookmark,
+                                     UITableViewDropDelegate,
+                                     Notifiable {
     struct UX {
         static let FolderIconSize = CGSize(width: 24, height: 24)
         static let RowFlashDelay: TimeInterval = 0.4
@@ -45,16 +46,28 @@ class BookmarksViewController: SiteTableViewController,
         switch state {
         case .bookmarks(state: .mainView), .bookmarks(state: .inFolder):
             bottomRightButton.title = .BookmarksEdit
+            if #available(iOS 26.0, *) {
+                bottomRightButton.tintColor = currentTheme().colors.textPrimary
+            }
             return [flexibleSpace, bottomRightButton]
         case .bookmarks(state: .inFolderEditMode):
             bottomRightButton.title = String.AppSettingsDone
+            if #available(iOS 26.0, *) {
+                bottomRightButton.tintColor = currentTheme().colors.textAccent
+            }
             return [bottomLeftButton, flexibleSpace, bottomRightButton]
         case .bookmarks(state: .itemEditMode):
             bottomRightButton.title = String.AppSettingsDone
+            if #available(iOS 26.0, *) {
+                bottomRightButton.tintColor = currentTheme().colors.textAccent
+            }
             bottomRightButton.isEnabled = true
             return [flexibleSpace, bottomRightButton]
         case .bookmarks(state: .itemEditModeInvalidField):
             bottomRightButton.title = String.AppSettingsDone
+            if #available(iOS 26.0, *) {
+                bottomRightButton.tintColor = currentTheme().colors.textAccent
+            }
             bottomRightButton.isEnabled = false
             return [flexibleSpace, bottomRightButton]
         default:
@@ -107,7 +120,11 @@ class BookmarksViewController: SiteTableViewController,
 
         bookmarksSaver = DefaultBookmarksSaver(profile: profile)
 
-        setupNotifications(forObserver: self, observing: [.FirefoxAccountChanged, .ProfileDidFinishSyncing])
+        startObservingNotifications(
+            withNotificationCenter: notificationCenter,
+            forObserver: self,
+            observing: [.FirefoxAccountChanged, .ProfileDidFinishSyncing]
+        )
 
         tableView.register(cellType: OneLineTableViewCell.self)
         tableView.register(cellType: SeparatorTableViewCell.self)
@@ -118,14 +135,26 @@ class BookmarksViewController: SiteTableViewController,
     }
 
     deinit {
-        notificationCenter.removeObserver(self)
+        // TODO: FXIOS-13097 This is a work around until we can leverage isolated deinits
+        guard Thread.isMainThread else {
+            DefaultLogger.shared.log(
+                "AddressToolbarContainer was not deallocated on the main thread. Redux was not cleaned up.",
+                level: .fatal,
+                category: .lifecycle
+            )
+            assertionFailure("The view was not deallocated on the main thread. Redux was not cleaned up.")
+            return
+        }
 
-        // FXIOS-11315: Necessary to prevent BookmarksFolderEmptyStateView from being retained in memory
-        a11yEmptyStateScrollView.removeFromSuperview()
+        MainActor.assumeIsolated {
+            // FXIOS-11315: Necessary to prevent BookmarksFolderEmptyStateView from being retained in memory
+            a11yEmptyStateScrollView.removeFromSuperview()
+        }
     }
 
     // MARK: - Lifecycle
 
+    // FIXME: FXIOS-12996 Use Themeable instead of custom theme setting
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -165,8 +194,8 @@ class BookmarksViewController: SiteTableViewController,
     // MARK: - Data
 
     override func reloadData() {
-        viewModel.reloadData { [weak self] in
-            ensureMainThread {
+        viewModel.reloadData {
+            ensureMainThread { [weak self] in
                 self?.tableView.reloadData()
                 if self?.viewModel.shouldFlashRow ?? false {
                     self?.flashRow()
@@ -217,13 +246,13 @@ class BookmarksViewController: SiteTableViewController,
             return
         }
 
-        deleteBookmarkWithUndo(indexPath: indexPath, bookmarkNode: bookmarkNode)
+        self.deleteBookmarkNode(indexPath, bookmarkNode: bookmarkNode)
     }
 
     private func restoreBookmarkTree(bookmarkTreeRoot: BookmarkNodeData,
                                      parentFolderGUID: String,
                                      recentBookmarkFolderGUID: String?,
-                                     completion: ((GUID) -> Void)? = nil) {
+                                     completion: (@Sendable (GUID) -> Void)? = nil) {
         guard bookmarkTreeRoot.type == .folder || bookmarkTreeRoot.type == .bookmark else { return }
         bookmarksSaver?.restoreBookmarkNode(bookmarkNode: bookmarkTreeRoot, parentFolderGUID: parentFolderGUID) { res in
             guard let guid = res else {return}
@@ -236,10 +265,12 @@ class BookmarksViewController: SiteTableViewController,
             // In the case that the node is a folder, restore its children as well
             guard let children = (bookmarkTreeRoot as? BookmarkFolderData)?.children else { return }
 
-            for child in children {
-                self.restoreBookmarkTree(bookmarkTreeRoot: child,
-                                         parentFolderGUID: guid,
-                                         recentBookmarkFolderGUID: recentBookmarkFolderGUID)
+            ensureMainThread {
+                for child in children {
+                    self.restoreBookmarkTree(bookmarkTreeRoot: child,
+                                             parentFolderGUID: guid,
+                                             recentBookmarkFolderGUID: recentBookmarkFolderGUID)
+                }
             }
         }
     }
@@ -252,49 +283,9 @@ class BookmarksViewController: SiteTableViewController,
                                                 style: .default))
         alertController.addAction(UIAlertAction(title: .BookmarksDeleteFolderDeleteButtonLabel,
                                                 style: .destructive) { [weak self] action in
-            self?.deleteBookmarkWithUndo(indexPath: indexPath, bookmarkNode: bookmarkNode)
+            self?.deleteBookmarkNode(indexPath, bookmarkNode: bookmarkNode)
         })
         present(alertController, animated: true, completion: nil)
-    }
-
-    private func deleteBookmarkWithUndo(indexPath: IndexPath,
-                                        bookmarkNode: FxBookmarkNode) {
-        profile.places.getBookmarksTree(rootGUID: bookmarkNode.guid, recursive: true).uponQueue(.main) { result in
-            guard let maybeBookmarkTreeRoot = result.successValue,
-                  let bookmarkTreeRoot = maybeBookmarkTreeRoot else { return }
-
-            let recentBookmarkFolderGUID = self.profile.prefs.stringForKey(PrefsKeys.RecentBookmarkFolder)
-
-            self.deleteBookmarkNode(indexPath, bookmarkNode: bookmarkNode)
-
-            let toastVM = ButtonToastViewModel(
-                labelText: String(format: .Bookmarks.Menu.DeletedBookmark, bookmarkNode.title),
-                buttonText: .UndoString,
-                textAlignment: .left)
-            let toast = ButtonToast(viewModel: toastVM,
-                                    theme: self.currentTheme(),
-                                    completion: { buttonPressed in
-                guard buttonPressed, let parentGUID = bookmarkTreeRoot.parentGUID else { return }
-                self.restoreBookmarkTree(bookmarkTreeRoot: bookmarkTreeRoot,
-                                         parentFolderGUID: parentGUID,
-                                         recentBookmarkFolderGUID: recentBookmarkFolderGUID) { guid in
-                    self.profile.places.getBookmark(guid: guid).uponQueue(.main) { result in
-                        guard let newBookmarkNode = result.successValue ?? nil,
-                              let fxBookmarkNode = newBookmarkNode as? FxBookmarkNode else { return }
-                        self.addBookmarkNodeToTable(bookmarkNode: fxBookmarkNode)
-                    }
-                }
-            })
-            toast.showToast(viewController: self, delay: UX.toastDelayBefore, duration: UX.toastDismissDelay) { toast in
-                [
-                    toast.leadingAnchor.constraint(equalTo: self.view.leadingAnchor,
-                                                   constant: Toast.UX.toastSidePadding),
-                    toast.trailingAnchor.constraint(equalTo: self.view.trailingAnchor,
-                                                    constant: -Toast.UX.toastSidePadding),
-                    toast.bottomAnchor.constraint(equalTo: self.view.safeAreaLayoutGuide.bottomAnchor)
-                ]
-            }
-        }
     }
 
     private func addBookmarkNodeToTable(bookmarkNode: FxBookmarkNode) {
@@ -309,15 +300,23 @@ class BookmarksViewController: SiteTableViewController,
     /// Performs the delete asynchronously even though we update the
     /// table view data source immediately for responsiveness.
     private func deleteBookmarkNode(_ indexPath: IndexPath, bookmarkNode: FxBookmarkNode) {
-        profile.places.deleteBookmarkNode(guid: bookmarkNode.guid).uponQueue(.main) { _ in
-            if let recentBookmarkFolderGuid = self.profile.prefs.stringForKey(PrefsKeys.RecentBookmarkFolder) {
-                self.profile.places.getBookmark(guid: recentBookmarkFolderGuid).uponQueue(.main) { node in
-                    guard let nodeValue = node.successValue, nodeValue == nil else { return }
-                    self.profile.prefs.removeObjectForKey(PrefsKeys.RecentBookmarkFolder)
+        profile.places.deleteBookmarkNode(guid: bookmarkNode.guid)
+            .uponQueue(.main) { _ in
+                // FXIOS-13228 It should be safe to assumeIsolated here because of `.main` queue above
+                MainActor.assumeIsolated {
+                    if let recentBookmarkFolderGuid = self.profile.prefs.stringForKey(PrefsKeys.RecentBookmarkFolder) {
+                        self.profile.places.getBookmark(guid: recentBookmarkFolderGuid)
+                            .uponQueue(.main) { node in
+                                // FXIOS-13228 It should be safe to assumeIsolated here because of `.main` queue above
+                                MainActor.assumeIsolated {
+                                    guard let nodeValue = node.successValue, nodeValue == nil else { return }
+                                    self.profile.prefs.removeObjectForKey(PrefsKeys.RecentBookmarkFolder)
+                                }
+                            }
+                    }
+                    self.removeBookmarkShortcut()
                 }
             }
-            self.removeBookmarkShortcut()
-        }
 
         tableView.beginUpdates()
         viewModel.bookmarkNodes.remove(at: indexPath.row)
@@ -485,14 +484,14 @@ class BookmarksViewController: SiteTableViewController,
                 !(node is BookmarkSeparatorData),
                 isCurrentFolderEditable(at: indexPath) {
                 // Only show detail controller for editable nodes
-                bookmarkCoordinatorDelegate?.showBookmarkDetail(for: node, folder: bookmarkFolder, completion: nil)
+                bookmarkCoordinatorDelegate?.showBookmarkDetail(for: node, folder: bookmarkFolder)
             }
             return
         }
 
         updatePanelState(newState: .bookmarks(state: .inFolder))
         if let itemData = bookmarkCell as? BookmarkItemData,
-           let url = URL(string: itemData.url, invalidCharacters: false) {
+           let url = URL(string: itemData.url) {
             libraryPanelDelegate?.libraryPanel(didSelectURL: url, visitType: .bookmark)
         } else {
             guard let folder = bookmarkCell as? FxBookmarkNode else { return }
@@ -666,22 +665,39 @@ class BookmarksViewController: SiteTableViewController,
     func tableView(_ tableView: UITableView, didEndEditingRowAt indexPath: IndexPath?) {
         updateEmptyState(animated: false)
     }
+
+    // MARK: - Notifiable
+    func handleNotifications(_ notification: Notification) {
+        switch notification.name {
+        case .FirefoxAccountChanged, .ProfileDidFinishSyncing:
+            ensureMainThread {
+                self.reloadData()
+            }
+        default:
+            break
+        }
+    }
 }
 
 // MARK: - LibraryPanelContextMenu
 
 extension BookmarksViewController: LibraryPanelContextMenu {
     func presentContextMenu(for indexPath: IndexPath) {
-        if let site = getSiteDetails(for: indexPath) {
-            presentContextMenu(for: site, with: indexPath, completionHandler: {
-                return self.contextMenu(for: site, with: indexPath)
-            })
-        } else if let bookmarkNode = viewModel.bookmarkNodes[safe: indexPath.row],
-                  bookmarkNode.type == .folder,
-                  isCurrentFolderEditable(at: indexPath) {
-            presentContextMenu(for: bookmarkNode, indexPath: indexPath)
+        viewModel.getSiteDetails(for: indexPath) { site in
+            ensureMainThread { [weak self] in
+                guard let self else { return }
+
+                if let site {
+                    self.presentContextMenu(for: site, with: indexPath, completionHandler: {
+                        return self.contextMenu(for: site, with: indexPath)
+                    })
+                } else if let bookmarkNode = self.viewModel.bookmarkNodes[safe: indexPath.row],
+                          bookmarkNode.type == .folder,
+                          self.isCurrentFolderEditable(at: indexPath) {
+                    self.presentContextMenu(for: bookmarkNode, indexPath: indexPath)
+                }
+            }
         }
-        return
     }
 
     func presentContextMenu(for site: Site,
@@ -709,25 +725,12 @@ extension BookmarksViewController: LibraryPanelContextMenu {
         present(contextMenu, animated: true, completion: nil)
     }
 
-    func getSiteDetails(for indexPath: IndexPath) -> Site? {
-        guard let bookmarkNode = viewModel.bookmarkNodes[safe: indexPath.row],
-              let bookmarkItem = bookmarkNode as? BookmarkItemData
-        else {
-            logger.log("Could not get site details for indexPath \(indexPath)",
-                       level: .debug,
-                       category: .library)
-            return nil
-        }
-
-        return Site.createBasicSite(url: bookmarkItem.url, title: bookmarkItem.title, isBookmarked: true)
-    }
-
     private func getFolderContextMenuActions(for folder: FxBookmarkNode, indexPath: IndexPath) -> [PhotonRowActions] {
         let editAction = SingleActionViewModel(title: .Bookmarks.Menu.EditFolder,
                                                iconString: StandardImageIdentifiers.Large.edit,
                                                tapHandler: { _ in
             guard let parentFolder = self.viewModel.bookmarkFolder else {return}
-            self.bookmarkCoordinatorDelegate?.showBookmarkDetail(for: folder, folder: parentFolder, completion: nil)
+            self.bookmarkCoordinatorDelegate?.showBookmarkDetail(for: folder, folder: parentFolder)
         }).items
 
         let removeAction = SingleActionViewModel(title: String.Bookmarks.Menu.DeleteFolder,
@@ -750,26 +753,18 @@ extension BookmarksViewController: LibraryPanelContextMenu {
                   let bookmarkFolder = self.viewModel.bookmarkFolder else {
                 return
             }
-            self.bookmarkCoordinatorDelegate?.showBookmarkDetail(for: bookmarkNode, folder: bookmarkFolder, completion: nil)
+            self.bookmarkCoordinatorDelegate?.showBookmarkDetail(for: bookmarkNode, folder: bookmarkFolder)
         }).items
         var actions: [PhotonRowActions] = [editBookmark] + defaultActions
 
-        let pinTopSite = SingleActionViewModel(title: .AddToShortcutsActionTitle,
-                                               iconString: StandardImageIdentifiers.Large.pin,
-                                               tapHandler: { _ in
-            self.profile.pinnedSites.addPinnedTopSite(site).uponQueue(.main) { result in
-                if result.isSuccess {
-                    SimpleToast().showAlertWithText(.LegacyAppMenu.AddPinToShortcutsConfirmMessage,
-                                                    bottomContainer: self.view,
-                                                    theme: self.currentTheme())
-                } else {
-                    self.logger.log("Could not add pinned top site",
-                                    level: .debug,
-                                    category: .library)
-                }
-            }
-        }).items
-        actions.append(pinTopSite)
+        let pinTopSiteAction = viewModel.createPinUnpinAction(
+            for: site,
+            isPinned: site.isPinnedSite
+        ) { [weak self] message in
+            guard let view = self?.view, let theme = self?.currentTheme() else { return }
+            SimpleToast().showAlertWithText(message, bottomContainer: view, theme: theme)
+        }
+        actions.append(pinTopSiteAction)
 
         let removeAction = SingleActionViewModel(title: .RemoveBookmarkContextMenuTitle,
                                                  iconString: StandardImageIdentifiers.Large.bookmarkSlash,
@@ -783,18 +778,6 @@ extension BookmarksViewController: LibraryPanelContextMenu {
         actions.append(getShareAction(site: site, sourceView: cell ?? self.view, delegate: bookmarkCoordinatorDelegate))
 
         return actions
-    }
-}
-
-// MARK: - Notifiable
-extension BookmarksViewController: Notifiable {
-    func handleNotifications(_ notification: Notification) {
-        switch notification.name {
-        case .FirefoxAccountChanged, .ProfileDidFinishSyncing:
-            reloadData()
-        default:
-            break
-        }
     }
 }
 

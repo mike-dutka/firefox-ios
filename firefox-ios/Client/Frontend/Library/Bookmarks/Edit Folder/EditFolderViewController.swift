@@ -21,7 +21,7 @@ class EditFolderViewController: UIViewController,
     }
     var currentWindowUUID: WindowUUID?
     var themeManager: any ThemeManager
-    var themeObserver: (any NSObjectProtocol)?
+    var themeListenerCancellable: Any?
     var notificationCenter: any NotificationProtocol
     var onViewWillDisappear: (() -> Void)?
     var onViewWillAppear: (() -> Void)?
@@ -31,24 +31,29 @@ class EditFolderViewController: UIViewController,
 
     private let viewModel: EditFolderViewModel
 
-    private lazy var tableView: UITableView = .build { view in
+    private lazy var tableView: UITableView = .build({ view in
         view.dataSource = self
         view.delegate = self
         view.register(cellType: EditFolderCell.self)
         view.register(cellType: OneLineTableViewCell.self)
         view.register(UITableViewHeaderFooterView.self,
                       forHeaderFooterViewReuseIdentifier: UX.parentFolderHeaderIdentifier)
-        view.separatorStyle = .none
         let headerSpacerView = UIView(frame: CGRect(origin: .zero,
                                                     size: CGSize(width: 0, height: UX.editFolderCellTopPadding)))
         view.tableHeaderView = headerSpacerView
         view.keyboardDismissMode = .onDrag
-    }
+    }, {
+        if #available(iOS 26.0, *) {
+            UITableView(frame: .zero, style: .insetGrouped)
+        } else {
+            UITableView()
+        }
+    })
 
     private lazy var saveBarButton: UIBarButtonItem =  {
         let button = UIBarButtonItem(
             title: String.Bookmarks.Menu.EditBookmarkSave,
-            style: .done,
+            style: .plain,
             target: self,
             action: #selector(saveButtonAction)
         )
@@ -65,7 +70,6 @@ class EditFolderViewController: UIViewController,
         self.notificationCenter = notificationCenter
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
-        listenForThemeChange(view)
     }
 
     required init?(coder: NSCoder) {
@@ -82,6 +86,9 @@ class EditFolderViewController: UIViewController,
             self?.tableView.reloadSections(IndexSet(integer: Section.parentFolder.rawValue), with: .automatic)
         }
         setupSubviews()
+
+        listenForThemeChanges(withNotificationCenter: notificationCenter)
+        applyTheme()
     }
 
     override func viewWillAppear(_ animated: Bool) {
@@ -118,7 +125,7 @@ class EditFolderViewController: UIViewController,
         NSLayoutConstraint.activate([
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            tableView.topAnchor.constraint(equalTo: view.topAnchor),
+            tableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             tableView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
     }
@@ -151,6 +158,9 @@ class EditFolderViewController: UIViewController,
         navigationController?.navigationBar.tintColor = theme.colors.actionPrimary
         view.backgroundColor = theme.colors.layer1
         tableView.backgroundColor = theme.colors.layer1
+        if #available(iOS 26.0, *) {
+            saveBarButton.tintColor = theme.colors.textAccent
+        }
     }
 
     // MARK: - UITableViewDataSource & UITableViewDelegate
@@ -207,7 +217,7 @@ class EditFolderViewController: UIViewController,
         let folderImage = UIImage(named: StandardImageIdentifiers.Large.folder)?.withRenderingMode(.alwaysTemplate)
         cell.leftImageView.image = folderImage
         cell.indentationLevel = viewModel.folderStructures.count == 1 ? 0 : folder.indentation
-        let isFolderSelected = folder == viewModel.selectedFolder
+        let isFolderSelected = folder.guid == viewModel.selectedFolder?.guid
         let canShowAccessoryView = viewModel.shouldShowDisclosureIndicator(isFolderSelected: isFolderSelected)
         cell.accessoryType = canShowAccessoryView ? .checkmark : .none
         cell.selectionStyle = .default

@@ -10,23 +10,24 @@ import XCTest
 
 class CanRemoveQuickActionBookmarkTests: XCTestCase {
     private var subject: MockCanRemoveQuickActionBookmark!
-    private var mockBookmarksHandler: BookmarksHandlerMock!
+    private var mockBookmarksHandler: MockBookmarksHandler!
     private var mockQuickActions: MockQuickActions!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         mockQuickActions = MockQuickActions()
-        mockBookmarksHandler = BookmarksHandlerMock()
-        subject = MockCanRemoveQuickActionBookmark(bookmarksHandler: mockBookmarksHandler)
+        mockBookmarksHandler = MockBookmarksHandler()
+        subject = await MockCanRemoveQuickActionBookmark(bookmarksHandler: mockBookmarksHandler)
     }
 
     override func tearDown() {
-        super.tearDown()
         mockQuickActions = nil
         mockBookmarksHandler = nil
         subject = nil
+        super.tearDown()
     }
 
+    @MainActor
     func testWithoutBookmarks() {
         subject.removeBookmarkShortcut(quickAction: mockQuickActions)
         mockBookmarksHandler.callGetRecentBookmarksCompletion(with: [])
@@ -37,6 +38,7 @@ class CanRemoveQuickActionBookmarkTests: XCTestCase {
         XCTAssertEqual(mockQuickActions.addFromShareItemCalled, 0)
     }
 
+    @MainActor
     func testWithBookmarks() {
         subject.removeBookmarkShortcut(quickAction: mockQuickActions)
         mockBookmarksHandler.callGetRecentBookmarksCompletion(with: getMockBookmarks())
@@ -63,6 +65,7 @@ private extension CanRemoveQuickActionBookmarkTests {
 }
 
 // MARK: - CanRemoveQuickActionBookmarkMock
+@MainActor
 private class MockCanRemoveQuickActionBookmark: CanRemoveQuickActionBookmark {
     var bookmarksHandler: BookmarksHandler
 
@@ -72,7 +75,7 @@ private class MockCanRemoveQuickActionBookmark: CanRemoveQuickActionBookmark {
 }
 
 // MARK: - MockQuickActions
-class MockQuickActions: QuickActions {
+class MockQuickActions: QuickActions, @unchecked Sendable {
     var addFromShareItemCalled = 0
     func addDynamicApplicationShortcutItemOfType(_ type: ShortcutType,
                                                  fromShareItem shareItem: ShareItem,

@@ -4,15 +4,12 @@
 
 import Foundation
 import Common
-import Storage
-import Shared
 
 // MARK: - ShortcutType
 enum ShortcutType: String {
     case newTab = "NewTab"
     case newPrivateTab = "NewPrivateTab"
     case openLastBookmark = "OpenLastBookmark"
-    case qrCode = "QRCode"
 
     var type: String {
         return Bundle.main.bundleIdentifier! + ".\(self.rawValue)"
@@ -28,13 +25,15 @@ struct QuickActionInfos {
 }
 
 // MARK: - QuickActions
-protocol QuickActions {
+protocol QuickActions: Sendable {
+    @MainActor
     func addDynamicApplicationShortcutItemOfType(
         _ type: ShortcutType,
         withUserData userData: [String: String],
         toApplication application: UIApplication
     )
 
+    @MainActor
     func removeDynamicApplicationShortcutItemOfType(
         _ type: ShortcutType,
         fromApplication application: UIApplication
@@ -42,6 +41,7 @@ protocol QuickActions {
 }
 
 extension QuickActions {
+    @MainActor
     func addDynamicApplicationShortcutItemOfType(
         _ type: ShortcutType,
         withUserData userData: [String: String] = [String: String](),

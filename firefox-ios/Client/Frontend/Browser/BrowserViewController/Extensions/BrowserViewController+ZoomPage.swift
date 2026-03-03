@@ -6,26 +6,26 @@ import Shared
 import Storage
 import Common
 
-extension BrowserViewController {
+extension BrowserViewController: ZoomPageBarDelegate {
     func updateZoomPageBarVisibility(visible: Bool) {
         toggleZoomPageBar(visible)
     }
 
     private func setupZoomPageBar() {
-        guard let tab = tabManager.selectedTab else { return }
-
-        let zoomPageBar = ZoomPageBar(tab: tab)
+        let zoomPageBar = ZoomPageBar(zoomManager: zoomManager)
         self.zoomPageBar = zoomPageBar
-        scrollController.zoomPageBar = zoomPageBar
+        if let scrollController = scrollController as? LegacyTabScrollProvider {
+            scrollController.zoomPageBar = zoomPageBar
+        }
         zoomPageBar.delegate = self
 
         if UIDevice.current.userInterfaceIdiom == .pad {
-            header.addArrangedViewToBottom(zoomPageBar, completion: {
-                self.view.layoutIfNeeded()
+            header.addArrangedViewToBottom(zoomPageBar, animated: false, completion: { [weak self] in
+                self?.view.layoutIfNeeded()
             })
         } else {
-            overKeyboardContainer.addArrangedViewToTop(zoomPageBar, completion: {
-                self.view.layoutIfNeeded()
+            overKeyboardContainer.addArrangedViewToTop(zoomPageBar, animated: false, completion: { [weak self] in
+                self?.view.layoutIfNeeded()
             })
         }
 
@@ -35,7 +35,12 @@ extension BrowserViewController {
         zoomPageBar.applyTheme(theme: themeManager.getCurrentTheme(for: windowUUID))
 
         if UIDevice.current.userInterfaceIdiom != .pad {
-            updateViewConstraints()
+            if !isSnapKitRemovalEnabled {
+                updateViewConstraints()
+            } else if !isBottomSearchBar {
+                // Existing condition for zoom bar in top position
+                updateOverKeyboardContainerConstraints()
+            }
         }
     }
 
@@ -46,7 +51,11 @@ extension BrowserViewController {
             overKeyboardContainer.removeArrangedView(zoomPageBar)
         }
         self.zoomPageBar = nil
-        updateViewConstraints()
+        if !isSnapKitRemovalEnabled {
+            updateViewConstraints()
+        } else {
+            updateOverKeyboardContainerConstraints()
+        }
     }
 
     private func toggleZoomPageBar(_ visible: Bool) {
@@ -60,45 +69,26 @@ extension BrowserViewController {
         }
     }
 
-    private func saveZoomLevel() {
-        guard let tab = tabManager.selectedTab, let host = tab.url?.host else { return }
-
-        let domainZoomLevel = DomainZoomLevel(host: host, zoomLevel: tab.pageZoom)
-        ZoomLevelStore.shared.save(domainZoomLevel)
-
-        // Notify other windows of zoom change (other pages with identical host should also update)
-        let userInfo: [AnyHashable: Any] = [WindowUUID.userInfoKey: windowUUID, "zoom": domainZoomLevel]
-        NotificationCenter.default.post(name: .PageZoomLevelUpdated, withUserInfo: userInfo)
-    }
-
     func zoomPageHandleEnterReaderMode() {
-        guard let tab = tabManager.selectedTab else { return }
         updateZoomPageBarVisibility(visible: false)
-        tab.resetZoom()
+        zoomManager.resetZoom(shouldSave: false)
     }
 
     func zoomPageHandleExitReaderMode() {
-        guard let tab = tabManager.selectedTab else { return }
-        tab.setZoomLevelforDomain()
+        zoomManager.setZoomAfterLeavingReaderMode()
     }
 
+    // The zoom level was updated on another iPad window, but the host matches
+    // this window's selected tab, so we need to ensure we update also.
     func updateForZoomChangedInOtherIPadWindow(zoom: DomainZoomLevel) {
         guard let tab = tabManager.selectedTab,
-              let currentHost = tab.url?.host,
-              currentHost.caseInsensitiveCompare(zoom.host) == .orderedSame,
               tab.pageZoom != zoom.zoomLevel else { return }
 
-        // The zoom level was updated on another iPad window, but the host matches
-        // this window's selected tab, so we need to ensure we update also.
-        if tab.pageZoom < zoom.zoomLevel { tab.zoomIn() } else { tab.zoomOut() }
-        zoomPageBar?.updateZoomLabel()
+        zoomManager.updateZoomChangedInOtherWindow()
+        zoomPageBar?.updateZoomLabel(zoomValue: zoomManager.getZoomLevel())
     }
-}
 
-extension BrowserViewController: ZoomPageBarDelegate {
-    func didChangeZoomLevel() {
-        saveZoomLevel()
-    }
+    // MARK: - ZoomPageBarDelegate
 
     func zoomPageDidPressClose() {
         updateZoomPageBarVisibility(visible: false)

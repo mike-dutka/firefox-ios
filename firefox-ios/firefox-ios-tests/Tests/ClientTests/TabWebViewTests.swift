@@ -5,7 +5,6 @@
 @testable import Client
 
 import Common
-import Shared
 import XCTest
 import WebKit
 
@@ -16,19 +15,19 @@ class TabWebViewTests: XCTestCaseRootViewController, UIGestureRecognizerDelegate
     private let sleepTime: UInt64 = 1 * NSEC_PER_SEC
     let windowUUID: WindowUUID = .XCTestDefaultUUID
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         navigationDelegate = MockNavigationDelegate()
         tabWebViewDelegate = MockTabWebViewDelegate()
         DependencyHelperMock().bootstrapDependencies()
         LegacyFeatureFlagsManager.shared.initializeDeveloperFeatures(with: MockProfile())
     }
 
-    override func tearDown() {
-        super.tearDown()
+    override func tearDown() async throws {
         navigationDelegate = nil
         tabWebViewDelegate = nil
         DependencyHelperMock().reset()
+        try await super.tearDown()
     }
 
     func testBasicTabWebView_doesntLeak() async throws {
@@ -94,11 +93,23 @@ class TabWebViewTests: XCTestCaseRootViewController, UIGestureRecognizerDelegate
         trackForMemoryLeaks(tab)
     }
 
+    func testHasOnlySecureContent_returnsTrue_ForLocalPDFFile() throws {
+        let tab = Tab(profile: MockProfile(), windowUUID: windowUUID)
+        tab.url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("test.pdf")
+        tab.createWebview(configuration: configuration)
+
+        let tabWebView = try XCTUnwrap(tab.webView)
+
+        XCTAssertTrue(tabWebView.hasOnlySecureContent)
+    }
+
     // MARK: - Helper methods
 
-    func createSubject(file: StaticString = #file,
+    func createSubject(file: StaticString = #filePath,
                        line: UInt = #line) async throws -> TabWebView {
-        let subject = TabWebView(frame: .zero, configuration: .init(), windowUUID: windowUUID)
+        let subject = TabWebView(frame: CGRect(origin: .zero, size: CGSize(width: 100, height: 100)),
+                                 configuration: .init(),
+                                 windowUUID: windowUUID)
         try await Task.sleep(nanoseconds: sleepTime)
         subject.configure(delegate: tabWebViewDelegate, navigationDelegate: navigationDelegate)
         trackForMemoryLeaks(subject)

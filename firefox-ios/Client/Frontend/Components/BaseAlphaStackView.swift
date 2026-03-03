@@ -4,14 +4,25 @@
 
 import Common
 import Foundation
-import Shared
 
+@MainActor
 protocol AlphaDimmable {
     func updateAlphaForSubviews(_ alpha: CGFloat)
 }
 
 class BaseAlphaStackView: UIStackView, AlphaDimmable, ThemeApplicable {
     var isClearBackground = false
+    var isSpacerClearBackground = false
+    lazy var toolbarHelper: ToolbarHelperInterface = ToolbarHelper()
+
+    private var isToolbarTranslucencyEnabled: Bool {
+        return FxNimbus.shared.features.toolbarRefactorFeature.value().translucency
+    }
+
+    private var isToolbarTranslucencyRefactorEnabled: Bool {
+        return FxNimbus.shared.features.toolbarRefactorFeature.value().translucencyRefactor
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
 
@@ -95,7 +106,14 @@ class BaseAlphaStackView: UIStackView, AlphaDimmable, ThemeApplicable {
             spacer.bottomAnchor.constraint(equalTo: self.bottomAnchor)
         ])
         insetSpacer = spacer
-        layoutIfNeeded()
+        if !isToolbarTranslucencyRefactorEnabled {
+            layoutIfNeeded()
+        }
+    }
+
+    func moveSpacerToBack() {
+        guard let insetSpacer = self.insetSpacer else { return }
+        sendSubviewToBack(insetSpacer)
     }
 
     func removeBottomInsetSpacer() {
@@ -103,13 +121,17 @@ class BaseAlphaStackView: UIStackView, AlphaDimmable, ThemeApplicable {
 
         removeArrangedView(insetSpacer)
         self.insetSpacer = nil
-        layoutIfNeeded()
+        if !isToolbarTranslucencyRefactorEnabled {
+            layoutIfNeeded()
+        }
     }
 
     func applyTheme(theme: Theme) {
-        let color = isClearBackground ? .clear : theme.colors.layer1
-        backgroundColor = color
-        keyboardSpacer?.backgroundColor = color
-        insetSpacer?.backgroundColor = color
+        let color: UIColor = theme.colors.layerSurfaceLow
+        let backgroundAlpha = toolbarHelper.glassEffectAlpha
+
+        backgroundColor = isClearBackground ? .clear : color
+        keyboardSpacer?.backgroundColor = isSpacerClearBackground ? .clear : color.withAlphaComponent(backgroundAlpha)
+        insetSpacer?.backgroundColor = isSpacerClearBackground ? .clear : color.withAlphaComponent(backgroundAlpha)
     }
 }

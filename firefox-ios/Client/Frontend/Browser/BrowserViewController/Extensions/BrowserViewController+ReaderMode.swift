@@ -17,7 +17,6 @@ extension BrowserViewController: ReaderModeDelegate {
         // Update reader mode state if is the selected tab. Otherwise it will update once is active
         if tabManager.selectedTab === tab {
             self.showReaderModeBar(animated: true)
-            tab.showContent(true)
         }
     }
 
@@ -34,18 +33,18 @@ extension BrowserViewController: ReaderModeStyleViewModelDelegate {
     func readerModeStyleViewModel(_ readerModeStyleViewModel: ReaderModeStyleViewModel,
                                   didConfigureStyle style: ReaderModeStyle,
                                   isUsingUserDefinedColor: Bool) {
-        var newStyle = style
+        let newStyle = style
         if !isUsingUserDefinedColor {
             newStyle.ensurePreferredColorThemeIfNeeded()
         }
 
         // Persist the new style to the profile
         let encodedStyle: [String: Any] = style.encodeAsDictionary()
-        profile.prefs.setObject(encodedStyle, forKey: ReaderModeProfileKeyStyle)
+        profile.prefs.setObject(encodedStyle, forKey: PrefsKeys.ReaderModeProfileKeyStyle)
 
         // Change the reader mode style on all tabs that have reader mode active
-        for tabIndex in 0..<tabManager.count {
-            guard let tab = tabManager[tabIndex],
+        for tabIndex in 0..<tabManager.tabs.count {
+            guard let tab = tabManager.tabs[safe: tabIndex],
                   let readerMode = tab.getContentScript(name: "ReaderMode") as? ReaderMode,
                   readerMode.state == ReaderModeState.active
             else { continue }
@@ -74,6 +73,8 @@ extension BrowserViewController {
     }
 
     func showReaderModeBar(animated: Bool) {
+        var needsConstraintsUpdate = false
+
         if self.readerModeBar == nil {
             let readerModeBar = ReaderModeBarView(frame: CGRect.zero)
             readerModeBar.delegate = self
@@ -84,10 +85,16 @@ extension BrowserViewController {
             }
 
             self.readerModeBar = readerModeBar
+            needsConstraintsUpdate = true
         }
 
         updateReaderModeBar()
-        updateViewConstraints()
+
+        if !isSnapKitRemovalEnabled {
+            updateViewConstraints()
+        } else if needsConstraintsUpdate, let readerModeBar {
+            browserLayoutManager.addReaderModeBarHeight(readerModeBar)
+        }
     }
 
     func hideReaderModeBar(animated: Bool) {
@@ -99,7 +106,10 @@ extension BrowserViewController {
             header.removeArrangedView(readerModeBar)
         }
         self.readerModeBar = nil
-        updateViewConstraints()
+
+        if !isSnapKitRemovalEnabled {
+            updateViewConstraints()
+        }
     }
 
     /// There are two ways we can enable reader mode. In the simplest case we open a URL to our internal reader mode
@@ -123,7 +133,9 @@ extension BrowserViewController {
             webView.go(to: forwardList.first!)
         } else {
             // Store the readability result in the cache and load it. This will later move to the ReadabilityHelper.
-            webView.evaluateJavascriptInDefaultContentWorld("\(ReaderModeNamespace).readerize()") { object, error in
+            webView.evaluateJavascriptInDefaultContentWorld(
+                "\(ReaderModeInfo.namespace.rawValue).readerize()"
+            ) { object, error in
                 guard let readabilityResult = ReadabilityResult(object: object as AnyObject?) else { return }
 
                 try? self.readerModeCache.put(currentURL, readabilityResult)
@@ -162,7 +174,7 @@ extension BrowserViewController {
 
     func applyThemeForPreferences(_ preferences: Prefs, contentScript: TabContentScript) {
         var readerModeStyle = ReaderModeStyle.defaultStyle(for: windowUUID)
-        if let dict = preferences.dictionaryForKey(ReaderModeProfileKeyStyle),
+        if let dict = preferences.dictionaryForKey(PrefsKeys.ReaderModeProfileKeyStyle),
            let style = ReaderModeStyle(windowUUID: windowUUID, dict: dict as [String: AnyObject]) {
             readerModeStyle = style
         }
@@ -185,7 +197,7 @@ extension BrowserViewController: ReaderModeBarViewDelegate {
             else { break }
 
             var readerModeStyle = ReaderModeStyle.defaultStyle(for: windowUUID)
-            if let dict = profile.prefs.dictionaryForKey(ReaderModeProfileKeyStyle),
+            if let dict = profile.prefs.dictionaryForKey(PrefsKeys.ReaderModeProfileKeyStyle),
                let style = ReaderModeStyle(windowUUID: windowUUID, dict: dict as [String: AnyObject]) {
                 readerModeStyle = style
             }

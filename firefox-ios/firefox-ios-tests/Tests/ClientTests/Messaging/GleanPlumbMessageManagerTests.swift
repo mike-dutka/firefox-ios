@@ -8,19 +8,36 @@ import Glean
 @testable import Client
 import MozillaAppServices
 
+// TODO: FXIOS-13565 - Migrate GleanPlumbMessageManagerTests to use mock telemetry or GleanWrapper
+// Note: There seems to be runtime warnings related to Nimbus, and not just Glean. This needs to be investigated
+// before enabling again those unit tests
+// DISABLED TESTS:
+//    "GleanPlumbMessageManagerTests\/testManagerGetMessage()",
+//    "GleanPlumbMessageManagerTests\/testManagerGetMessageExceptIfAnySome()",
+//    "GleanPlumbMessageManagerTests\/testManagerGetMessage_experiments_controlMessages()",
+//    "GleanPlumbMessageManagerTests\/testManagerGetMessage_experiments_exposureEvents()",
+//    "GleanPlumbMessageManagerTests\/testManagerGetMessage_experiments_malformedControlMessages()",
+//    "GleanPlumbMessageManagerTests\/testManagerGetMessage_experiments_multiplControlMessages()",
+//    "GleanPlumbMessageManagerTests\/testManagerGetMessage_happyPath_byMultipleTriggers()",
+//    "GleanPlumbMessageManagerTests\/testManagerGetMessage_happyPath_bySurface()",
+//    "GleanPlumbMessageManagerTests\/testManagerGetMessage_happyPath_byTrigger()",
+//    "GleanPlumbMessageManagerTests\/testManagerGetMessages_happyPath_withNoAction()",
+//    "GleanPlumbMessageManagerTests\/testManagerOnMessageDismissed()",
+//    "GleanPlumbMessageManagerTests\/testManagerOnMessageDisplayed()",
+//    "GleanPlumbMessageManagerTests\/testManagerOnMessagePressed_linkWithEmbeddedParam()",
+//    "GleanPlumbMessageManagerTests\/testManagerOnMessagePressed_linkWithEmbeddedParamAndOneActionParam()",
+//    "GleanPlumbMessageManagerTests\/testManagerOnMessagePressed_linkWithOneParam()",
+//    "GleanPlumbMessageManagerTests\/testManagerOnMessagePressed_linkWithScheme()",
 class GleanPlumbMessageManagerTests: XCTestCase {
     var subject: GleanPlumbMessageManager!
     var messagingStore: MockGleanPlumbMessageStore!
     var applicationHelper: MockApplicationHelper!
     let messageId = "testId"
 
-    override func setUp() {
-        super.setUp()
-        // Due to changes allow certain custom pings to implement their own opt-out
-        // independent of Glean, custom pings may need to be registered manually in
-        // tests in order to puth them in a state in which they can collect data.
-        Glean.shared.registerPings(GleanMetrics.Pings.shared)
-        Glean.shared.resetGlean(clearStores: true)
+    @MainActor
+    override func setUp() async throws {
+        try await super.setUp()
+        Self.setupTelemetry(with: MockProfile())
         messagingStore = MockGleanPlumbMessageStore(messageId: messageId)
         applicationHelper = MockApplicationHelper()
         subject = GleanPlumbMessageManager(
@@ -32,22 +49,28 @@ class GleanPlumbMessageManagerTests: XCTestCase {
     }
 
     override func tearDown() {
-        super.tearDown()
-
         messagingStore = nil
         subject = nil
+        Self.tearDownTelemetry()
+        super.tearDown()
     }
 
     func testMessagingFeatureIsCoenrolling() {
         XCTAssertTrue(FxNimbus.shared.getCoenrollingFeatureIds().contains("messaging"))
     }
 
-    func testManagerGetMessage() {
+    func testManagerGetMessage() throws {
         let hardcodedNimbusFeatures =
             HardcodedNimbusFeatures(with: [
                 "messaging": [
                     "messages": [
                         "default-browser": [
+                            "title": "Default Browser/DefaultBrowserCard.Title",
+                            "text": "Default Browser/DefaultBrowserCard.Description",
+                            "button-label": "Default Browser/DefaultBrowserCard.Button.v2",
+                            "surface": "new-tab-card",
+                            "style": "FALLBACK",
+                            "action": "MAKE_DEFAULT_BROWSER_WITH_TUTORIAL",
                             "trigger-if-all": ["ALWAYS"],
                             "except-if-any": []
                         ]
@@ -63,7 +86,7 @@ class GleanPlumbMessageManagerTests: XCTestCase {
         }
 
         subject.onMessageDisplayed(message)
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.shown)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.shown)
         XCTAssertEqual(hardcodedNimbusFeatures.getExposureCount(featureId: "messaging"), 0)
     }
 
@@ -255,34 +278,37 @@ class GleanPlumbMessageManagerTests: XCTestCase {
         XCTAssertEqual(observed.id, expectedId)
     }
 
-    func testManagerOnMessageDisplayed() {
+    func testManagerOnMessageDisplayed() throws {
         let message = createMessage(messageId: messageId)
         subject.onMessageDisplayed(message)
         let messageMetadata = messagingStore.getMessageMetadata(messageId: messageId)
         XCTAssertFalse(messageMetadata.isExpired)
         XCTAssertEqual(messageMetadata.impressions, 1)
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.shown)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.shown)
     }
 
-    func testManagerOnMessagePressed() {
+    @MainActor
+    func testManagerOnMessagePressed() throws {
         let message = createMessage(messageId: messageId, action: "://test-action")
         subject.onMessagePressed(message, window: nil)
         let messageMetadata = messagingStore.getMessageMetadata(messageId: messageId)
         XCTAssertTrue(messageMetadata.isExpired)
         XCTAssertEqual(applicationHelper.openURLCalled, 1)
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
     }
 
-    func testManagerOnMessagePressed_withoutExpiring() {
+    @MainActor
+    func testManagerOnMessagePressed_withoutExpiring() throws {
         let message = createMessage(messageId: messageId, action: "://test-action")
         subject.onMessagePressed(message, window: nil, shouldExpire: false)
         let messageMetadata = messagingStore.getMessageMetadata(messageId: messageId)
         XCTAssertFalse(messageMetadata.isExpired)
         XCTAssertEqual(applicationHelper.openURLCalled, 1)
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
     }
 
-    func testManagerOnMessagePressed_linkWithScheme() {
+    @MainActor
+    func testManagerOnMessagePressed_linkWithScheme() throws {
         // {uuid} works for the mock message helper, but in reality, you'd use {app_id};
         // this test is showing that:
         // 1. the action itself is put through the message helper string templatng
@@ -295,10 +321,11 @@ class GleanPlumbMessageManagerTests: XCTestCase {
         XCTAssertEqual(applicationHelper.openURLCalled, 1)
         XCTAssertNotNil(applicationHelper.lastOpenURL)
         XCTAssertEqual(applicationHelper.lastOpenURL!.absoluteString, "itms-apps://itunes.apple.com/app/idMY-UUID")
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
     }
 
-    func testManagerOnMessagePressed_linkWithEmbeddedParam() {
+    @MainActor
+    func testManagerOnMessagePressed_linkWithEmbeddedParam() throws {
         // Test shows query params can be part of the action.
         let message = createMessage(messageId: messageId, action: "itms-apps://itunes.apple.com/app/id?utm_param=foo")
         subject.onMessagePressed(message, window: nil)
@@ -307,10 +334,11 @@ class GleanPlumbMessageManagerTests: XCTestCase {
         XCTAssertEqual(applicationHelper.openURLCalled, 1)
         XCTAssertNotNil(applicationHelper.lastOpenURL)
         XCTAssertEqual(applicationHelper.lastOpenURL!.absoluteString, "itms-apps://itunes.apple.com/app/id?utm_param=foo")
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
     }
 
-    func testManagerOnMessagePressed_linkWithEmbeddedParamAndOneActionParam() {
+    @MainActor
+    func testManagerOnMessagePressed_linkWithEmbeddedParamAndOneActionParam() throws {
         // Test shows query param can be part of the action or part of the action-params.
         let message = createMessage(messageId: messageId,
                                     action: "fennec://open-url?private=true",
@@ -323,10 +351,11 @@ class GleanPlumbMessageManagerTests: XCTestCase {
         XCTAssertEqual(applicationHelper.openURLCalled, 1)
         XCTAssertNotNil(applicationHelper.lastOpenURL)
         XCTAssertEqual(applicationHelper.lastOpenURL!.absoluteString, "fennec://open-url?private=true&url=https://example.com")
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
     }
 
-    func testManagerOnMessagePressed_linkWithOneParam() {
+    @MainActor
+    func testManagerOnMessagePressed_linkWithOneParam() throws {
         // This test is showing:
         // 1. that string templating happens in the query param values
         // 2. that the mozInternalScheme is used if no scheme is found.
@@ -339,10 +368,11 @@ class GleanPlumbMessageManagerTests: XCTestCase {
         XCTAssertNotNil(applicationHelper.lastOpenURL)
         XCTAssertTrue(applicationHelper.lastOpenURL!.absoluteString.hasPrefix(URL.mozInternalScheme))
         XCTAssertEqual(applicationHelper.lastOpenURL!.absoluteString, "\(URL.mozInternalScheme)://open-url?url=https://example.com?foo%3DMY-UUID%26bar%3Dbaz")
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
     }
 
-    func testManagerOnMessagePressed_linkWithTwoParams() {
+    @MainActor
+    func testManagerOnMessagePressed_linkWithTwoParams() throws {
         let message = createMessage(messageId: messageId,
                                     action: "://open-url",
                                     actionParams: [
@@ -357,38 +387,40 @@ class GleanPlumbMessageManagerTests: XCTestCase {
         XCTAssertTrue(applicationHelper.lastOpenURL!.absoluteString.hasPrefix(URL.mozInternalScheme))
         XCTAssertTrue(applicationHelper.lastOpenURL!.absoluteString.contains("url=https://example.com"))
         XCTAssertTrue(applicationHelper.lastOpenURL!.absoluteString.contains("private=true"))
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
     }
 
     // FXIOS-8107: Disabled test as history highlights has been disabled to fix app hangs / slowness
     // Reloads for notification
-    func testManagerOnMessagePressed_withMalformedURL() {
+    @MainActor
+    func testManagerOnMessagePressed_withMalformedURL() throws {
         let message = createMessage(messageId: messageId, action: "http://www.google.com?q=א")
         subject.onMessagePressed(message, window: nil)
         let messageMetadata = messagingStore.getMessageMetadata(messageId: messageId)
         XCTAssertTrue(messageMetadata.isExpired)
         XCTAssertEqual(applicationHelper.openURLCalled, 0)
         XCTAssertNil(applicationHelper.lastOpenURL)
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.malformed)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.malformed)
     }
 
-    func testManagerOnMessagePressed_withNoAction() {
+    @MainActor
+    func testManagerOnMessagePressed_withNoAction() throws {
         let message = createMessage(messageId: messageId, action: nil)
         subject.onMessagePressed(message, window: nil)
         let messageMetadata = messagingStore.getMessageMetadata(messageId: messageId)
         XCTAssertTrue(messageMetadata.isExpired)
         XCTAssertEqual(applicationHelper.openURLCalled, 0)
         XCTAssertNil(applicationHelper.lastOpenURL)
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.clicked)
     }
 
-    func testManagerOnMessageDismissed() {
+    func testManagerOnMessageDismissed() throws {
         let message = createMessage(messageId: messageId)
         subject.onMessageDismissed(message)
         let messageMetadata = messagingStore.getMessageMetadata(messageId: messageId)
         XCTAssertEqual(messageMetadata.dismissals, 1)
         XCTAssertTrue(messageMetadata.isExpired)
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.dismissed)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Messaging.dismissed)
     }
 
     // MARK: - Helper function
@@ -431,7 +463,7 @@ class GleanPlumbMessageManagerTests: XCTestCase {
 }
 
 // MARK: - MockGleanPlumbMessageStore
-class MockGleanPlumbMessageStore: GleanPlumbMessageStoreProtocol {
+class MockGleanPlumbMessageStore: GleanPlumbMessageStoreProtocol, @unchecked Sendable {
     private var metadatas = [String: GleanPlumbMessageMetaData]()
     var messageId: String
 

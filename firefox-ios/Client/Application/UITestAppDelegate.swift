@@ -10,7 +10,7 @@ import Kingfisher
 import class MozillaAppServices.HardcodedNimbusFeatures
 
 class UITestAppDelegate: AppDelegate {
-    lazy var dirForTestProfile = { return "\(self.appRootDir())/profile.testProfile" }()
+    nonisolated static let dirForTestProfile = "\(UITestAppDelegate.appRootDir())/profile.testProfile"
 
     private var internalProfile: Profile?
 
@@ -71,7 +71,7 @@ class UITestAppDelegate: AppDelegate {
         }
 
         if launchArguments.contains(LaunchArguments.SkipSponsoredShortcuts) {
-            profile.prefs.setBool(false, forKey: PrefsKeys.UserFeatureFlagPrefs.SponsoredShortcuts)
+            profile.prefs.setBool(false, forKey: PrefsKeys.FeatureFlags.SponsoredShortcuts)
         }
 
         // Don't show the What's New page.
@@ -81,6 +81,10 @@ class UITestAppDelegate: AppDelegate {
 
         if launchArguments.contains(LaunchArguments.SkipDefaultBrowserOnboarding) {
             profile.prefs.setBool(true, forKey: PrefsKeys.KeyDidShowDefaultBrowserOnboarding)
+        }
+
+        if launchArguments.contains(LaunchArguments.SkipTermsOfUse) {
+            profile.prefs.setBool(true, forKey: PrefsKeys.TermsOfUseAccepted)
         }
 
         // Skip the intro when requested by for example tests or automation
@@ -105,7 +109,7 @@ class UITestAppDelegate: AppDelegate {
         }
 
         if launchArguments.contains(LaunchArguments.ResetMicrosurveyExpirationCount) {
-            // String is pulled from our "evergreen" messages configurations 
+            // String is pulled from our "evergreen" messages configurations
             // that are displayed via the Nimbus Messaging system.
             let microsurveyID = "homepage-microsurvey-message"
             UserDefaults.standard.set(nil, forKey: "\(GleanPlumbMessageStore.rootKey)\(microsurveyID)")
@@ -139,13 +143,13 @@ class UITestAppDelegate: AppDelegate {
             )!
         )
         try? FileManager.default.createDirectory(
-            atPath: dirForTestProfile,
+            atPath: UITestAppDelegate.dirForTestProfile,
             withIntermediateDirectories: false,
             attributes: nil
         )
-        let output = URL(fileURLWithPath: "\(dirForTestProfile)/places.db")
+        let output = URL(fileURLWithPath: "\(UITestAppDelegate.dirForTestProfile)/places.db")
 
-        let enumerator = FileManager.default.enumerator(atPath: dirForTestProfile)
+        let enumerator = FileManager.default.enumerator(atPath: UITestAppDelegate.dirForTestProfile)
         guard let filePaths = enumerator?.allObjects as? [String] else {
             logger.log("Failed to retrieve file paths during database configuration in UITestAppDelegate class",
                        level: .info,
@@ -154,7 +158,7 @@ class UITestAppDelegate: AppDelegate {
         }
         filePaths.filter { $0.contains(".db") }.forEach { item in
             try? FileManager.default.removeItem(
-                at: URL(fileURLWithPath: "\(dirForTestProfile)/\(item)")
+                at: URL(fileURLWithPath: "\(UITestAppDelegate.dirForTestProfile)/\(item)")
             )
         }
 
@@ -169,7 +173,7 @@ class UITestAppDelegate: AppDelegate {
     }
 
     private func configureTabs(_ arg: String, launchArguments: [String]) {
-        let tabDirectory = "\(self.appRootDir())/profile.profile"
+        let tabDirectory = "\(UITestAppDelegate.appRootDir())/profile.profile"
         if launchArguments.contains(LaunchArguments.ClearProfile) {
             fatalError("Clearing profile and loading tabs, not a supported combination.")
         }
@@ -237,7 +241,9 @@ class UITestAppDelegate: AppDelegate {
         KingfisherManager.shared.cache.clearDiskCache()
 
         // Clear the cookie/url cache
-        URLCache.shared.removeAllCachedResponses()
+        // removeAllCachedResponses() crashes on iOS 17 simulators from Xcode 26
+        // https://github.com/mozilla-mobile/firefox-ios/issues/30947
+        // URLCache.shared.removeAllCachedResponses()
         let storage = HTTPCookieStorage.shared
         if let cookies = storage.cookies {
             for cookie in cookies {
@@ -246,7 +252,7 @@ class UITestAppDelegate: AppDelegate {
         }
 
         // Clear the documents directory
-        let rootPath = appRootDir()
+        let rootPath = UITestAppDelegate.appRootDir()
         let manager = FileManager.default
         let documents = URL(fileURLWithPath: rootPath)
         do {
@@ -275,7 +281,7 @@ class UITestAppDelegate: AppDelegate {
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
     }
 
-    func appRootDir() -> String {
+    nonisolated static func appRootDir() -> String {
         var rootPath = ""
         let sharedContainerIdentifier = AppInfo.sharedContainerIdentifier
         if let url = FileManager.default.containerURL(
@@ -290,28 +296,36 @@ class UITestAppDelegate: AppDelegate {
 
     // MARK: - Private
     private func loadExperiment() {
-        let argumentExperimentFile = ProcessInfo.processInfo.arguments.first { string in
+        let argumentExperimentFile = ProcessInfo.processInfo.arguments.filter { string in
             string.starts(with: LaunchArguments.LoadExperiment)
         }
 
-        let argumentFeatureName = ProcessInfo.processInfo.arguments.first { string in
+        let argumentFeatureName = ProcessInfo.processInfo.arguments.filter { string in
             string.starts(with: LaunchArguments.ExperimentFeatureName)
         }
 
-        guard let argumentExperimentFile, let argumentFeatureName else { return }
+        guard !argumentExperimentFile.isEmpty, !argumentFeatureName.isEmpty else { return }
 
-        let experimentFeatureName = argumentFeatureName.replacingOccurrences(of: LaunchArguments.ExperimentFeatureName,
-                                                                             with: "")
-        let experimentFileName = argumentExperimentFile.replacingOccurrences(of: LaunchArguments.LoadExperiment,
-                                                                             with: "")
-        let fileURL = Bundle.main.url(forResource: experimentFileName, withExtension: "json")
-        if let fileURL = fileURL {
-            do {
-                let fileContent = try String(contentsOf: fileURL)
-                let features = HardcodedNimbusFeatures(with: [experimentFeatureName: fileContent])
-                features.connect(with: FxNimbus.shared)
-            } catch {
+        let experimentsName = argumentFeatureName.map { string in
+            string.replacingOccurrences(of: LaunchArguments.ExperimentFeatureName, with: "")
+        }
+        let experimentFileName = argumentExperimentFile.map { string in
+            string.replacingOccurrences(of: LaunchArguments.LoadExperiment, with: "")
+        }
+
+        var injectingFeature = [String: String]()
+
+        for index in 0..<experimentsName.count {
+            let fileURL = Bundle.main.url(forResource: experimentFileName[index], withExtension: "json")
+            if let fileURL {
+                do {
+                    let fileContent = try String(contentsOf: fileURL)
+                    injectingFeature[experimentsName[index]] = fileContent
+                } catch {
+                }
             }
         }
+        let features = HardcodedNimbusFeatures(with: injectingFeature)
+        features.connect(with: FxNimbus.shared)
     }
 }

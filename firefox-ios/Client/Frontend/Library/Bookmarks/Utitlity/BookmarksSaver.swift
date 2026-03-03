@@ -9,14 +9,16 @@ import Shared
 protocol BookmarksSaver {
     /// Saves or updates a bookmark or folder
     /// Returns a GUID when creating a bookmark or folder, or nil when updating them
+    @MainActor
     func save(bookmark: FxBookmarkNode, parentFolderGUID: String) async -> Result<GUID?, Error>
+    @MainActor
     func createBookmark(url: String, title: String?, position: UInt32?) async
     func restoreBookmarkNode(bookmarkNode: BookmarkNodeData,
                              parentFolderGUID: String,
-                             completion: @escaping (GUID?) -> Void)
+                             completion: @escaping @Sendable(GUID?) -> Void)
 }
 
-struct DefaultBookmarksSaver: BookmarksSaver, BookmarksRefactorFeatureFlagProvider {
+struct DefaultBookmarksSaver: BookmarksSaver {
     enum SaveError: Error {
         case bookmarkTypeDontSupportSaving
         case saveOperationFailed
@@ -38,7 +40,7 @@ struct DefaultBookmarksSaver: BookmarksSaver, BookmarksRefactorFeatureFlagProvid
 
     func restoreBookmarkNode(bookmarkNode: BookmarkNodeData,
                              parentFolderGUID: String,
-                             completion: @escaping (GUID?) -> Void) {
+                             completion: @escaping @Sendable (GUID?) -> Void) {
         switch bookmarkNode.type {
         case .bookmark:
             guard let bookmark = bookmarkNode as? BookmarkItemData else {
@@ -79,6 +81,7 @@ struct DefaultBookmarksSaver: BookmarksSaver, BookmarksRefactorFeatureFlagProvid
         }
     }
 
+    @MainActor
     func createBookmark(url: String, title: String?, position: UInt32?) async {
         let bookmarkData = BookmarkItemData(guid: "",
                                             dateAdded: 0,
@@ -88,10 +91,29 @@ struct DefaultBookmarksSaver: BookmarksSaver, BookmarksRefactorFeatureFlagProvid
                                             url: url,
                                             title: title ?? "")
         // Add new bookmark to the top of the folder
-        // If bookmarks refactor is enabled, save bookmark to recent bookmark folder, otherwise save to root folder
-        let recentBookmarkFolderGuid = profile.prefs.stringForKey(PrefsKeys.RecentBookmarkFolder)
-        let parentGuid = (isBookmarkRefactorEnabled ? recentBookmarkFolderGuid : nil) ?? BookmarkRoots.MobileFolderGUID
+        // Save bookmark to recent bookmark folder
+        let parentGuid = await resolvedParentFolderGuid()
         _ = await save(bookmark: bookmarkData, parentFolderGUID: parentGuid)
+    }
+
+    @MainActor
+    private func resolvedParentFolderGuid() async -> String {
+        guard let recentBookmarkFolderGuid = profile.prefs.stringForKey(PrefsKeys.RecentBookmarkFolder) else {
+            return BookmarkRoots.MobileFolderGUID
+        }
+
+        let bookmarkExists = await withCheckedContinuation { continuation in
+            profile.places.getBookmark(guid: recentBookmarkFolderGuid)
+                .uponQueue(.main) { result in
+                    continuation.resume(returning: (result.successValue ?? nil) != nil)
+                }
+        }
+
+        if !bookmarkExists {
+            profile.prefs.removeObjectForKey(PrefsKeys.RecentBookmarkFolder)
+        }
+
+        return bookmarkExists ? recentBookmarkFolderGuid : BookmarkRoots.MobileFolderGUID
     }
 
     private func saveBookmark(bookmark: FxBookmarkNode, parentFolderGUID: String) async -> Result<GUID?, any Error> {

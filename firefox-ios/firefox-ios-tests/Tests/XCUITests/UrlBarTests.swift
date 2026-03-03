@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
+import XCTest
 
 class UrlBarTests: BaseTestCase {
     // https://mozilla.testrail.io/index.php?/cases/view/2306888
@@ -13,8 +14,8 @@ class UrlBarTests: BaseTestCase {
         app.textFields[AccessibilityIdentifiers.Browser.AddressToolbar.searchTextField].waitAndTap()
         // The keyboard is brought up.
         XCTAssertTrue(urlBarAddress.value(forKey: "hasKeyboardFocus") as? Bool ?? false)
-        // Scroll on the page
-        app.swipeUp()
+        // Tap cancel button
+        app.buttons[AccessibilityIdentifiers.Browser.UrlBar.cancelButton].waitAndTap()
         // The keyboard is dismissed
         XCTAssertFalse(urlBarAddress.value(forKey: "hasKeyboardFocus") as? Bool ?? true)
         // Select the tab tray and add a new tab

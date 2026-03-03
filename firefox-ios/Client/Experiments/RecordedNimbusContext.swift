@@ -20,18 +20,19 @@ private extension Double? {
     }
 }
 
-private extension Int32? {
+extension Int32? {
     func toInt64() -> Int64? {
         guard let self = self else { return nil }
         return Int64(self)
     }
 }
 
-class RecordedNimbusContext: RecordedContext {
+/// TODO(FXIOS-12942): Implement proper thread-safety
+final class RecordedNimbusContext: RecordedContext, @unchecked Sendable {
     /**
      * The following constants are string constants of the keys that appear in the [EVENT_QUERIES] map.
      */
-    static let DAYS_OPENED_IN_LAST_28: String = "days_opened_in_last_28"
+    static let DAYS_OPENED_IN_LAST_28 = "days_opened_in_last_28"
 
     /**
      * [EVENT_QUERIES] is a map of keys to Nimbus SDK EventStore queries.
@@ -42,14 +43,19 @@ class RecordedNimbusContext: RecordedContext {
 
     var isFirstRun: Bool
     var isPhone: Bool
-    var isReviewCheckerEnabled: Bool
     var isDefaultBrowser: Bool
+    var isBottomToolbarUser: Bool
+    var hasEnabledTipsNotifications: Bool
+    var hasAcceptedTermsOfUse: Bool
+    var isAppleIntelligenceAvailable: Bool
+    var cannotUseAppleIntelligence: Bool
     var appVersion: String?
     var region: String?
     var language: String?
     var locale: String
     var daysSinceInstall: Int32?
     var daysSinceUpdate: Int32?
+    var touExperiencePoints: Int32?
 
     private var eventQueries: [String: String]
     private var eventQueryValues: [String: Double] = [:]
@@ -57,10 +63,14 @@ class RecordedNimbusContext: RecordedContext {
     private var logger: Logger
 
     init(isFirstRun: Bool,
-         isReviewCheckerEnabled: Bool,
          isDefaultBrowser: Bool,
+         isBottomToolbarUser: Bool,
+         hasEnabledTipsNotifications: Bool,
+         hasAcceptedTermsOfUse: Bool,
+         isAppleIntelligenceAvailable: Bool,
+         cannotUseAppleIntelligence: Bool,
          eventQueries: [String: String] = RecordedNimbusContext.EVENT_QUERIES,
-         isPhone: Bool = UIDevice.current.userInterfaceIdiom == .phone,
+         isPhone: Bool = UIDeviceDetails.userInterfaceIdiom == .phone,
          bundle: Bundle = Bundle.main,
          logger: Logger = DefaultLogger.shared) {
         self.logger = logger
@@ -69,8 +79,12 @@ class RecordedNimbusContext: RecordedContext {
 
         self.isFirstRun = isFirstRun
         self.isPhone = isPhone
-        self.isReviewCheckerEnabled = isReviewCheckerEnabled
         self.isDefaultBrowser = isDefaultBrowser
+        self.isBottomToolbarUser = isBottomToolbarUser
+        self.hasEnabledTipsNotifications = hasEnabledTipsNotifications
+        self.hasAcceptedTermsOfUse = hasAcceptedTermsOfUse
+        self.isAppleIntelligenceAvailable = isAppleIntelligenceAvailable
+        self.cannotUseAppleIntelligence = cannotUseAppleIntelligence
 
         let info = bundle.infoDictionary ?? [:]
         appVersion = info["CFBundleShortVersionString"] as? String
@@ -101,6 +115,7 @@ class RecordedNimbusContext: RecordedContext {
         daysSinceUpdate = calculatedAttributes.daysSinceUpdate
         language = calculatedAttributes.language
         region = calculatedAttributes.region
+        touExperiencePoints = Experiments.touExperiencePoints(region: region)
         self.logger.log("init end", level: .debug, category: .experiments)
     }
 
@@ -130,7 +145,6 @@ class RecordedNimbusContext: RecordedContext {
             GleanMetrics.NimbusSystem.RecordedNimbusContextObject(
                 isFirstRun: isFirstRun,
                 eventQueryValues: eventQueryValuesObject,
-                isReviewCheckerEnabled: isReviewCheckerEnabled,
                 isPhone: isPhone,
                 appVersion: appVersion,
                 locale: locale,
@@ -138,9 +152,16 @@ class RecordedNimbusContext: RecordedContext {
                 daysSinceUpdate: daysSinceUpdate.toInt64(),
                 language: language,
                 region: region,
-                isDefaultBrowser: isDefaultBrowser
+                isDefaultBrowser: isDefaultBrowser,
+                isBottomToolbarUser: isBottomToolbarUser,
+                hasEnabledTipsNotifications: hasEnabledTipsNotifications,
+                hasAcceptedTermsOfUse: hasAcceptedTermsOfUse,
+                isAppleIntelligenceAvailable: isAppleIntelligenceAvailable,
+                cannotUseAppleIntelligence: cannotUseAppleIntelligence,
+                touExperiencePoints: touExperiencePoints.toInt64()
             )
         )
+        GleanMetrics.Pings.shared.nimbus.submit()
         logger.log("record end", level: .debug, category: .experiments)
     }
 
@@ -170,7 +191,6 @@ class RecordedNimbusContext: RecordedContext {
             "is_first_run": isFirstRun,
             "isFirstRun": "\(isFirstRun)",
             "is_phone": isPhone,
-            "is_review_checker_enabled": isReviewCheckerEnabled,
             "events": eventQueryValues,
             "app_version": appVersion as Any,
             "region": region as Any,
@@ -179,6 +199,12 @@ class RecordedNimbusContext: RecordedContext {
             "days_since_install": daysSinceInstall as Any,
             "days_since_update": daysSinceUpdate as Any,
             "is_default_browser": isDefaultBrowser,
+            "is_bottom_toolbar_user": isBottomToolbarUser,
+            "has_enabled_tips_notifications": hasEnabledTipsNotifications,
+            "has_accepted_terms_of_use": hasAcceptedTermsOfUse,
+            "is_apple_intelligence_available": isAppleIntelligenceAvailable,
+            "cannot_use_apple_intelligence": cannotUseAppleIntelligence,
+            "tou_experience_points": touExperiencePoints as Any
         ]),
             let jsonString = NSString(data: data, encoding: String.Encoding.utf8.rawValue) as? String
         else {

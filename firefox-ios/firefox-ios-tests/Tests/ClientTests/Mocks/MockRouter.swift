@@ -8,6 +8,7 @@ import UIKit
 class MockRouter: NSObject, Router {
     var navigationController: NavigationController
     var rootViewController: UIViewController?
+    var onPresent: (() -> Void)?
 
     var isPresenting: Bool {
         return presentCalled != 0
@@ -15,6 +16,7 @@ class MockRouter: NSObject, Router {
 
     var presentedViewController: UIViewController?
     var presentCalled = 0
+    var presentCalledWithAnimation = 0
     var dismissCalled = 0
     var pushedViewController: UIViewController?
     var pushCalled = 0
@@ -22,6 +24,9 @@ class MockRouter: NSObject, Router {
     var setRootViewControllerCalled = 0
     var savedCompletion: (() -> Void)?
     var isNavigationBarHidden = false
+    var topViewController: UIViewController?
+    var viewControllers: [UIViewController]?
+    var popToViewControllerCalled = 0
 
     init(navigationController: NavigationController) {
         self.navigationController = navigationController
@@ -32,6 +37,15 @@ class MockRouter: NSObject, Router {
         savedCompletion = completion
         presentedViewController = viewController
         presentCalled += 1
+        onPresent?()
+    }
+
+    func present(_ viewController: UIViewController,
+                 animated: Bool,
+                 customTransition: UIViewControllerTransitioningDelegate?,
+                 presentationStyle: UIModalPresentationStyle) {
+        presentedViewController = viewController
+        presentCalledWithAnimation += 1
     }
 
     func dismiss(animated: Bool, completion: (() -> Void)?) {
@@ -42,6 +56,8 @@ class MockRouter: NSObject, Router {
     func push(_ viewController: UIViewController, animated: Bool, completion: (() -> Void)?) {
         savedCompletion = completion
         pushedViewController = viewController
+        topViewController = viewController
+        navigationController.pushViewController(viewController, animated: false)
         pushCalled += 1
     }
 
@@ -49,6 +65,13 @@ class MockRouter: NSObject, Router {
         popViewControllerCalled += 1
         savedCompletion?()
         savedCompletion = nil
+    }
+
+    func popToViewController(_ viewController: UIViewController,
+                             reason: DismissalReason,
+                             animated: Bool) -> [UIViewController]? {
+        popToViewControllerCalled += 1
+        return nil
     }
 
     func setRootViewController(_ viewController: UIViewController, hideBar: Bool, animated: Bool) {

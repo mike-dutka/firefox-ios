@@ -3,25 +3,24 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import XCTest
-import Shared
-import Common
 @testable import Client
 
-class NotificationSurfaceManagerTests: XCTestCase {
+@MainActor
+final class NotificationSurfaceManagerTests: XCTestCase {
     private var messageManager: MockGleanPlumbMessageManagerProtocol!
     private var notificationManager: MockNotificationManager!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         DependencyHelperMock().bootstrapDependencies()
         notificationManager = MockNotificationManager()
         messageManager = MockGleanPlumbMessageManagerProtocol()
     }
 
-    override func tearDown() {
-        super.tearDown()
+    override func tearDown() async throws {
         messageManager = nil
         notificationManager = nil
+        try await super.tearDown()
     }
 
     func testShouldShowSurface_noMessage() {
@@ -38,25 +37,25 @@ class NotificationSurfaceManagerTests: XCTestCase {
         XCTAssertTrue(subject.shouldShowSurface)
     }
 
-    func testShowSurface_noMessage() {
+    func testShowSurface_noMessage() async {
         let subject = createSubject()
 
         XCTAssertFalse(subject.shouldShowSurface)
 
-        subject.showNotificationSurface()
+        await subject.showNotificationSurface()
 
         XCTAssertFalse(notificationManager.scheduleWithIntervalWasCalled)
         XCTAssertEqual(notificationManager.scheduledNotifications, 0)
     }
 
-    func testShowSurface_validMessage() {
+    func testShowSurface_validMessage() async {
         let subject = createSubject()
         let message = createMessage()
         messageManager.message = message
 
         XCTAssertTrue(subject.shouldShowSurface)
 
-        subject.showNotificationSurface()
+        await subject.showNotificationSurface()
 
         XCTAssertTrue(notificationManager.scheduleWithIntervalWasCalled)
         XCTAssertEqual(notificationManager.scheduledNotifications, 1)
@@ -64,14 +63,14 @@ class NotificationSurfaceManagerTests: XCTestCase {
 
     func testDidTapNotification_noMessageId() {
         let subject = createSubject()
-        subject.didTapNotification([:])
+        subject.didTapNotification("")
 
         XCTAssertEqual(messageManager.onMessagePressedCalled, 0)
     }
 
     func testDidTapNotification_noMessageFound() {
         let subject = createSubject()
-        subject.didTapNotification([NotificationSurfaceManager.Constant.messageIdKey: "test"])
+        subject.didTapNotification("test")
 
         XCTAssertEqual(messageManager.onMessagePressedCalled, 0)
     }
@@ -83,7 +82,7 @@ class NotificationSurfaceManagerTests: XCTestCase {
 
         XCTAssertTrue(subject.shouldShowSurface)
 
-        subject.didTapNotification([NotificationSurfaceManager.Constant.messageIdKey: "test-notification"])
+        subject.didTapNotification("test-notification")
 
         XCTAssertEqual(messageManager.onMessagePressedCalled, 1)
     }
@@ -95,13 +94,13 @@ class NotificationSurfaceManagerTests: XCTestCase {
 
         XCTAssertTrue(subject.shouldShowSurface)
 
-        subject.didTapNotification([NotificationSurfaceManager.Constant.messageIdKey: "test-notification"])
+        subject.didTapNotification("test-notification")
 
         XCTAssertEqual(messageManager.onMessagePressedCalled, 1)
     }
 
     // MARK: Helpers
-    private func createSubject(file: StaticString = #file,
+    private func createSubject(file: StaticString = #filePath,
                                line: UInt = #line
     ) -> NotificationSurfaceManager {
         let subject = NotificationSurfaceManager(messagingManager: messageManager,
@@ -149,7 +148,7 @@ class MockNotificationMessageDataProtocol: MessageDataProtocol {
     var surface: MessageSurfaceId
     var isControl = true
     var title: String? = "title label test"
-    var text: String = "text label test"
+    var text = "text label test"
     var buttonLabel: String? = "button label test"
     var experiment: String?
     var actionParams: [String: String] = [:]

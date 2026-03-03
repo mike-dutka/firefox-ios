@@ -4,25 +4,23 @@
 
 import Foundation
 import XCTest
-import Shared
 import Common
-import Storage
-import TabDataStore
 @testable import Client
 
+@MainActor
 class WindowManagerTests: XCTestCase {
     let tabManager = MockTabManager(windowUUID: WindowUUID())
     let secondTabManager = MockTabManager(windowUUID: WindowUUID())
     let mockTabDataStore = MockTabDataStore()
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         DependencyHelperMock().bootstrapDependencies(injectedTabManager: tabManager)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         DependencyHelperMock().reset()
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func testConfiguringAndConnectingSingleAppWindow() {
@@ -66,6 +64,7 @@ class WindowManagerTests: XCTestCase {
         XCTAssertEqual(secondTabManager.windowUUID, secondWindowUUID)
     }
 
+    @MainActor
     func testOpeningMultipleWindowsAndClosingTheFirstWindow() {
         let subject = createSubject()
 
@@ -204,6 +203,7 @@ class WindowManagerTests: XCTestCase {
         XCTAssertEqual(result2, result3)
     }
 
+    @MainActor
     func testAllWindowTabManagers_forIpad() {
         let isIpad = true
         let subject = createSubject()
@@ -230,6 +230,7 @@ class WindowManagerTests: XCTestCase {
         XCTAssert(tabManager2 === allTabManagers.first!)
     }
 
+    @MainActor
     func testAllWindowTabManagers__forIphone_onlyHasOneUUID() {
         let isIpad = false
         let subject = createSubject()
@@ -292,6 +293,7 @@ class WindowManagerTests: XCTestCase {
         XCTAssertEqual(requestedUUID2, savedUUID)
     }
 
+    @MainActor
     func testClosingTwoWindowsInDifferentOrdersResultsInSensibleExpectedOrderWhenOpening_forIpad() {
         let isIpad = true
         let subject = createSubject()
@@ -332,6 +334,7 @@ class WindowManagerTests: XCTestCase {
         XCTAssertEqual(result2_2, uuid1)
     }
 
+    @MainActor
     func testClosingTwoWindowsInDifferentOrdersResultsInSensibleExpectedOrderWhenOpening_forIphone_onlyHasOneUUID() {
         let isIpad = false
         let subject = createSubject()

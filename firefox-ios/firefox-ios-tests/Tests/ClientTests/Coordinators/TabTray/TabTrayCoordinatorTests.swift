@@ -5,14 +5,15 @@
 import XCTest
 @testable import Client
 
+@MainActor
 final class TabTrayCoordinatorTests: XCTestCase {
     private var mockRouter: MockRouter!
     private var profile: MockProfile!
     private var parentCoordinator: MockTabTrayCoordinatorDelegate!
     private var tabManager: TabManager!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         let mockTabManager = MockTabManager()
         DependencyHelperMock().bootstrapDependencies(injectedTabManager: mockTabManager)
         mockRouter = MockRouter(navigationController: MockNavigationController())
@@ -22,12 +23,12 @@ final class TabTrayCoordinatorTests: XCTestCase {
         LegacyFeatureFlagsManager.shared.initializeDeveloperFeatures(with: MockProfile())
     }
 
-    override func tearDown() {
-        super.tearDown()
+    override func tearDown() async throws {
         mockRouter = nil
         profile = nil
         parentCoordinator = nil
         DependencyHelperMock().reset()
+        try await super.tearDown()
     }
 
     func testInitialState() {
@@ -71,7 +72,7 @@ final class TabTrayCoordinatorTests: XCTestCase {
 
     // MARK: - Helpers
     private func createSubject(panelType: TabTrayPanelType = .tabs,
-                               file: StaticString = #file,
+                               file: StaticString = #filePath,
                                line: UInt = #line) -> TabTrayCoordinator {
         let subject = TabTrayCoordinator(router: mockRouter,
                                          tabTraySection: panelType,

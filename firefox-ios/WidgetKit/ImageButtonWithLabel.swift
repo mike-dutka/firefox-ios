@@ -64,54 +64,109 @@ struct ImageButtonWithLabel: View {
         Link(destination: isSmall ? link.smallWidgetUrl : link.mediumWidgetUrl) {
             ZStack(alignment: .leading) {
                 if !isSmall {
-                    ContainerRelativeShape()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: link.backgroundColors),
-                                startPoint: .bottomLeading,
-                                endPoint: .topTrailing
-                            )
-                        )
+                    background
                 }
 
                 VStack(alignment: .center, spacing: 50.0) {
                     HStack(alignment: .top) {
-                        VStack(alignment: .leading) {
-                            if isSmall {
-                                Text(link.label)
-                                    .font(.headline)
-                                    .minimumScaleFactor(0.75)
-                                    .layoutPriority(1000)
-                            } else {
-                                Text(link.label)
-                                    .font(.footnote)
-                                    .minimumScaleFactor(0.75)
-                                    .layoutPriority(1000)
-                            }
-                        }
+                        label
                         Spacer()
-                        if link == .search && isSmall {
-                            Image(decorative: StandardImageIdentifiers.Large.search)
-                                .scaledToFit()
-                                .frame(height: 24.0)
-                        } else {
-                            Image(decorative: link.imageName)
-                                .scaledToFit()
-                                .frame(height: 24.0)
-                        }
+                        logo
                     }
                     if isSmall {
-                        HStack(alignment: .bottom) {
-                            Spacer()
-                            Image(decorative: "faviconFox")
-                                .scaledToFit()
-                                .frame(height: 24.0)
-                        }
+                        icon
                     }
                 }
                 .foregroundColor(Color("widgetLabelColors"))
                 .padding([.horizontal, .vertical], paddingValue)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        if #available(iOS 16.0, *) {
+            BackgroundContent(link: link)
+        } else {
+            ContainerRelativeShape()
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: link.backgroundColors),
+                        startPoint: .bottomLeading,
+                        endPoint: .topTrailing
+                    )
+                )
+        }
+    }
+
+    private var label: some View {
+        return VStack(alignment: .leading) {
+            if isSmall {
+                Text(link.label)
+                    .font(.headline)
+                    .minimumScaleFactor(0.75)
+                    .layoutPriority(1000)
+            } else {
+                Text(link.label)
+                    .font(.footnote)
+                    .minimumScaleFactor(0.75)
+                    .layoutPriority(1000)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var logo: some View {
+        let isSearchSmall = (link == .search && isSmall)
+        let imageName = isSearchSmall ? StandardImageIdentifiers.Large.search : link.imageName
+
+        if #available(iOSApplicationExtension 18.0, *) {
+            Image(decorative: imageName)
+                .widgetAccentedRenderingMode(.accentedDesaturated)
+                .scaledToFit()
+                .frame(height: 24.0)
+        } else {
+            Image(decorative: imageName)
+                .scaledToFit()
+                .frame(height: 24.0)
+        }
+    }
+
+    private var icon: some View {
+        return HStack(alignment: .bottom) {
+            Spacer()
+            if #available(iOSApplicationExtension 18.0, *) {
+                Image(decorative: "faviconFox")
+                    .widgetAccentedRenderingMode(.accentedDesaturated)
+                    .scaledToFit()
+                    .frame(height: 24.0)
+            } else {
+                Image(decorative: "faviconFox")
+                    .scaledToFit()
+                    .frame(height: 24.0)
+            }
+        }
+    }
+}
+
+@available(iOS 16.0, *)
+struct BackgroundContent: View {
+    @Environment(\.widgetRenderingMode) private var renderingMode
+    var link: QuickLink
+
+    var body: some View {
+        if renderingMode == .accented {
+            ContainerRelativeShape()
+                .fill(link.tintedBackgroundColor)
+        } else {
+            ContainerRelativeShape()
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: link.backgroundColors),
+                        startPoint: .bottomLeading,
+                        endPoint: .topTrailing
+                    )
+                )
         }
     }
 }

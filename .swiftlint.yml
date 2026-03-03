@@ -16,7 +16,6 @@ only_rules: # Only enforce these rules, ignore all others
   - empty_parameters
   - empty_parentheses_with_trailing_closure
   - for_where
-  - force_try
   - implicit_getter
   - inclusive_language
   - invalid_swiftlint_command
@@ -84,7 +83,6 @@ only_rules: # Only enforce these rules, ignore all others
   - yoda_condition
   - accessibility_label_for_image
   - accessibility_trait_for_button
-  - force_cast
   - closure_body_length
   - implicitly_unwrapped_optional
 

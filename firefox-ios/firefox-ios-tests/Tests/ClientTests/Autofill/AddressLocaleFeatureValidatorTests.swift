@@ -4,39 +4,63 @@
 
 import Foundation
 import XCTest
-import Common
 
 @testable import Client
 
 class AddressLocaleFeatureValidatorTests: XCTestCase {
     func testValidRegionCA() {
-        let locale = Locale(identifier: "en_CA")
+        let locale = MockLocaleProvider(regionCode: "CA")
         XCTAssertTrue(
-            AddressLocaleFeatureValidator.isValidRegion(locale: locale),
+            AddressLocaleFeatureValidator.isValidRegion(for: locale.regionCode()),
             "Region valid for CA"
         )
     }
 
     func testValidRegionUS() {
-        let locale = Locale(identifier: "en_US")
+        let locale = MockLocaleProvider(regionCode: "US")
         XCTAssertTrue(
-            AddressLocaleFeatureValidator.isValidRegion(locale: locale),
+            AddressLocaleFeatureValidator.isValidRegion(for: locale.regionCode()),
             "Region valid for US"
         )
     }
 
-    func testInvalidRegionFR() {
-        let locale = Locale(identifier: "fr_FR")
+    func testValidRegionFR() {
+        let locale =  MockLocaleProvider(regionCode: "FR")
+        XCTAssertTrue(
+            AddressLocaleFeatureValidator.isValidRegion(for: locale.regionCode()),
+            "Valid region for FR"
+        )
+    }
+
+    func testValidRegionDE() {
+        let locale =  MockLocaleProvider(regionCode: "DE")
+        XCTAssertTrue(
+            AddressLocaleFeatureValidator.isValidRegion(for: locale.regionCode()),
+            "Valid region for DE"
+        )
+    }
+
+    func testValidRegionGB() {
+        let locale =  MockLocaleProvider(regionCode: "GB")
+        XCTAssertTrue(
+            AddressLocaleFeatureValidator.isValidRegion(for: locale.regionCode()),
+            "Valid region for GB"
+        )
+    }
+
+    func testInvalidRegionMA() {
+        let locale =  MockLocaleProvider(regionCode: "MA")
         XCTAssertFalse(
-            AddressLocaleFeatureValidator.isValidRegion(locale: locale),
-            "Invalid region for FR"
+            AddressLocaleFeatureValidator.isValidRegion(for: locale.regionCode()),
+            "Invalid region for MA"
         )
     }
 
     func testInvalidRegionWithoutRegionCode() {
-        let locale = Locale(identifier: "")
+        let locale =  MockLocaleProvider(regionCode: "")
+
         XCTAssertFalse(
-            AddressLocaleFeatureValidator.isValidRegion(locale: locale),
+            AddressLocaleFeatureValidator.isValidRegion(for: locale.regionCode()),
             "Invalid region for locale without region code"
         )
     }

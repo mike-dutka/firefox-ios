@@ -5,14 +5,14 @@
 import Foundation
 import Shared
 
-open class SQLiteQueue: TabQueue {
+public final class SQLiteQueue: TabQueue {
     let db: BrowserDB
 
     public init(db: BrowserDB) {
         self.db = db
     }
 
-    open func addToQueue(_ tab: ShareItem) -> Success {
+    public func addToQueue(_ tab: ShareItem) -> Success {
         return db.run("INSERT OR IGNORE INTO queue (url) VALUES (?)", withArgs: [tab.url])
     }
 
@@ -21,18 +21,19 @@ open class SQLiteQueue: TabQueue {
         return ShareItem(url: url, title: "")
     }
 
-    open func getQueuedTabs(completion: @escaping ([ShareItem]) -> Void) {
+    public func getQueuedTabs(completion: @MainActor @escaping ([ShareItem]) -> Void) {
         let sql = "SELECT url FROM queue"
-        let deferredResponse = db.runQuery(sql, args: nil, factory: self.factory) >>== { cursor in
-            return deferMaybe(cursor.asArray())
-        }
-
-        deferredResponse.upon { result in
-            completion(result.successValue ?? [])
-        }
+        db.runQuery(sql, args: nil, factory: self.factory)
+            .uponQueue(.main) { result in
+                guard let cursor = result.successValue else { return }
+                // FXIOS-13228 It should be safe to assumeIsolated here because of `.main` queue above
+                MainActor.assumeIsolated {
+                    completion(cursor.asArray())
+                }
+            }
     }
 
-    open func clearQueuedTabs() -> Success {
+    public func clearQueuedTabs() -> Success {
         return db.run("DELETE FROM queue")
     }
 }

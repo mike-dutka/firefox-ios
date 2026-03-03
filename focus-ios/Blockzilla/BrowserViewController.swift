@@ -13,7 +13,7 @@ import Onboarding
 import AppShortcuts
 import SwiftUI
 
-class BrowserViewController: UIViewController {
+final class BrowserViewController: UIViewController {
     private let mainContainerView = UIView(frame: .zero)
     let darkView = UIView()
     private lazy var trackingProtectionManager = TrackingProtectionManager(
@@ -323,7 +323,8 @@ class BrowserViewController: UIViewController {
 
     private func tooltipController(
         anchoredBy sourceView: UIView,
-        sourceRect: CGRect, title: String = "",
+        sourceRect: CGRect, 
+        title: String = "",
         body: String,
         dismiss: @escaping () -> Void ) -> UIViewController {
             let tooltipViewController = TooltipViewController()
@@ -336,123 +337,152 @@ class BrowserViewController: UIViewController {
     func controller(for route: ToolTipRoute) -> UIViewController? {
         switch route {
         case .trackingProtectionShield(let version):
-            switch version {
-            case .v2:
-                return self.tooltipController(
-                    anchoredBy: self.urlBar.shieldIconAnchor,
-                    sourceRect: CGRect(x: self.urlBar.shieldIconAnchor.bounds.midX, y: self.urlBar.shieldIconAnchor.bounds.midY + 10, width: 0, height: 0),
-                    body: UIConstants.strings.tooltipBodyTextForShieldIconV2,
-                    dismiss: { [unowned self] in self.onboardingEventsHandler.route = nil
-                        self.onboardingEventsHandler.send(.showTrash)
-                    }
-                )
-
-            case .v1:
-                return self.tooltipController(
-                    anchoredBy: self.urlBar.shieldIconAnchor,
-                    sourceRect: CGRect(x: self.urlBar.shieldIconAnchor.bounds.midX, y: self.urlBar.shieldIconAnchor.bounds.midY + 10, width: 0, height: 0),
-                    body: UIConstants.strings.tooltipBodyTextForShieldIcon,
-                    dismiss: { [unowned self] in self.onboardingEventsHandler.route = nil }
-                )
-            }
+            return handleTrackingProtectionShieldAction(version: version)
 
         case .trash(let version):
-            switch version {
-            case .v2:
-                let sourceButton = showsToolsetInURLBar ? urlBar.deleteButtonAnchor : browserToolbar.deleteButtonAnchor
-                let sourceRect = showsToolsetInURLBar ? CGRect(x: sourceButton.bounds.midX, y: sourceButton.bounds.maxY - 10, width: 0, height: 0) :
-                CGRect(x: sourceButton.bounds.midX, y: sourceButton.bounds.minY + 10, width: 0, height: 0)
-                return self.tooltipController(
-                    anchoredBy: sourceButton,
-                    sourceRect: sourceRect,
-                    body: UIConstants.strings.tooltipBodyTextForTrashIconV2,
-                    dismiss: { [unowned self] in self.onboardingEventsHandler.route = nil }
-                )
-
-            case .v1:
-                let sourceButton = showsToolsetInURLBar ? urlBar.deleteButtonAnchor : browserToolbar.deleteButtonAnchor
-                let sourceRect = showsToolsetInURLBar ? CGRect(x: sourceButton.bounds.midX, y: sourceButton.bounds.maxY - 10, width: 0, height: 0) :
-                CGRect(x: sourceButton.bounds.midX, y: sourceButton.bounds.minY + 10, width: 0, height: 0)
-                return self.tooltipController(
-                    anchoredBy: sourceButton,
-                    sourceRect: sourceRect,
-                    body: UIConstants.strings.tooltipBodyTextForTrashIcon,
-                    dismiss: { [unowned self] in self.onboardingEventsHandler.route = nil }
-                )
-            }
+            return handleTrashAction(version: version)
 
         case .searchBar:
-            return self.tooltipController(
-                anchoredBy: self.urlBar.textFieldAnchor,
-                sourceRect: CGRect(
-                    x: self.urlBar.textFieldAnchor.bounds.minX,
-                    y: self.urlBar.textFieldAnchor.bounds.maxY,
-                    width: 0,
-                    height: 0
-                ),
-                body: UIConstants.strings.tooltipBodyTextStartPrivateBrowsing,
-                dismiss: { [unowned self] in self.onboardingEventsHandler.route = nil }
-            )
+            return handleSearchBarAction()
 
         case .onboarding(let onboardingType):
-            let dismissOnboarding = { [unowned self] in
-                UserDefaults.standard.set(true, forKey: OnboardingConstants.onboardingDidAppear)
-                urlBar.activateTextField()
-                onboardingEventsHandler.route = nil
-                onboardingEventsHandler.send(.enterHome)
-            }
-                return OnboardingFactory.make(onboardingType: onboardingType, dismissAction: dismissOnboarding, telemetry: onboardingTelemetry.handle(event:))
+            return handleOnboardingAction(onboardingType: onboardingType)
 
         case .trackingProtection:
             return nil
 
         case .widget:
-            urlBar.dismiss()
-            let cardBanner = PortraitHostingController(
-                rootView: CardBannerView(
-                    config: .init(
-                        title: UIConstants.strings.widgetOnboardingCardTitle,
-                        subtitle: UIConstants.strings.widgetOnboardingCardSubtitle,
-                        actionButtonTitle: UIConstants.strings.widgetOnboardingCardActionButton,
-                        widget: .init(
-                            title: UIConstants.strings.searchInAppInstruction
-                        )),
-                    primaryAction: { [weak self] in
-                        self?.onboardingEventsHandler.route = nil
-                        self?.onboardingEventsHandler.send(.widgetDismissed)
-                        self?.onboardingTelemetry.handle(event: .widgetPrimaryButtonTapped)
-                    },
-                    dismiss: { [weak self] in
-                        self?.onboardingEventsHandler.route = nil
-                        self?.urlBar.activateTextField()
-                        self?.onboardingTelemetry.handle(event: .widgetCloseTapped)
-                    }))
-            cardBanner.view.backgroundColor = .clear
-            cardBanner.modalPresentationStyle = .overFullScreen
-            return cardBanner
+            return handleWidgetAction()
 
         case .menu:
+            return handleMenuAction()
+
+        case .widgetTutorial:
+            return handleWidgetTutorialAction()
+        }
+    }
+
+    private func handleTrackingProtectionShieldAction(version: OnboardingVersion) -> UIViewController? {
+        switch version {
+        case .v2:
             return self.tooltipController(
-                anchoredBy: self.urlBar.contextMenuButtonAnchor,
-                sourceRect: CGRect(x: self.urlBar.contextMenuButtonAnchor.bounds.maxX, y: self.urlBar.contextMenuButtonAnchor.bounds.midY + 12, width: 0, height: 0),
-                body: UIConstants.strings.tootipBodyTextForContextMenuIcon,
+                anchoredBy: self.urlBar.shieldIconAnchor,
+                sourceRect: CGRect(x: self.urlBar.shieldIconAnchor.bounds.midX, y: self.urlBar.shieldIconAnchor.bounds.midY + 10, width: 0, height: 0),
+                body: UIConstants.strings.tooltipBodyTextForShieldIconV2,
+                dismiss: { [unowned self] in self.onboardingEventsHandler.route = nil
+                    self.onboardingEventsHandler.send(.showTrash)
+                }
+            )
+
+        case .v1:
+            return self.tooltipController(
+                anchoredBy: self.urlBar.shieldIconAnchor,
+                sourceRect: CGRect(x: self.urlBar.shieldIconAnchor.bounds.midX, y: self.urlBar.shieldIconAnchor.bounds.midY + 10, width: 0, height: 0),
+                body: UIConstants.strings.tooltipBodyTextForShieldIcon,
                 dismiss: { [unowned self] in self.onboardingEventsHandler.route = nil }
             )
-        case .widgetTutorial:
-            let controller = PortraitHostingController(
-                rootView: ShowMeHowOnboardingView(
-                    config: .init(
-                        title: UIConstants.strings.titleShowMeHowOnboardingV2,
-                        subtitleStep1: UIConstants.strings.subtitleStepOneShowMeHowOnboardingV2,
-                        subtitleStep2: UIConstants.strings.subtitleStepTwoShowMeHowOnboardingV2,
-                        subtitleStep3: UIConstants.strings.subtitleStepThreeShowMeHowOnboardingV2,
-                        buttonText: UIConstants.strings.buttonTextShowMeHowOnboardingV2,
-                        widgetText: UIConstants.strings.searchInAppInstruction),
-                    dismissAction: { [unowned self] in self.onboardingEventsHandler.route = nil }))
-            controller.modalPresentationStyle = UIDevice.current.userInterfaceIdiom == .phone ? .overFullScreen : .formSheet
-            controller.isModalInPresentation = true
-            return controller
         }
+    }
+
+    private func handleTrashAction(version: OnboardingVersion) -> UIViewController? {
+        switch version {
+        case .v2:
+            let sourceButton = showsToolsetInURLBar ? urlBar.deleteButtonAnchor : browserToolbar.deleteButtonAnchor
+            let sourceRect = showsToolsetInURLBar ? CGRect(x: sourceButton.bounds.midX, y: sourceButton.bounds.maxY - 10, width: 0, height: 0) :
+            CGRect(x: sourceButton.bounds.midX, y: sourceButton.bounds.minY + 10, width: 0, height: 0)
+            return self.tooltipController(
+                anchoredBy: sourceButton,
+                sourceRect: sourceRect,
+                body: UIConstants.strings.tooltipBodyTextForTrashIconV2,
+                dismiss: { [unowned self] in self.onboardingEventsHandler.route = nil }
+            )
+
+        case .v1:
+            let sourceButton = showsToolsetInURLBar ? urlBar.deleteButtonAnchor : browserToolbar.deleteButtonAnchor
+            let sourceRect = showsToolsetInURLBar ? CGRect(x: sourceButton.bounds.midX, y: sourceButton.bounds.maxY - 10, width: 0, height: 0) :
+            CGRect(x: sourceButton.bounds.midX, y: sourceButton.bounds.minY + 10, width: 0, height: 0)
+            return self.tooltipController(
+                anchoredBy: sourceButton,
+                sourceRect: sourceRect,
+                body: UIConstants.strings.tooltipBodyTextForTrashIcon,
+                dismiss: { [unowned self] in self.onboardingEventsHandler.route = nil }
+            )
+        }
+    }
+
+    private func handleSearchBarAction() -> UIViewController? {
+        return self.tooltipController(
+            anchoredBy: self.urlBar.textFieldAnchor,
+            sourceRect: CGRect(
+                x: self.urlBar.textFieldAnchor.bounds.minX,
+                y: self.urlBar.textFieldAnchor.bounds.maxY,
+                width: 0,
+                height: 0
+            ),
+            body: UIConstants.strings.tooltipBodyTextStartPrivateBrowsing,
+            dismiss: { [unowned self] in self.onboardingEventsHandler.route = nil }
+        )
+    }
+
+    private func handleOnboardingAction(onboardingType: OnboardingVersion) -> UIViewController? {
+        let dismissOnboarding = { [unowned self] in
+            UserDefaults.standard.set(true, forKey: OnboardingConstants.onboardingDidAppear)
+            urlBar.activateTextField()
+            onboardingEventsHandler.dismissTooltip(route: .onboarding(.v2))
+            onboardingEventsHandler.send(.enterHome)
+        }
+        return OnboardingFactory.make(onboardingType: onboardingType, dismissAction: dismissOnboarding, telemetry: onboardingTelemetry.handle(event:))
+    }
+
+    private func handleWidgetAction() -> UIViewController? {
+        urlBar.dismiss()
+        let cardBanner = PortraitHostingController(
+            rootView: CardBannerView(
+                config: .init(
+                    title: UIConstants.strings.widgetOnboardingCardTitle,
+                    subtitle: UIConstants.strings.widgetOnboardingCardSubtitle,
+                    actionButtonTitle: UIConstants.strings.widgetOnboardingCardActionButton,
+                    widget: .init(
+                        title: UIConstants.strings.searchInAppInstruction
+                    )),
+                primaryAction: { [weak self] in
+                    self?.onboardingEventsHandler.route = nil
+                    self?.onboardingEventsHandler.send(.widgetDismissed)
+                    self?.onboardingTelemetry.handle(event: .widgetPrimaryButtonTapped)
+                },
+                dismiss: { [weak self] in
+                    self?.onboardingEventsHandler.route = nil
+                    self?.urlBar.activateTextField()
+                    self?.onboardingTelemetry.handle(event: .widgetCloseTapped)
+                }))
+        cardBanner.view.backgroundColor = .clear
+        cardBanner.modalPresentationStyle = .overFullScreen
+        return cardBanner
+    }
+
+    private func handleMenuAction() -> UIViewController? {
+        return self.tooltipController(
+            anchoredBy: self.urlBar.contextMenuButtonAnchor,
+            sourceRect: CGRect(x: self.urlBar.contextMenuButtonAnchor.bounds.maxX, y: self.urlBar.contextMenuButtonAnchor.bounds.midY + 12, width: 0, height: 0),
+            body: UIConstants.strings.tootipBodyTextForContextMenuIcon,
+            dismiss: { [unowned self] in self.onboardingEventsHandler.route = nil }
+        )
+    }
+
+    private func handleWidgetTutorialAction() -> UIViewController? {
+        let controller = PortraitHostingController(
+            rootView: ShowMeHowOnboardingView(
+                config: .init(
+                    title: UIConstants.strings.titleShowMeHowOnboardingV2,
+                    subtitleStep1: UIConstants.strings.subtitleStepOneShowMeHowOnboardingV2,
+                    subtitleStep2: UIConstants.strings.subtitleStepTwoShowMeHowOnboardingV2,
+                    subtitleStep3: UIConstants.strings.subtitleStepThreeShowMeHowOnboardingV2,
+                    buttonText: UIConstants.strings.buttonTextShowMeHowOnboardingV2,
+                    widgetText: UIConstants.strings.searchInAppInstruction),
+                dismissAction: { [unowned self] in self.onboardingEventsHandler.route = nil }))
+        controller.modalPresentationStyle = UIDevice.current.userInterfaceIdiom == .phone ? .overFullScreen : .formSheet
+        controller.isModalInPresentation = true
+        return controller
     }
 
     private func setupOnboardingEvents() {
@@ -968,10 +998,6 @@ class BrowserViewController: UIViewController {
         // FXIOS-8626 - #19148 - Integrate basics APIs of WebEngine in Focus iOS
         webViewController.load(URLRequest(url: url))
 
-        if urlBar.url != url {
-            urlBar.url = url
-        }
-
         onboardingEventsHandler.route = nil
         onboardingEventsHandler.send(.startBrowsing)
 
@@ -1231,7 +1257,7 @@ extension BrowserViewController: UIDropInteractionDelegate {
 
     func dropInteraction(_ interaction: UIDropInteraction, performDrop session: UIDropSession) {
         _ = session.loadObjects(ofClass: URL.self) { urls in
-            guard let url = urls.first else {
+            guard let draggedUrl = urls.first, let url = URIFixup.getURL(entry: draggedUrl.absoluteString) else {
                 return
             }
 
@@ -1438,11 +1464,17 @@ extension BrowserViewController: URLBarDelegate {
             .eraseToAnyPublisher()
 
         // FXIOS-8643 - #19166 ⁃ Integrate content blocking in Focus iOS
-        let state: TrackingProtectionState = urlBar.inBrowsingMode
-        ? .browsing(status: SecureConnectionStatus(
-            url: webViewController.url!,
-            isSecureConnection: webViewController.connectionIsSecure))
-        : .homescreen
+        let state: TrackingProtectionState = if urlBar.inBrowsingMode,
+                                                let url = urlBar.url {
+            .browsing(
+                status: SecureConnectionStatus(
+                    url: url,
+                    isSecureConnection: webViewController.connectionIsSecure
+                )
+            )
+        } else {
+            .homescreen
+        }
 
         let trackingProtectionViewController = TrackingProtectionViewController(state: state, onboardingEventsHandler: onboardingEventsHandler, favIconPublisher: favIconPublisher)
         trackingProtectionViewController.delegate = self
@@ -1681,8 +1713,11 @@ extension BrowserViewController: LegacyWebControllerDelegate {
     }
 
     func webControllerDidStartNavigation(_ controller: LegacyWebController) {
-        if !SearchHistoryUtils.isFromURLBar && !SearchHistoryUtils.isNavigating && !SearchHistoryUtils.isReload {
-            SearchHistoryUtils.pushSearchToStack(with: (urlBar.url?.absoluteString)!)
+        if !SearchHistoryUtils.isFromURLBar &&
+            !SearchHistoryUtils.isNavigating &&
+            !SearchHistoryUtils.isReload,
+           let urlString = urlBar.url?.absoluteString {
+            SearchHistoryUtils.pushSearchToStack(with: urlString)
         }
         SearchHistoryUtils.isReload = false
         SearchHistoryUtils.isNavigating = false
@@ -1693,7 +1728,6 @@ extension BrowserViewController: LegacyWebControllerDelegate {
     }
 
     func webControllerDidFinishNavigation(_ controller: LegacyWebController) {
-        updateURLBar()
         urlBarViewModel.isLoading = false
         urlBarViewModel.loadingProgres = 1
         toggleURLBarBackground(isBright: !urlBar.isEditing)

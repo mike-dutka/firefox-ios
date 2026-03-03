@@ -7,18 +7,19 @@ import XCTest
 
 @testable import Client
 
+@MainActor
 class IntroViewControllerTests: XCTestCase {
     var mockNotificationCenter: MockNotificationCenter!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         DependencyHelperMock().bootstrapDependencies()
         mockNotificationCenter = MockNotificationCenter()
     }
 
-    override func tearDown() {
-        super.tearDown()
+    override func tearDown() async throws {
         mockNotificationCenter = nil
+        try await super.tearDown()
     }
 
     // Temp. Disabled: https://mozilla-hub.atlassian.net/browse/FXIOS-7505
@@ -37,11 +38,8 @@ class IntroViewControllerTests: XCTestCase {
     func testSubjectRegistersForNotification() {
         XCTAssertEqual(mockNotificationCenter.addObserverCallCount, 0)
         let subject = createSubject()
-
-        XCTAssertEqual(mockNotificationCenter.addObserverCallCount, 1)
         subject.registerForNotification()
-
-        XCTAssertEqual(mockNotificationCenter.addObserverCallCount, 2)
+        XCTAssertEqual(mockNotificationCenter.addObserverCallCount, 1)
     }
 
     func testViewMoving_MovesToNextCard_ifSetDefaultBrowserCard() {
@@ -76,6 +74,7 @@ class IntroViewControllerTests: XCTestCase {
         XCTAssertEqual(subject.pageControl.currentPage, 2)
     }
 
+    @MainActor
     func testViewMovesToNextScreenAfterNotification() {
         let subject = createSubject()
         XCTAssertEqual(subject.pageControl.currentPage, 0)
@@ -91,7 +90,7 @@ class IntroViewControllerTests: XCTestCase {
     // MARK: - Private Helpers
     func createSubject(
         withCustomPrimaryActions: [OnboardingActions] = [.setDefaultBrowser, .syncSignIn, .requestNotifications],
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) -> IntroViewController {
         NimbusOnboardingTestingConfigUtility().setupNimbusWith(
@@ -104,7 +103,7 @@ class IntroViewControllerTests: XCTestCase {
         )
 
         let onboardingViewModel = NimbusOnboardingFeatureLayer().getOnboardingModel(for: .freshInstall)
-        let telemetryUtility = OnboardingTelemetryUtility(with: onboardingViewModel)
+        let telemetryUtility = OnboardingTelemetryUtility(with: onboardingViewModel, onboardingReason: .newUser)
         let viewModel = IntroViewModel(profile: MockProfile(),
                                        model: onboardingViewModel,
                                        telemetryUtility: telemetryUtility)

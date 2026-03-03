@@ -18,13 +18,13 @@ class EditBookmarkViewController: UIViewController,
 
     var currentWindowUUID: WindowUUID?
     var themeManager: any ThemeManager
-    var themeObserver: (any NSObjectProtocol)?
+    var themeListenerCancellable: Any?
     var notificationCenter: any NotificationProtocol
     private var theme: any Theme {
         return themeManager.getCurrentTheme(for: currentWindowUUID)
     }
 
-    private lazy var tableView: UITableView = .build { view in
+    private lazy var tableView: UITableView = .build({ view in
         view.delegate = self
         view.register(cellType: EditBookmarkCell.self)
         view.register(cellType: OneLineTableViewCell.self)
@@ -35,11 +35,18 @@ class EditBookmarkViewController: UIViewController,
                                                     size: CGSize(width: 0, height: UX.bookmarkCellTopPadding)))
         view.tableHeaderView = headerSpacerView
         view.keyboardDismissMode = .onDrag
-    }
+    }, {
+        if #available(iOS 26.0, *) {
+            UITableView(frame: .zero, style: .insetGrouped)
+        } else {
+            UITableView()
+        }
+    })
+
     private lazy var saveBarButton: UIBarButtonItem =  {
         let button = UIBarButtonItem(
             title: String.Bookmarks.Menu.EditBookmarkSave,
-            style: .done,
+            style: .plain,
             target: self,
             action: #selector(saveButtonAction)
         )
@@ -67,7 +74,6 @@ class EditBookmarkViewController: UIViewController,
         self.notificationCenter = notificationCenter
         self.currentWindowUUID = windowUUID
         super.init(nibName: nil, bundle: nil)
-        listenForThemeChange(view)
     }
 
     required init?(coder: NSCoder) {
@@ -90,13 +96,16 @@ class EditBookmarkViewController: UIViewController,
 
         dataSource.defaultRowAnimation = .fade
         reloadTableViewData()
+
+        listenForThemeChanges(withNotificationCenter: notificationCenter)
+        applyTheme()
     }
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         setTheme(theme)
         _ = viewModel.getBackNavigationButtonTitle
-        navigationController?.setNavigationBarHidden(false, animated: true)
+        navigationController?.setNavigationBarHidden(false, animated: false)
         navigationController?.interactivePopGestureRecognizer?.isEnabled = false
         onViewWillAppear?()
     }
@@ -112,7 +121,7 @@ class EditBookmarkViewController: UIViewController,
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         if let isDragging = transitionCoordinator?.isInteractive, !isDragging {
-            navigationController?.setNavigationBarHidden(true, animated: true)
+            navigationController?.setNavigationBarHidden(true, animated: false)
         }
         // Save when popping the view off the navigation stack (when in library)
         if isMovingFromParent {
@@ -122,7 +131,6 @@ class EditBookmarkViewController: UIViewController,
     }
 
     // MARK: - Setup
-
     private func setupSubviews() {
         view.addSubview(tableView)
         NSLayoutConstraint.activate([
@@ -172,6 +180,9 @@ class EditBookmarkViewController: UIViewController,
         navigationController?.navigationBar.tintColor = theme.colors.actionPrimary
         view.backgroundColor = theme.colors.layer1
         tableView.backgroundColor = theme.colors.layer1
+        if #available(iOS 26.0, *) {
+            saveBarButton.tintColor = theme.colors.textAccent
+        }
     }
 
     // MARK: - Configure Table View Cells

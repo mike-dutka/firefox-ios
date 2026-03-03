@@ -3,18 +3,17 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
-import Shared
 import WebKit
 import Glean
 
-public enum BasicSearchProvider: String {
+enum BasicSearchProvider: String {
     case google
     case duckduckgo
     case yahoo
     case bing
 }
 
-public struct SearchProviderModel {
+public struct SearchProviderModel: Sendable {
     typealias Predicate = (String) -> Bool
     let name: String
     let regexp: String
@@ -24,7 +23,7 @@ public struct SearchProviderModel {
     let followOnParams: [String]
     let extraAdServersRegexps: [String]
 
-    public static let searchProviderList = [
+    static let searchProviderList = [
         SearchProviderModel(
             name: BasicSearchProvider.google.rawValue,
             regexp: #"^https:\/\/www\.google\.(?:.+)\/search"#,
@@ -96,7 +95,7 @@ extension SearchProviderModel {
     }
 }
 
-class AdsTelemetryHelper: TabContentScript {
+final class AdsTelemetryHelper: TabContentScript {
     fileprivate weak var tab: Tab?
 
     class func name() -> String {
@@ -128,6 +127,7 @@ class AdsTelemetryHelper: TabContentScript {
         }
     }
 
+    @MainActor
     private func getProviderForMessage(message: WKScriptMessage) -> SearchProviderModel? {
         guard let body = message.body as? [String: Any], let url = body["url"] as? String else { return nil }
         for provider in SearchProviderModel.searchProviderList {
@@ -138,13 +138,13 @@ class AdsTelemetryHelper: TabContentScript {
         return nil
     }
 
-    // Tracking
+    // MARK: Tracking
 
-    public static func trackAdsFoundOnPage(providerName: String) {
+    static func trackAdsFoundOnPage(providerName: String) {
         GleanMetrics.BrowserSearch.withAds["provider-\(providerName)"].add()
     }
 
-    public static func trackAdsClickedOnPage(providerName: String) {
+    static func trackAdsClickedOnPage(providerName: String) {
         GleanMetrics.BrowserSearch.adClicks["provider-\(providerName)"].add()
     }
 }

@@ -2,18 +2,21 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import SwiftUI
 import Common
+import OnboardingKit
 import XCTest
 @testable import Client
 
+@MainActor
 final class LaunchCoordinatorTests: XCTestCase {
     private var profile: MockProfile!
     private var mockRouter: MockRouter!
     private var delegate: MockLaunchCoordinatorDelegate!
     let windowUUID: WindowUUID = .XCTestDefaultUUID
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         DependencyHelperMock().bootstrapDependencies()
         profile = MockProfile()
         LegacyFeatureFlagsManager.shared.initializeDeveloperFeatures(with: profile)
@@ -21,12 +24,12 @@ final class LaunchCoordinatorTests: XCTestCase {
         delegate = MockLaunchCoordinatorDelegate()
     }
 
-    override func tearDown() {
-        super.tearDown()
+    override func tearDown() async throws {
+        DependencyHelperMock().reset()
         profile = nil
         mockRouter = nil
         delegate = nil
-        AppContainer.shared.reset()
+        try await super.tearDown()
     }
 
     func testInitialState() {
@@ -83,10 +86,38 @@ final class LaunchCoordinatorTests: XCTestCase {
         XCTAssertNotNil(pushedVC as? IntroViewController)
     }
 
+    func testStart_introNotIphone_presentToModernUI() throws {
+        let introScreenManager = MockIntroScreenManager(isModernEnabled: true)
+        let subject = createSubject(isIphone: false)
+        subject.start(with: .intro(manager: introScreenManager))
+
+        XCTAssertEqual(mockRouter.presentCalled, 1)
+        XCTAssertEqual(mockRouter.setRootViewControllerCalled, 0)
+        let presentedViewController = try XCTUnwrap(mockRouter.presentedViewController)
+        XCTAssertTrue(
+            presentedViewController is
+            UIHostingController<OnboardingKit.OnboardingView<Client.OnboardingKitCardInfoModel>>
+        )
+    }
+
+    func testStart_introIsIphone_setRootViewToModernUI() throws {
+        let introScreenManager = MockIntroScreenManager(isModernEnabled: true)
+        let subject = createSubject(isIphone: true)
+        subject.start(with: .intro(manager: introScreenManager))
+
+        XCTAssertEqual(mockRouter.presentCalled, 1)
+        XCTAssertEqual(mockRouter.setRootViewControllerCalled, 0)
+        let pushedVC = try XCTUnwrap(mockRouter.presentedViewController)
+        XCTAssertTrue(
+            pushedVC is
+            UIHostingController<OnboardingKit.OnboardingView<Client.OnboardingKitCardInfoModel>>
+        )
+    }
+
     // MARK: - Update
     func testStart_updateNotIphone_present() throws {
         let onboardingModel = NimbusOnboardingFeatureLayer().getOnboardingModel(for: .upgrade)
-        let telemetryUtility = OnboardingTelemetryUtility(with: onboardingModel)
+        let telemetryUtility = OnboardingTelemetryUtility(with: onboardingModel, onboardingReason: .newUser)
         let viewModel = UpdateViewModel(profile: profile,
                                         model: onboardingModel,
                                         telemetryUtility: telemetryUtility,
@@ -102,7 +133,7 @@ final class LaunchCoordinatorTests: XCTestCase {
 
     func testStart_updateIsIphone_setRootView() throws {
         let onboardingModel = NimbusOnboardingFeatureLayer().getOnboardingModel(for: .upgrade)
-        let telemetryUtility = OnboardingTelemetryUtility(with: onboardingModel)
+        let telemetryUtility = OnboardingTelemetryUtility(with: onboardingModel, onboardingReason: .newUser)
         let viewModel = UpdateViewModel(profile: profile,
                                         model: onboardingModel,
                                         telemetryUtility: telemetryUtility,
@@ -202,7 +233,7 @@ final class LaunchCoordinatorTests: XCTestCase {
 
     // MARK: - Helpers
     private func createSubject(isIphone: Bool,
-                               file: StaticString = #file,
+                               file: StaticString = #filePath,
                                line: UInt = #line) -> LaunchCoordinator {
         let subject = LaunchCoordinator(
             router: mockRouter,

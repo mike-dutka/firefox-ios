@@ -10,7 +10,10 @@ import SwiftUI
 import Common
 
 protocol DevicePickerViewControllerDelegate: AnyObject {
+    @MainActor
     func devicePickerViewControllerDidCancel(_ devicePickerViewController: DevicePickerViewController)
+
+    @MainActor
     func devicePickerViewController(
         _ devicePickerViewController: DevicePickerViewController,
         didPickDevices devices: [RemoteDevice]
@@ -126,8 +129,10 @@ class DevicePickerViewController: UITableViewController {
         notification = NotificationCenter.default.addObserver(forName: Notification.Name.constellationStateUpdate,
                                                               object: nil,
                                                               queue: .main) { [weak self ] _ in
-            self?.loadList()
-            self?.refreshControl?.endRefreshing()
+            ensureMainThread { [self] in
+                self?.loadList()
+                self?.refreshControl?.endRefreshing()
+            }
         }
 
         RustFirefoxAccounts.shared.accountManager?.deviceConstellation()?.refreshState()
@@ -140,8 +145,16 @@ class DevicePickerViewController: UITableViewController {
     }
 
     deinit {
-        if let obj = notification {
-            NotificationCenter.default.removeObserver(obj)
+        // TODO: FXIOS-13097 This is a work around until we can leverage isolated deinits
+        guard Thread.isMainThread else {
+            assertionFailure("DevicePickerViewController was not deallocated on the main thread. Observer was not removed")
+            return
+        }
+
+        MainActor.assumeIsolated {
+            if let notification = notification {
+                NotificationCenter.default.removeObserver(notification)
+            }
         }
     }
 

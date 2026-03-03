@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import Common
 import Foundation
 
 /// This Activity Item Provider subclass does two things that are non-standard behaviour:
@@ -42,7 +41,7 @@ class TitleActivityItemProvider: UIActivityItemProvider, @unchecked Sendable {
         _ activityViewController: UIActivityViewController,
         itemForActivityType activityType: UIActivity.ActivityType?
     ) -> Any? {
-        // For excluded activites, we don't want to provide any content
+        // For excluded activities, we don't want to provide any content
         if let activityType = activityType, TitleActivityItemProvider.activityTypesToIgnore.contains(activityType) {
             return NSNull()
         } else if applySentFromFirefoxTreatment, activityType?.rawValue == ActivityIdentifiers.whatsApp {

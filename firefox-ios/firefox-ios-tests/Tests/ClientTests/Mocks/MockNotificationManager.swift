@@ -7,17 +7,20 @@ import Foundation
 
 class MockNotificationManager: NotificationManagerProtocol {
     let wasAuthorizationSuccessful = true
-    func requestAuthorization(completion: @escaping (Bool, Error?) -> Void) {
+    var requestAuthorizationCalled = false
+    var shouldGrantPermission = true
+    var errorToReturn: Error?
+
+    func requestAuthorization(completion: @escaping @Sendable (Bool, Error?) -> Void) {
+        requestAuthorizationCalled = true
+        completion(shouldGrantPermission, errorToReturn)
     }
 
-    func requestAuthorization(completion: @escaping (Result<Bool, Error>) -> Void) {
+    func requestAuthorization(completion: @escaping @Sendable (Result<Bool, Error>) -> Void) {
     }
 
     func requestAuthorization() async throws -> Bool {
         return wasAuthorizationSuccessful
-    }
-
-    func getNotificationSettings(sendTelemetry: Bool, completion: @escaping (UNNotificationSettings) -> Void) {
     }
 
     func getNotificationSettings(sendTelemetry: Bool) async -> UNNotificationSettings {
@@ -25,7 +28,7 @@ class MockNotificationManager: NotificationManagerProtocol {
     }
 
     var hasPermission = true
-    func hasPermission(completion: @escaping (Bool) -> Void) {
+    func hasPermission(completion: @escaping @Sendable (Bool) -> Void) {
         completion(hasPermission)
     }
 
@@ -58,11 +61,12 @@ class MockNotificationManager: NotificationManagerProtocol {
         scheduleWithIntervalWasCalled = true
     }
 
-    func findDeliveredNotifications(completion: @escaping ([UNNotification]) -> Void) {
+    func findDeliveredNotifications() async -> [UNNotification] {
+        return []
     }
 
-    func findDeliveredNotificationForId(id: String, completion: @escaping (UNNotification?) -> Void) {
-        completion(nil)
+    func findDeliveredNotificationForId(id: String) async -> UNNotification? {
+        return nil
     }
 
     var removeAllPendingNotificationsWasCalled = false

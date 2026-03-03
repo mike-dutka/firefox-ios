@@ -9,28 +9,45 @@ import Storage
 import UIKit
 import SwiftUI
 import Common
+import Glean
 
 protocol ToolBarActionMenuDelegate: AnyObject {
+    @MainActor
     func updateToolbarState()
+    @MainActor
     func addBookmark(urlString: String, title: String?, site: Site?)
 
     @discardableResult
+    @MainActor
     func openURLInNewTab(_ url: URL?, isPrivate: Bool) -> Tab
+    @MainActor
     func openNewTabFromMenu(focusLocationField: Bool, isPrivate: Bool)
-
+    @MainActor
     func showLibrary(panel: LibraryPanelType)
+    @MainActor
     func showViewController(viewController: UIViewController)
+    @MainActor
     func showToast(_ bookmarkURL: String?, _ title: String?, message: String, toastAction: MenuButtonToastAction)
+    @MainActor
     func showFindInPage()
+    @MainActor
     func showCustomizeHomePage()
+    @MainActor
     func showZoomPage(tab: Tab)
+    @MainActor
     func showCreditCardSettings()
+    @MainActor
     func showSignInView(fxaParameters: FxASignInViewParameters)
+    @MainActor
     func showFilePicker(fileURL: URL)
+    @MainActor
     func showEditBookmark()
+    @MainActor
+    func showTrackingProtection()
 }
 
 extension ToolBarActionMenuDelegate {
+    @MainActor
     func showToast(_ urlString: String? = nil, _ title: String? = nil, message: String, toastAction: MenuButtonToastAction) {
         showToast(urlString, title, message: message, toastAction: toastAction)
     }
@@ -54,11 +71,11 @@ enum MenuButtonToastAction {
 ///     - The home page menu, determined with isHomePage variable
 ///     - The file URL menu, shown when the user is on a url of type `file://`
 ///     - The site menu, determined by the absence of isHomePage and isFileURL
-class MainMenuActionHelper: PhotonActionSheetProtocol,
+@MainActor
+final class MainMenuActionHelper: PhotonActionSheetProtocol,
                             FeatureFlaggable,
                             CanRemoveQuickActionBookmark,
-                            AppVersionUpdateCheckerProtocol,
-                            BookmarksRefactorFeatureFlagProvider {
+                            AppVersionUpdateCheckerProtocol {
     typealias SendToDeviceDelegate = InstructionsViewDelegate & DevicePickerViewControllerDelegate
 
     private let isHomePage: Bool
@@ -85,6 +102,7 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
     ///   - buttonView: the view from which the menu will be shown
     ///   - toastContainer: the view hosting a toast alert
     ///   - showFXASyncAction: the closure that will be executed for the sync action in the library section
+
     init(profile: Profile,
          tabManager: TabManager,
          buttonView: UIButton,
@@ -105,7 +123,7 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
     }
 
     func getToolbarActions(navigationController: UINavigationController?,
-                           completion: @escaping ([[PhotonRowActions]]) -> Void) {
+                           completion: @escaping @MainActor ([[PhotonRowActions]]) -> Void) {
         var actions: [[PhotonRowActions]] = []
         let firstMiscSection = getFirstMiscSection(navigationController)
 
@@ -128,9 +146,9 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
                     self.getLastSection()
                 ])
 
-                DispatchQueue.main.async {
-                    completion(actions)
-                }
+                // Immutable copies need to be passed across async boundaries
+                let actions = actions
+                completion(actions)
             })
         }
     }
@@ -138,13 +156,14 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
     // MARK: - Update data
 
     private let dataQueue = DispatchQueue(label: "com.moz.mainMenuAction.queue")
-    private var isInReadingList = false
-    private var isBookmarked = false
-    private var isPinned = false
+    // TODO: FXIOS-13791 These properties need to be noniolsated because this work is put on its own queue
+    nonisolated(unsafe) private var isInReadingList = false
+    nonisolated(unsafe) private var isBookmarked = false
+    nonisolated(unsafe) private var isPinned = false
 
     /// Update data to show the proper menus related to the page
     /// - Parameter dataLoadingCompletion: Complete when the loading of data from the profile is done
-    private func updateData(dataLoadingCompletion: (() -> Void)? = nil) {
+    private func updateData(dataLoadingCompletion: (@MainActor () -> Void)? = nil) {
         var url: String?
 
         if let tabUrl = tabUrl, tabUrl.isReaderModeURL, let tabUrlDecoded = tabUrl.decodeReaderModeURL {
@@ -163,8 +182,7 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
         getIsPinned(url: url, group: group)
         getIsInReadingList(url: url, group: group)
 
-        let dataQueue = DispatchQueue.global()
-        group.notify(queue: dataQueue) {
+        group.notify(queue: .main) {
             dataLoadingCompletion?()
         }
     }
@@ -229,19 +247,22 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
         var section = [PhotonRowActions]()
 
         if !isHomePage && !isFileURL {
-            if featureFlags.isFeatureEnabled(.zoomFeature, checking: .buildOnly) {
-                let zoomAction = getZoomAction()
-                append(to: &section, action: zoomAction)
-            }
+            let zoomAction = getZoomAction()
+            append(to: &section, action: zoomAction)
 
             let findInPageAction = getFindInPageAction()
             append(to: &section, action: findInPageAction)
 
             let desktopSiteAction = getRequestDesktopSiteAction()
             append(to: &section, action: desktopSiteAction)
+
+            let trackingProtectionAction = getTrackingProtectionAction()
+            append(to: &section, action: trackingProtectionAction)
         }
 
-        if featureFlags.isFeatureEnabled(.nightMode, checking: .buildOnly) {
+        /// In the new experiment, where website theming is different from app theming homepage menu should not show
+        /// the website theming option, since it will follow the app theme.
+        if !(themeManager.isNewAppearanceMenuOn && isHomePage) {
             let nightModeAction = getNightModeAction()
             append(to: &section, action: nightModeAction)
         }
@@ -389,13 +410,23 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
         }.items
     }
 
+    private func getTrackingProtectionAction() -> PhotonRowActions {
+        return SingleActionViewModel(title: .SettingsTrackingProtectionSectionName,
+                                     iconString: StandardImageIdentifiers.Large.shieldCheckmark) { [weak self] _ in
+            let isPrivate = self?.selectedTab?.isPrivate ?? false
+            let extra = GleanMetrics.Toolbar.SiteInfoButtonTappedExtra(isPrivate: isPrivate,
+                                                                       isToolbar: false)
+            GleanMetrics.Toolbar.siteInfoButtonTapped.record(extra)
+            self?.delegate?.showTrackingProtection()
+        }.items
+    }
+
     private func getCopyAction() -> PhotonRowActions? {
         return SingleActionViewModel(title: .LegacyAppMenu.AppMenuCopyLinkTitleString,
                                      iconString: StandardImageIdentifiers.Large.link) { _ in
             TelemetryWrapper.recordEvent(category: .action, method: .tap, object: .copyAddress)
             if let url = self.selectedTab?.canonicalURL?.displayURL {
                 UIPasteboard.general.url = url
-                self.delegate?.showToast(message: .LegacyAppMenu.AppMenuCopyURLConfirmMessage, toastAction: .copyUrl)
             }
         }.items
     }
@@ -440,7 +471,7 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
     private func getHelpAction() -> PhotonRowActions {
         return SingleActionViewModel(title: .LegacyAppMenu.Help,
                                      iconString: StandardImageIdentifiers.Large.helpCircle) { _ in
-            if let url = URL(string: "https://support.mozilla.org/products/ios") {
+            if let url = SupportUtils.URLForGetHelp {
                 self.delegate?.openURLInNewTab(url, isPrivate: self.tabManager.selectedTab?.isPrivate ?? false)
             }
             TelemetryWrapper.recordEvent(category: .action, method: .tap, object: .help)
@@ -468,19 +499,30 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
         return openSettings
     }
 
+    private func getNightModeTitle(_ isNightModeOn: Bool) -> String {
+        if themeManager.isNewAppearanceMenuOn {
+            return isNightModeOn
+                ? .MainMenu.Submenus.Tools.WebsiteDarkModeOff
+                : .MainMenu.Submenus.Tools.WebsiteDarkModeOn
+        } else {
+            return isNightModeOn
+                ? .LegacyAppMenu.AppMenuTurnOffNightMode
+                : .LegacyAppMenu.AppMenuTurnOnNightMode
+        }
+    }
+
     private func getNightModeAction() -> [PhotonRowActions] {
         var items: [PhotonRowActions] = []
 
         let nightModeEnabled = NightModeHelper.isActivated()
-        let nightModeTitle: String = if nightModeEnabled {
-            .LegacyAppMenu.AppMenuTurnOffNightMode
-        } else {
-            .LegacyAppMenu.AppMenuTurnOnNightMode
-        }
+
+        let nightModeIcon: String = nightModeEnabled
+            ? StandardImageIdentifiers.Large.nightModeFill
+            : StandardImageIdentifiers.Large.nightMode
 
         let nightMode = SingleActionViewModel(
-            title: nightModeTitle,
-            iconString: StandardImageIdentifiers.Large.nightMode,
+            title: getNightModeTitle(nightModeEnabled),
+            iconString: nightModeIcon,
             isEnabled: nightModeEnabled
         ) { _ in
             NightModeHelper.toggle()
@@ -499,7 +541,7 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
     }
 
     private func syncMenuButton() -> PhotonRowActions? {
-        let action: (SingleActionViewModel) -> Void = { [weak self] action in
+        let action: @MainActor (SingleActionViewModel) -> Void = { [weak self] action in
             let fxaParams = FxALaunchParams(entrypoint: .browserMenu, query: [:])
             let parameters = FxASignInViewParameters(launchParameters: fxaParams,
                                                      flowType: .emailLoginFlow,
@@ -530,7 +572,7 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
 
         var iconURL: URL?
         if let str = rustAccount.userProfile?.avatarUrl,
-            let url = URL(string: str, invalidCharacters: false) {
+            let url = URL(string: str) {
             iconURL = url
         }
         let iconType: PhotonActionSheetIconType = needsReAuth ? .Image : .URL
@@ -611,22 +653,25 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
         return SingleActionViewModel(title: .LegacyAppMenu.AppMenuDownloadPDF,
                                      iconString: StandardImageIdentifiers.Large.folder) { _ in
             guard let tab = self.selectedTab, let temporaryDocument = tab.temporaryDocument else { return }
-                temporaryDocument.getURL { fileURL in
-                    DispatchQueue.main.async {
-                        guard let fileURL = fileURL else {return}
-                        self.delegate?.showFilePicker(fileURL: fileURL)
-                    }
+            temporaryDocument.download { fileURL in
+                DispatchQueue.main.async {
+                    guard let fileURL = fileURL else {return}
+                    self.delegate?.showFilePicker(fileURL: fileURL)
                 }
+            }
         }.items
     }
 
     /// Share the URL of a downloaded file (e.g. either a user-downloaded file being viewed in the webView, or a link with a
     /// non-HTML MIME type currently opened in the webView, such as a PDF).
     /// NOTE: Called from getShareFileAction (files in the browser) and getShareAction (websites)
+    @MainActor
     private func share(fileURL: URL, buttonView: UIView) {
         TelemetryWrapper.recordEvent(category: .action, method: .tap, object: .sharePageWith)
+
+        // Since this file is already downloaded, we don't have a remote URL to use for the "Send to Device" activity
         navigationHandler?.showShareSheet(
-            shareType: .file(url: fileURL),
+            shareType: .file(url: fileURL, remoteURL: nil),
             shareMessage: nil,
             sourceView: buttonView,
             sourceRect: nil,
@@ -635,7 +680,7 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
     }
 
     // MARK: Reading list
-
+    @MainActor
     private func getReadingListSection() -> [PhotonRowActions] {
         var section = [PhotonRowActions]()
 
@@ -667,7 +712,6 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
             guard let tab = self.selectedTab,
                   let url = self.tabUrl?.displayURL
             else { return }
-
             self.profile.readingList.createRecordWithURL(
                 url.absoluteString,
                 title: tab.title ?? "",
@@ -723,7 +767,7 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
 
     private func getBookmarkAction() -> SingleActionViewModel {
         guard isBookmarked else { return getAddBookmarkAction() }
-        return isBookmarkRefactorEnabled ? getEditBookmarkAction() : getRemoveBookmarkAction()
+        return getEditBookmarkAction()
     }
 
     private func getAddBookmarkAction() -> SingleActionViewModel {
@@ -745,14 +789,14 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
                                      iconString: StandardImageIdentifiers.Large.bookmarkSlash) { _ in
             guard let url = self.tabUrl?.displayURL else { return }
 
-            self.profile.places.deleteBookmarksWithURL(url: url.absoluteString).uponQueue(.main) { result in
-                guard result.isSuccess else { return }
-                self.delegate?.showToast(
-                    message: .LegacyAppMenu.RemoveBookmarkConfirmMessage,
-                    toastAction: .removeBookmark
-                )
-                self.removeBookmarkShortcut()
-            }
+            self.profile.places.deleteBookmarksWithURL(url: url.absoluteString)
+                .uponQueue(.main) { result in
+                    // FXIOS-13228 It should be safe to assumeIsolated here because of `.main` queue above
+                    MainActor.assumeIsolated {
+                        guard result.isSuccess else { return }
+                        self.removeBookmarkShortcut()
+                    }
+                }
             let bookmarksTelemetry = BookmarksTelemetry()
             bookmarksTelemetry.deleteBookmark(eventLabel: .pageActionMenu)
         }
@@ -779,11 +823,7 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
 
             let site = Site.createBasicSite(url: url.absoluteString, title: title)
 
-            self.profile.pinnedSites.addPinnedTopSite(site).uponQueue(.main) { result in
-                guard result.isSuccess else { return }
-                self.delegate?.showToast(message: .LegacyAppMenu.AddPinToShortcutsConfirmMessage, toastAction: .pinPage)
-            }
-
+            self.profile.pinnedSites.addPinnedTopSite(site)
             TelemetryWrapper.recordEvent(category: .action, method: .tap, object: .pinToTopSites)
         }
     }
@@ -796,20 +836,14 @@ class MainMenuActionHelper: PhotonActionSheetProtocol,
 
             let site = Site.createBasicSite(url: url.absoluteString, title: title)
 
-            self.profile.pinnedSites.removeFromPinnedTopSites(site).uponQueue(.main) { result in
-                if result.isSuccess {
-                    self.delegate?.showToast(
-                        message: .LegacyAppMenu.RemovePinFromShortcutsConfirmMessage,
-                        toastAction: .removePinPage
-                    )
-                }
-            }
+            self.profile.pinnedSites.removeFromPinnedTopSites(site)
             TelemetryWrapper.recordEvent(category: .action, method: .tap, object: .removePinnedSite)
         }
     }
 
     // MARK: Password
 
+    @MainActor
     private func getPasswordAction(navigationController: UINavigationController?) -> PhotonRowActions? {
         guard PasswordManagerListViewController.shouldShowAppMenuShortcut(forPrefs: profile.prefs) else { return nil }
         TelemetryWrapper.recordEvent(category: .action, method: .open, object: .logins)

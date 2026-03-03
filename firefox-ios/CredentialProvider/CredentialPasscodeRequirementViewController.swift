@@ -3,10 +3,10 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import UIKit
-import Shared
 import Common
 
 protocol CredentialPasscodeRequirementViewControllerDelegate: AnyObject {
+    @MainActor
     func credentialPasscodeRequirementViewControllerDidDismiss()
 }
 
@@ -64,7 +64,7 @@ class CredentialPasscodeRequirementViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        view.backgroundColor = UIColor.CredentialProvider.welcomeScreenBackgroundColor
+        view.backgroundColor = CredentialProvider.welcomeScreenBackgroundColor
 
         view.addSubviews(logoImageView, titleLabel, taglineLabel, warningLabel, cancelButton)
 

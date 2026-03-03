@@ -14,7 +14,8 @@ private let URLBeforePathRegex = try? NSRegularExpression(pattern: "^https?://([
  * Shared data source for the SearchViewController and the URLBar domain completion.
  * Since both of these use the same SQL query, we can perform the query once and dispatch the results.
  */
-final class SearchLoader: Loader<Cursor<Site>, SearchViewModel>, FeatureFlaggable {
+/// FIXME: FXIOS-14129 SearchLoader is not thread safe
+final class SearchLoader: Loader<Cursor<Site>, SearchViewModel>, FeatureFlaggable, @unchecked Sendable {
     fileprivate let profile: Profile
     fileprivate let autocompleteView: Autocompletable
     private let logger: Logger
@@ -30,17 +31,10 @@ final class SearchLoader: Loader<Cursor<Site>, SearchViewModel>, FeatureFlaggabl
         super.init()
     }
 
-    fileprivate lazy var topDomains: [String]? = {
-        guard let filePath = Bundle.main.path(forResource: "topdomains", ofType: "txt")
-        else { return nil }
-
-        return try? String(contentsOfFile: filePath).components(separatedBy: "\n")
-    }()
-
     fileprivate func getBookmarksAsSites(
         matchingSearchQuery query: String,
         limit: UInt,
-        completionHandler: @escaping (([Site]) -> Void)
+        completionHandler: @escaping (@Sendable ([Site]) -> Void)
     ) {
         profile.places.searchBookmarks(query: query, limit: limit).upon { result in
             guard let bookmarkItems = result.successValue else {
@@ -56,12 +50,12 @@ final class SearchLoader: Loader<Cursor<Site>, SearchViewModel>, FeatureFlaggabl
     private func getHistoryAsSites(
         matchingSearchQuery query: String,
         limit: Int,
-        completionHandler: @escaping (([Site]) -> Void)
+        completionHandler: @escaping (@Sendable ([Site]) -> Void)
     ) {
         profile.places.interruptReader()
-        profile.places.queryAutocomplete(matchingSearchQuery: query, limit: limit).upon { result in
+        profile.places.queryAutocomplete(matchingSearchQuery: query, limit: limit).upon { [logger] result in
             guard let historyItems = result.successValue else {
-                self.logger.log(
+                logger.log(
                     "Error searching history",
                     level: .warning,
                     category: .sync,
@@ -80,7 +74,8 @@ final class SearchLoader: Loader<Cursor<Site>, SearchViewModel>, FeatureFlaggabl
         }
     }
 
-    var query: String = "" {
+    @MainActor
+    var query = "" {
         didSet {
             let timerid = GleanMetrics.Awesomebar.queryTime.start()
             guard profile is BrowserProfile else {
@@ -95,38 +90,38 @@ final class SearchLoader: Loader<Cursor<Site>, SearchViewModel>, FeatureFlaggabl
                 return
             }
 
-            getBookmarksAsSites(matchingSearchQuery: query, limit: 5) { [weak self] bookmarks in
-                guard let self = self else { return }
+            getBookmarksAsSites(matchingSearchQuery: query, limit: 5) { bookmarks in
+                ensureMainThread { [weak self] in
+                    guard let query = self?.query else { return }
 
-                var queries = [bookmarks]
-                let historyHighlightsEnabled = self.featureFlags.isFeatureEnabled(
-                    .searchHighlights,
-                    checking: .buildOnly
-                )
-                if !historyHighlightsEnabled {
+                    var queries = [bookmarks]
+
                     let group = DispatchGroup()
                     group.enter()
-                    // Lets only add the history query if history highlights are not enabled
-                    self.getHistoryAsSites(matchingSearchQuery: self.query, limit: 100) { history in
-                        queries.append(history)
-                        group.leave()
-                    }
-                    _ = group.wait(timeout: .distantFuture)
-                }
 
-                DispatchQueue.main.async {
-                    self.updateUIWithBookmarksAsSitesResults(queries: queries,
-                                                             timerid: timerid,
-                                                             historyHighlightsEnabled: historyHighlightsEnabled,
-                                                             oldValue: oldValue)
+                    self?.getHistoryAsSites(matchingSearchQuery: query, limit: 100) { history in
+                        ensureMainThread {
+                            // Mutate local variable on the main thread for thread safety
+                            queries.append(history)
+                            group.leave()
+                        }
+                    }
+
+                    group.notify(queue: .main) {
+                        self?.updateUIWithBookmarksAsSitesResults(
+                            queries: queries,
+                            timerid: timerid,
+                            oldValue: oldValue
+                        )
+                    }
                 }
             }
         }
     }
 
+    @MainActor
     private func updateUIWithBookmarksAsSitesResults(queries: [[Site]],
                                                      timerid: TimerId,
-                                                     historyHighlightsEnabled: Bool,
                                                      oldValue: String) {
         let results = queries
         defer {
@@ -134,11 +129,8 @@ final class SearchLoader: Loader<Cursor<Site>, SearchViewModel>, FeatureFlaggabl
         }
 
         let bookmarksSites = results[safe: 0] ?? []
-        var combinedSites = bookmarksSites
-        if !historyHighlightsEnabled {
-            let historySites = results[safe: 1] ?? []
-            combinedSites += historySites
-        }
+        let historySites = results[safe: 1] ?? []
+        let combinedSites = bookmarksSites + historySites
 
         // Load the data in the table view.
         load(ArrayCursor(data: combinedSites))
@@ -161,23 +153,15 @@ final class SearchLoader: Loader<Cursor<Site>, SearchViewModel>, FeatureFlaggabl
                 return
             }
         }
-
-        // If there are no search history matches, try matching one of the Alexa top domains.
-        if let topDomains = topDomains {
-            for domain in topDomains {
-                if let completion = completionForDomain(domain) {
-                    autocompleteView.setAutocompleteSuggestion(completion)
-                    return
-                }
-            }
-        }
     }
 
+    @MainActor
     func setQueryWithoutAutocomplete(_ query: String) {
         skipNextAutocomplete = true
         self.query = query
     }
 
+    @MainActor
     fileprivate func completionForURL(_ url: String) -> String? {
         // Extract the pre-path substring from the URL. This should be more efficient than parsing via
         // NSURL since we need to only look at the beginning of the string.
@@ -206,8 +190,9 @@ final class SearchLoader: Loader<Cursor<Site>, SearchViewModel>, FeatureFlaggabl
         return completionForDomain(domain)
     }
 
+    @MainActor
     fileprivate func completionForDomain(_ domain: String) -> String? {
-        let domainWithDotPrefix: String = ".\(domain)"
+        let domainWithDotPrefix = ".\(domain)"
         if let range = domainWithDotPrefix.range(of: ".\(query)", options: .caseInsensitive, range: nil, locale: nil) {
             // We don't actually want to match the top-level domain ("com", "org", etc.) by itself, so
             // so make sure the result includes at least one ".".

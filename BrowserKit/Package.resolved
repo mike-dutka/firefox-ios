@@ -1,4 +1,5 @@
 {
+  "originHash" : "296a236f920c1e9d03078eb62076c82dbe012a6626942c71b98dfa691f0b8f3a",
   "pins" : [
     {
       "identity" : "dip",
@@ -7,6 +8,15 @@
       "state" : {
         "revision" : "c3b601df0ff22b06b6d5ff4943faf05c0bd3f9bb",
         "version" : "7.1.1"
+      }
+    },
+    {
+      "identity" : "down",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/johnxnguyen/Down.git",
+      "state" : {
+        "revision" : "f34b166be1f1db4aa8f573067e901d72f2a6be57",
+        "version" : "0.11.0"
       }
     },
     {
@@ -32,8 +42,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/onevcat/Kingfisher.git",
       "state" : {
-        "revision" : "2ef543ee21d63734e1c004ad6c870255e8716c50",
-        "version" : "7.12.0"
+        "revision" : "3db26ab625d194c38e68c1a40e43d1bc12743fe0",
+        "version" : "8.2.0"
       }
     },
     {
@@ -46,6 +56,15 @@
       }
     },
     {
+      "identity" : "swiftdraw",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swhitty/SwiftDraw",
+      "state" : {
+        "revision" : "2cfd97c753feafe23c767ad3cb4daaf5c5415272",
+        "version" : "0.18.3"
+      }
+    },
+    {
       "identity" : "swiftybeaver",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/SwiftyBeaver/SwiftyBeaver.git",
@@ -55,5 +74,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

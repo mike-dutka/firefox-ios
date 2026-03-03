@@ -27,7 +27,7 @@ private struct ReadingListTableViewCellUX {
 }
 
 class ReadingListTableViewCell: UITableViewCell, ThemeApplicable {
-    var title: String = "Example" {
+    var title = "Example" {
         didSet {
             titleLabel.text = title
             updateAccessibilityLabel()
@@ -57,7 +57,7 @@ class ReadingListTableViewCell: UITableViewCell, ThemeApplicable {
     }
     let titleLabel: UILabel = .build { label in
         label.numberOfLines = 2
-        label.font = LegacyDynamicFontHelper.defaultHelper.DeviceFont
+        label.font = FXFontStyles.Bold.body.scaledFont()
     }
     let hostnameLabel: UILabel = .build { label in
         label.numberOfLines = 1
@@ -166,14 +166,16 @@ class ReadingListTableViewCell: UITableViewCell, ThemeApplicable {
 
 class ReadingListPanel: UITableViewController,
                         LibraryPanel,
-                        Themeable {
+                        LibraryPanelContextMenu,
+                        Themeable,
+                        Notifiable {
     weak var libraryPanelDelegate: LibraryPanelDelegate?
     weak var navigationHandler: ReadingListNavigationHandler?
     let profile: Profile
     var state: LibraryPanelMainState
     var bottomToolbarItems = [UIBarButtonItem]()
     var themeManager: ThemeManager
-    var themeObserver: NSObjectProtocol?
+    var themeListenerCancellable: Any?
     var notificationCenter: NotificationProtocol
     let windowUUID: WindowUUID
     var currentWindowUUID: UUID? { windowUUID }
@@ -200,16 +202,15 @@ class ReadingListPanel: UITableViewController,
         self.state = .readingList
         super.init(nibName: nil, bundle: nil)
 
-        [ Notification.Name.FirefoxAccountChanged,
-          Notification.Name.DynamicFontChanged,
-          Notification.Name.DatabaseWasReopened ].forEach {
-            NotificationCenter.default.addObserver(
-                self,
-                selector: #selector(notificationReceived),
-                name: $0,
-                object: nil
-            )
-        }
+        startObservingNotifications(
+            withNotificationCenter: NotificationCenter.default,
+            forObserver: self,
+            observing: [
+                Notification.Name.FirefoxAccountChanged,
+                UIContentSizeCategory.didChangeNotification,
+                Notification.Name.DatabaseWasReopened
+            ]
+        )
     }
 
     required init!(coder aDecoder: NSCoder) {
@@ -248,22 +249,26 @@ class ReadingListPanel: UITableViewController,
         tableView.tableFooterView = UIView()
         tableView.dragDelegate = self
 
+        listenForThemeChanges(withNotificationCenter: notificationCenter)
         applyTheme()
-        listenForThemeChange(view)
     }
 
     private func currentTheme() -> Theme {
         return themeManager.getCurrentTheme(for: windowUUID)
     }
 
-    @objc
-    func notificationReceived(_ notification: Notification) {
+    // MARK: Notifiable
+    func handleNotifications(_ notification: Notification) {
         switch notification.name {
-        case .FirefoxAccountChanged, .DynamicFontChanged:
-            refreshReadingList()
+        case .FirefoxAccountChanged, UIContentSizeCategory.didChangeNotification:
+            ensureMainThread {
+                self.refreshReadingList()
+            }
         case .DatabaseWasReopened:
             if let dbName = notification.object as? String, dbName == "ReadingList.db" {
-                refreshReadingList()
+                ensureMainThread {
+                    self.refreshReadingList()
+                }
             }
         default:
             // no need to do anything at all
@@ -360,7 +365,7 @@ class ReadingListPanel: UITableViewController,
         }
         if let record = records?[indexPath.row] {
             cell.title = record.title
-            cell.url = URL(string: record.url, invalidCharacters: false)!
+            cell.url = URL(string: record.url)!
             cell.unread = record.unread
             cell.applyTheme(theme: currentTheme())
         }
@@ -404,7 +409,7 @@ class ReadingListPanel: UITableViewController,
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: false)
         if let record = records?[indexPath.row],
-            let url = URL(string: record.url, invalidCharacters: false),
+            let url = URL(string: record.url),
             let encodedURL = url.encodeReaderModeURL(WebServer.sharedInstance.baseReaderModeURL()) {
             // Mark the item as read
             profile.readingList.updateRecord(record, unread: false)
@@ -429,9 +434,8 @@ class ReadingListPanel: UITableViewController,
             )
             profile.readingList.deleteRecord(record, completion: { success in
                 guard success else { return }
-                self.records?.remove(at: indexPath.row)
-
                 DispatchQueue.main.async {
+                    self.records?.remove(at: indexPath.row)
                     self.tableView.deleteRows(at: [indexPath], with: .automatic)
                     // reshow empty state if no records left
                     if let records = self.records, records.isEmpty {
@@ -467,9 +471,9 @@ class ReadingListPanel: UITableViewController,
         tableView.backgroundColor = currentTheme().colors.layer1
         refreshReadingList()
     }
-}
 
-extension ReadingListPanel: LibraryPanelContextMenu {
+    // MARK: - LibraryPanelContextMenu
+
     func presentContextMenu(
         for site: Site,
         with indexPath: IndexPath,
@@ -511,7 +515,7 @@ extension ReadingListPanel: UITableViewDragDelegate {
         at indexPath: IndexPath
     ) -> [UIDragItem] {
         guard let site = getSiteDetails(for: indexPath),
-              let url = URL(string: site.url, invalidCharacters: false),
+              let url = URL(string: site.url),
               let itemProvider = NSItemProvider(contentsOf: url)
         else { return [] }
 

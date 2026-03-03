@@ -21,11 +21,17 @@ const WebcompatAllFramesAtDocumentStart = glob.sync(
 const AutofillAllFramesAtDocumentStart = glob.sync(
   "./firefox-ios/Client/Frontend/UserContent/UserScripts/AllFrames/AutofillAtDocumentStart/*.{js,mjs}"
 );
-const NightModeMainFrameAtDocumentEnd = glob.sync(
-  "./firefox-ios/Client/Frontend/UserContent/UserScripts/MainFrame/NightModeAtDocumentEnd/*.{js,mjs}"
+const NightModeAllFramesAtDocumentStart = glob.sync(
+  "./firefox-ios/Client/Frontend/UserContent/UserScripts/AllFrames/NightModeAtDocumentStart/*.{js,mjs}"
 );
 const AddressFormManager = glob.sync(
   "./firefox-ios/Client/Frontend/UserContent/UserScripts/AddressFormManager/*.{js,mjs}"
+);
+const TranslationsEngine = glob.sync(
+  "./firefox-ios/Client/Frontend/UserContent/UserScripts/TranslationsEngine/*.{js,mjs}"
+);
+const TranslationsEngineWorker = glob.sync(
+  "./firefox-ios/Client/Assets/CC_Script/translations-engine.worker.js"
 );
 
 // Ensure the first script loaded at document start is __firefox__.js
@@ -38,7 +44,7 @@ const needsFirefoxFile = {
   // to include __firefox__.js for the document end scripts.
   // ¯\_(ツ)_/¯
   AllFramesAtDocumentEnd,
-  NightModeMainFrameAtDocumentEnd,
+  NightModeAllFramesAtDocumentStart,
 };
 
 for (let [name, files] of Object.entries(needsFirefoxFile)) {
@@ -72,9 +78,14 @@ module.exports = {
     MainFrameAtDocumentStart,
     MainFrameAtDocumentEnd,
     WebcompatAllFramesAtDocumentStart,
-    NightModeMainFrameAtDocumentEnd,
+    NightModeAllFramesAtDocumentStart,
     AutofillAllFramesAtDocumentStart,
     AddressFormManager,
+    TranslationsEngine,
+    /// Use a custom name for the worker since it's fetched at runtime.
+    /// We can't override it via our CustomResourceURIWebpackPlugin.
+    /// This will generate `firefox-ios/Client/Assets/translations-engine.worker.js`
+    "translations-engine.worker":  TranslationsEngineWorker,
   },
   output: {
     filename: "[name].js",
@@ -97,5 +108,8 @@ module.exports = {
     alias: {
       Assets: path.resolve(__dirname, "firefox-ios/Client/Assets"),
     },
+  },
+  performance: {
+    hints: false,
   },
 };

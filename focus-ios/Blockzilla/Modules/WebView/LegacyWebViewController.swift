@@ -44,7 +44,7 @@ protocol LegacyWebControllerDelegate: AnyObject {
     func webController(_ controller: LegacyWebController, didUpdateFindInPageResults currentResult: Int?, totalResults: Int?)
 }
 
-class LegacyWebViewController: UIViewController, LegacyWebController {
+final class LegacyWebViewController: UIViewController, LegacyWebController {
     private enum ScriptHandlers: String, CaseIterable {
         case focusTrackingProtection
         case focusTrackingProtectionPostLoad
@@ -160,9 +160,9 @@ class LegacyWebViewController: UIViewController, LegacyWebController {
         // Focus on iPad, which means there could be some edge cases right now.
 
         if UIDevice.current.userInterfaceIdiom == .pad {
-            configuration.applicationNameForUserAgent = "Version/13.1 Safari/605.1.15"
+            configuration.applicationNameForUserAgent = "Version/18.6 Safari/605.1.15"
         } else {
-            configuration.applicationNameForUserAgent = "FxiOS/\(AppInfo.majorVersion) Mobile/15E148 Version/15.0"
+            configuration.applicationNameForUserAgent = "FxiOS/\(AppInfo.majorVersion) Mobile/15E148 Version/18.6"
         }
 
         if #available(iOS 15.0, *) {
@@ -428,6 +428,11 @@ extension LegacyWebViewController: WKNavigationDelegate {
         if let redirectedURL = navigationAction.request.url {
             adsTelemetryHelper.trackClickedAds(with: redirectedURL)
         }
+        // Bugzilla #1979804
+        if let scheme = navigationAction.request.url?.scheme, scheme.lowercased() == "fido" {
+            decisionHandler(.cancel, preferences)
+            return
+        }
 
         // If the user has asked for a specific content mode for this host, use that.
         if let hostName = navigationAction.request.url?.host, let preferredContentMode = contentModeForHost[hostName] {
@@ -474,6 +479,32 @@ extension LegacyWebViewController: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
         let response = navigationResponse.response
+
+        let isBinaryData = {
+            let octetStream = "application/octet-stream"
+            if let httpResponse = response as? HTTPURLResponse,
+               let typeStr = httpResponse.allHeaderFields["Content-Type"] as? String,
+               typeStr == octetStream {
+                return true
+            }
+            // Identical handling to Firefox, if no MIME type we assume octet stream
+            return (response.mimeType ?? octetStream) == octetStream
+        }()
+
+        if isBinaryData {
+            // Bugzilla #1976296; Binary content is blocked from loading on Focus.
+            decisionHandler(.cancel)
+            return
+        }
+
+        if let httpResponse = response as? HTTPURLResponse,
+           let contentDisposition = httpResponse.allHeaderFields["Content-Disposition"] as? String {
+            if contentDisposition.trimmingCharacters(in: .whitespaces).starts(with: "attachment") {
+                // Bugzilla #1976296
+                decisionHandler(.cancel)
+                return
+            }
+        }
 
         guard let responseMimeType = response.mimeType else {
             decisionHandler(.allow)

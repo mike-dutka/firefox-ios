@@ -2,15 +2,32 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>LiteLLMAPIKey</key>
+	<string>$(LITE_LLM_API_KEY)</string>
+	<key>LiteLLMAPIEndpoint</key>
+	<string>$(LITE_LLM_API_ENDPOINT)</string>
+	<key>LiteLLMAPIModel</key>
+	<string>$(LITE_LLM_API_MODEL)</string>
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>4fzdc2evr5.skadnetwork</string>
+		</dict>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>AdjustAppToken</key>
 	<string>$(ADJUST_APP_TOKEN)</string>
 	<key>AppIdentifierPrefix</key>
 	<string>$(APP_IDENTIFIER_PREFIX)</string>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>org.mozilla.ios.sync.part1</string>
+		<string>mdutka.ios.sync.part1</string>
 		<string>mdutka.ios.sync.part2</string>
-		<string>org.mozilla.ios.surface.notification.refresh</string>
+		<string>mdutka.ios.surface.notification.refresh</string>
 		<string>mdutka.ios.firefox.suggest.ingest</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
@@ -28,14 +45,14 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>136.0</string>
+	<string>$(APP_VERSION)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>org.mozilla.Client</string>
+			<string>mdutka.Client</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>$(MOZ_PUBLIC_URL_SCHEME)</string>
@@ -94,6 +111,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Firefox uses speech recognition to convert your voice to text for voice search.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Firefox uses your camera to scan QR codes and take photos and video.</string>
 	<key>NSFaceIDUsageDescription</key>
@@ -104,10 +123,12 @@
 	<string>Firefox uses your microphone to record and upload audio.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>This lets you save photos.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>QuickActionIntent</string>
-		<string>org.mozilla.ios.firefox.browsing</string>
+		<string>mdutka.ios.firefox.browsing</string>
 	</array>
 	<key>NimbusURL</key>
 	<string>$(NIMBUS_URL)</string>
@@ -159,14 +180,6 @@
 			<key>UIApplicationShortcutItemType</key>
 			<string>$(PRODUCT_BUNDLE_IDENTIFIER).NewPrivateTab</string>
 		</dict>
-		<dict>
-			<key>UIApplicationShortcutItemIconFile</key>
-			<string>qrCodeLarge</string>
-			<key>UIApplicationShortcutItemTitle</key>
-			<string>Scan QR Code</string>
-			<key>UIApplicationShortcutItemType</key>
-			<string>$(PRODUCT_BUNDLE_IDENTIFIER).QRCode</string>
-		</dict>
 	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
@@ -185,7 +198,7 @@
 		<string>armv7</string>
 	</array>
 	<key>UIStatusBarHidden</key>
-	<true/>
+	<false/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

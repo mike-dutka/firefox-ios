@@ -2,10 +2,9 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import Common
 import MozillaAppServices
-import Shared
 import XCTest
+import OnboardingKit
 
 @testable import Client
 
@@ -20,8 +19,8 @@ class NimbusOnboardingFeatureLayerTests: XCTestCase {
     }
 
     override func tearDown() {
-        super.tearDown()
         configUtility = nil
+        super.tearDown()
     }
 
     // MARK: - Test placeholder methods
@@ -46,7 +45,7 @@ class NimbusOnboardingFeatureLayerTests: XCTestCase {
         let layer = NimbusOnboardingFeatureLayer(with: MockNimbusMessagingHelperUtility())
         let subject = layer.getOnboardingModel(for: .freshInstall)
 
-        XCTAssertTrue(subject.isDismissable)
+        XCTAssertTrue(subject.isDismissible)
     }
 
     func testLayer_dismissable_isFalse() {
@@ -54,7 +53,7 @@ class NimbusOnboardingFeatureLayerTests: XCTestCase {
         let layer = NimbusOnboardingFeatureLayer(with: MockNimbusMessagingHelperUtility())
         let subject = layer.getOnboardingModel(for: .freshInstall)
 
-        XCTAssertFalse(subject.isDismissable)
+        XCTAssertFalse(subject.isDismissible)
     }
 
     // MARK: - Test A11yRoot
@@ -93,7 +92,7 @@ class NimbusOnboardingFeatureLayerTests: XCTestCase {
             return
         }
 
-        let expectedCard = OnboardingCardInfoModel(
+        let expectedCard = OnboardingKitCardInfoModel(
             cardType: .basic,
             name: CardElementNames.name + " 1",
             order: 10,
@@ -101,18 +100,19 @@ class NimbusOnboardingFeatureLayerTests: XCTestCase {
             body: CardElementNames.body + " 1",
             link: OnboardingLinkInfoModel(title: CardElementNames.linkTitle,
                                           url: URL(string: CardElementNames.linkURL)!),
-            buttons: OnboardingButtons(
-                primary: OnboardingButtonInfoModel(
+            buttons: OnboardingButtons<OnboardingActions>(
+                primary: OnboardingButtonInfoModel<OnboardingActions>(
                     title: CardElementNames.primaryButtonTitle,
                     action: .forwardOneCard),
-                secondary: OnboardingButtonInfoModel(
+                secondary: OnboardingButtonInfoModel<OnboardingActions>(
                     title: CardElementNames.secondaryButtonTitle,
                     action: .forwardOneCard)),
             multipleChoiceButtons: [],
             onboardingType: .freshInstall,
             a11yIdRoot: CardElementNames.a11yIDOnboarding,
             imageID: ImageIdentifiers.Onboarding.HeaderImages.welcomev106,
-            instructionsPopup: nil)
+            instructionsPopup: nil,
+            embededLinkText: [])
 
         XCTAssertEqual(subject.name, expectedCard.name)
         XCTAssertEqual(subject.title, expectedCard.title)

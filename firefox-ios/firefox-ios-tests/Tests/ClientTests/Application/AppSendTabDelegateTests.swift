@@ -5,26 +5,26 @@
 import XCTest
 @testable import Client
 
-@preconcurrency
+@MainActor
 final class AppFxACommandsTests: XCTestCase {
     private var applicationStateProvider: MockApplicationStateProvider!
     private var applicationHelper: MockApplicationHelper!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         self.applicationStateProvider = MockApplicationStateProvider()
         self.applicationHelper = MockApplicationHelper()
     }
 
-    override func tearDown() {
-        super.tearDown()
+    override func tearDown() async throws {
         self.applicationStateProvider = nil
         self.applicationHelper = nil
+        try await super.tearDown()
     }
 
     func testOpenSendTabs_inactiveState_doesntCallDeeplink() {
         applicationStateProvider.applicationState = .inactive
-        let url = URL(string: "https://mozilla.com", invalidCharacters: false)!
+        let url = URL(string: "https://mozilla.com")!
         let subject = createSubject()
         subject.openSendTabs(for: [url])
 
@@ -33,7 +33,7 @@ final class AppFxACommandsTests: XCTestCase {
 
     func testOpenSendTabs_backgroundState_doesntCallDeeplink() {
         applicationStateProvider.applicationState = .background
-        let url = URL(string: "https://mozilla.com", invalidCharacters: false)!
+        let url = URL(string: "https://mozilla.com")!
         let subject = createSubject()
         subject.openSendTabs(for: [url])
 
@@ -41,7 +41,7 @@ final class AppFxACommandsTests: XCTestCase {
     }
 
     func testOpenSendTabs_activeWithOneURL_callsDeeplink() {
-        let url = URL(string: "https://mozilla.com", invalidCharacters: false)!
+        let url = URL(string: "https://mozilla.com")!
         let subject = createSubject()
         subject.openSendTabs(for: [url])
 
@@ -51,7 +51,7 @@ final class AppFxACommandsTests: XCTestCase {
     }
 
     func testOpenSendTabs_activeWithMultipleURLs_callsDeeplink() {
-        let url = URL(string: "https://mozilla.com", invalidCharacters: false)!
+        let url = URL(string: "https://mozilla.com")!
         let subject = createSubject()
         subject.openSendTabs(for: [url, url, url])
 
@@ -59,44 +59,49 @@ final class AppFxACommandsTests: XCTestCase {
     }
 
     // MARK: - Close Remote Tabs Tests
-    func testCloseSendTabs_activeWithOneURL_callsDeeplink() async {
-        let url = URL(string: "https://mozilla.com", invalidCharacters: false)!
+    func testCloseSendTabs_activeWithOneURL_callsDeeplink() {
+        let url = URL(string: "https://mozilla.com")!
         let subject = createSubject()
-        let expectation = XCTestExpectation(description: "Close tabs called")
+
         subject.closeTabs(for: [url])
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            expectation.fulfill()
-            XCTAssertEqual(self.applicationHelper.closeTabsCalled, 1)
+
+        let predicate = NSPredicate { _, _ in
+            return self.applicationHelper.closeTabsCalled == 1
         }
-        await fulfillment(of: [expectation])
+        let exp = XCTNSPredicateExpectation(predicate: predicate, object: .none)
+        wait(for: [exp], timeout: 3.0)
+
+        XCTAssertEqual(applicationHelper.closeTabsCalled, 1)
     }
 
-    func testCloseSendTabs_activeWithMultipleURLs_callsDeeplink() async {
-        let url1 = URL(string: "https://example.com", invalidCharacters: false)!
-        let url2 = URL(string: "https://example.com/1", invalidCharacters: false)!
-        let url3 = URL(string: "https://example.com/2", invalidCharacters: false)!
+    func testCloseSendTabs_activeWithMultipleURLs_callsDeeplink() {
+        let url1 = URL(string: "https://example.com")!
+        let url2 = URL(string: "https://example.com/1")!
+        let url3 = URL(string: "https://example.com/2")!
         let subject = createSubject()
-        let expectation = XCTestExpectation(description: "Close tabs called multiple times")
+
         subject.closeTabs(for: [url1, url2, url3])
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            expectation.fulfill()
-            XCTAssertEqual(self.applicationHelper.closeTabsCalled, 1)
+
+        let predicate = NSPredicate { _, _ in
+            return self.applicationHelper.closeTabsCalled == 1
         }
-        await fulfillment(of: [expectation])
+        let exp = XCTNSPredicateExpectation(predicate: predicate, object: .none)
+        wait(for: [exp], timeout: 3.0)
+
+        XCTAssertEqual(applicationHelper.closeTabsCalled, 1)
     }
 
     // MARK: - Helper methods
 
     func createSubject() -> AppFxACommandsDelegate {
         let subject = AppFxACommandsDelegate(app: applicationStateProvider,
-                                             applicationHelper: applicationHelper,
-                                             mainQueue: MockDispatchQueue())
+                                             applicationHelper: applicationHelper)
         trackForMemoryLeaks(subject)
         return subject
     }
 }
 
 // MARK: MockApplicationStateProvider
-class MockApplicationStateProvider: ApplicationStateProvider {
+final class MockApplicationStateProvider: ApplicationStateProvider {
     var applicationState: UIApplication.State = .active
 }

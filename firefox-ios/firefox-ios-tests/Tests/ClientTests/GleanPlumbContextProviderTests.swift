@@ -12,20 +12,21 @@ class GleanPlumbContextProviderTests: XCTestCase {
     private var contextProvider: GleanPlumbContextProvider!
     private var profile: MockProfile!
 
-    override func setUp() {
-        super.setUp()
-        DependencyHelperMock().bootstrapDependencies()
+    override func setUp() async throws {
+        try await super.setUp()
+        await DependencyHelperMock().bootstrapDependencies()
         userDefaults = MockUserDefaults()
         profile = MockProfile()
         contextProvider = GleanPlumbContextProvider(profile: profile)
         contextProvider.userDefaults = userDefaults
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         profile = nil
         userDefaults = nil
         contextProvider = nil
-        super.tearDown()
+        DependencyHelperMock().reset()
+        try await super.tearDown()
     }
 
     func testNumberOfLaunches_withFirstLaunch() {

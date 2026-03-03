@@ -89,6 +89,41 @@ class OpenSearchEngineTests: XCTestCase {
         )
     }
 
+    func test_trendingURLForEngine_returnsExpectedURL() throws {
+        let searchEngine = OpenSearchEngine(
+            engineID: "Bing_Test",
+            shortName: "Bing",
+            telemetrySuffix: nil,
+            image: UIImage(),
+            searchTemplate: "some link",
+            suggestTemplate: nil,
+            trendingTemplate: "www.example.com",
+            isCustomEngine: true
+        )
+
+        let url = searchEngine.trendingURLForEngine()
+
+        XCTAssertNotNil(url)
+        XCTAssertEqual(url?.absoluteString, "www.example.com")
+    }
+
+    func test_trendingURLForEngine_withNoTrendingTemplate_returnsNil() throws {
+        let searchEngine = OpenSearchEngine(
+            engineID: "Bing_Test",
+            shortName: "Bing",
+            telemetrySuffix: nil,
+            image: UIImage(),
+            searchTemplate: "some link",
+            suggestTemplate: nil,
+            trendingTemplate: nil,
+            isCustomEngine: true
+        )
+
+        let url = searchEngine.trendingURLForEngine()
+
+        XCTAssertNil(url)
+    }
+
     /// For generating test `OpenSearchEngine` data.
     public enum TestSearchEngine {
         case youtube, wikipedia
@@ -135,16 +170,18 @@ class OpenSearchEngineTests: XCTestCase {
         return OpenSearchEngine(
             engineID: type.engineID,
             shortName: type.name,
+            telemetrySuffix: nil,
             image: testImage,
             searchTemplate: "some link",
             suggestTemplate: nil,
+            trendingTemplate: nil,
             isCustomEngine: true
         )
     }
 
     private var customFileEnginePath: String {
         get throws {
-            let sharedContainerIdentifier = "group.org.mozilla.ios.Fennec"
+            let sharedContainerIdentifier = "group.mdutka.ios.Fennec"
             let profileDirName = "profile.profile"
             let customSearchEnginesFileName = "customEngines.plist"
 
@@ -157,7 +194,7 @@ class OpenSearchEngineTests: XCTestCase {
                 directoryPath = (NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)[0])
             }
 
-            let fileAccessor = FileAccessor(rootPath: directoryPath)
+            let fileAccessor = MockFiles(rootPath: directoryPath)
             let profilePath = try fileAccessor.getAndEnsureDirectory() as NSString
             return profilePath.appendingPathComponent(customSearchEnginesFileName)
         }

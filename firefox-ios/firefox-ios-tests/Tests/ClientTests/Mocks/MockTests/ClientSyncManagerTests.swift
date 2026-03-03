@@ -5,8 +5,6 @@
 import XCTest
 import Foundation
 
-@testable import Client
-
 final class ClientSyncManagerTests: XCTestCase {
     private var sut: ClientSyncManagerSpy!
     private let engine = "creditcards"
@@ -17,8 +15,8 @@ final class ClientSyncManagerTests: XCTestCase {
     }
 
     override func tearDown() {
-        super.tearDown()
         sut = nil
+        super.tearDown()
     }
 
     func testCreditCardEngineEnablement_WhenMockDeclinedEnginesIsNilAndMockEngineEnabledIsFalse() {

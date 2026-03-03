@@ -6,6 +6,7 @@ import XCTest
 import Common
 @testable import Client
 
+@MainActor
 final class RemoteTabsCoordinatorTests: XCTestCase {
     private var mockProfile: MockProfile!
     private var mockRouter: MockRouter!
@@ -13,8 +14,8 @@ final class RemoteTabsCoordinatorTests: XCTestCase {
     private var qrDelegate: MockQRCodeViewControllerDelegate!
     let windowUUID: WindowUUID = .XCTestDefaultUUID
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         DependencyHelperMock().bootstrapDependencies()
         mockProfile = MockProfile()
         mockRouter = MockRouter(navigationController: MockNavigationController())
@@ -22,13 +23,13 @@ final class RemoteTabsCoordinatorTests: XCTestCase {
         qrDelegate = MockQRCodeViewControllerDelegate()
     }
 
-    override func tearDown() {
-        super.tearDown()
+    override func tearDown() async throws {
         mockProfile = nil
         mockRouter = nil
         mockApplicationHelper = nil
         qrDelegate = nil
         DependencyHelperMock().reset()
+        try await super.tearDown()
     }
 
     func testInitialState() {
@@ -74,7 +75,7 @@ final class RemoteTabsCoordinatorTests: XCTestCase {
     }
 
     // MARK: - Helpers
-    private func createSubject(file: StaticString = #file,
+    private func createSubject(file: StaticString = #filePath,
                                line: UInt = #line) -> RemoteTabsCoordinator {
         let subject = RemoteTabsCoordinator(profile: mockProfile,
                                             router: mockRouter,

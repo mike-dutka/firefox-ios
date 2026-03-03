@@ -2,7 +2,6 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import Common
 import XCTest
 
 @testable import Client
@@ -18,29 +17,46 @@ class NativeErrorPageFeatureFlagTests: XCTestCase {
     }
 
     override func tearDown() {
-        super.tearDown()
-
         subject = nil
+        super.tearDown()
     }
 
     func testFeatureFlag_WhenNativeErrorPageEnabled_ThenFeatureIsEnabled() {
         setupNimbusNativeErrorPageTesting(isEnabled: true,
-                                          noInternetConnectionErrorIsEnabled: true)
+                                          noInternetConnectionErrorIsEnabled: true,
+                                          otherErrorPagesIsEnabled: false)
         XCTAssertTrue(subject.isNativeErrorPageEnabled)
     }
 
     func testFeatureFlag_WhenNativeErrorPageDisabled_ThenFeatureIsDisabled() {
         setupNimbusNativeErrorPageTesting(isEnabled: false,
-                                          noInternetConnectionErrorIsEnabled: false)
+                                          noInternetConnectionErrorIsEnabled: false,
+                                          otherErrorPagesIsEnabled: false)
         XCTAssertFalse(subject.isNativeErrorPageEnabled)
+    }
+
+    func testFeatureFlag_WhenOtherErrorPagesEnabled_ThenFeatureIsEnabled() {
+        setupNimbusNativeErrorPageTesting(isEnabled: true,
+                                          noInternetConnectionErrorIsEnabled: true,
+                                          otherErrorPagesIsEnabled: true)
+        XCTAssertTrue(subject.isOtherErrorPagesEnabled)
+    }
+
+    func testFeatureFlag_WhenOtherErrorPagesDisabled_ThenFeatureIsDisabled() {
+        setupNimbusNativeErrorPageTesting(isEnabled: true,
+                                          noInternetConnectionErrorIsEnabled: true,
+                                          otherErrorPagesIsEnabled: false)
+        XCTAssertFalse(subject.isOtherErrorPagesEnabled)
     }
 
     // Helper
     private func setupNimbusNativeErrorPageTesting(isEnabled: Bool,
-                                                   noInternetConnectionErrorIsEnabled: Bool) {
+                                                   noInternetConnectionErrorIsEnabled: Bool,
+                                                   otherErrorPagesIsEnabled: Bool = false) {
         FxNimbus.shared.features.nativeErrorPageFeature.with { _, _ in
                 return NativeErrorPageFeature(enabled: isEnabled,
-                                              noInternetConnectionError: noInternetConnectionErrorIsEnabled)
+                                              noInternetConnectionError: noInternetConnectionErrorIsEnabled,
+                                              otherErrorPages: otherErrorPagesIsEnabled)
         }
     }
 }

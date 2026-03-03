@@ -5,15 +5,19 @@
 import Common
 import UIKit
 
-public enum ToolbarButtonGesture {
+public enum ToolbarButtonGesture: Sendable {
     case tap
     case longPress
 }
 
-class ToolbarButton: UIButton, ThemeApplicable, UIGestureRecognizerDelegate {
+class ToolbarButton: UIButton,
+                     ThemeApplicable,
+                     UIGestureRecognizerDelegate,
+                     Notifiable {
     private struct UX {
         static let verticalInset: CGFloat = 10
         static let horizontalInset: CGFloat = 10
+        static let horizontalTextInset: CGFloat = 5
         static let badgeIconSize = CGSize(width: 20, height: 20)
         static let defaultMinimumPressDuration: TimeInterval = 0.5
         static let minimumPressDurationWithLargeContentViewer: TimeInterval = 1.5
@@ -22,6 +26,8 @@ class ToolbarButton: UIButton, ThemeApplicable, UIGestureRecognizerDelegate {
     private var foregroundColorNormal: UIColor = .clear
     private var foregroundColorHighlighted: UIColor = .clear
     private var foregroundColorDisabled: UIColor = .clear
+    private var foregroundTitleColorNormal: UIColor = .clear
+    private var foregroundTitleColorHighlighted: UIColor = .clear
     private var backgroundColorNormal: UIColor = .clear
 
     private var badgeImageView: UIImageView?
@@ -32,6 +38,15 @@ class ToolbarButton: UIButton, ThemeApplicable, UIGestureRecognizerDelegate {
     private var notificationCenter: NotificationProtocol?
     private var largeContentViewerInteraction: UILargeContentViewerInteraction?
 
+    private var isTextButton = false
+    private var hasCustomColor = false
+    private var hasHighlightedColor = true
+    // Used to determine whether we want to generate a new image
+    // based on change in icon name
+    private var lastIconName: String?
+    // Cache the current element to avoid unnecessary reconfiguration.
+    private var currentElement: ToolbarElement?
+
     override init(frame: CGRect) {
         super.init(frame: frame)
 
@@ -40,20 +55,37 @@ class ToolbarButton: UIButton, ThemeApplicable, UIGestureRecognizerDelegate {
                                                                leading: UX.horizontalInset,
                                                                bottom: UX.verticalInset,
                                                                trailing: UX.horizontalInset)
+        titleLabel?.adjustsFontForContentSizeCategory = true
     }
 
     open func configure(
         element: ToolbarElement,
         notificationCenter: NotificationProtocol = NotificationCenter.default) {
         guard var config = configuration else { return }
+
+        // Skip reconfiguration if the element hasn't changed.
+        if let currentElement, currentElement == element { return }
+        currentElement = element
+
         removeLongPressGestureRecognizer()
         configureLongPressGestureRecognizerIfNeeded(for: element, notificationCenter: notificationCenter)
         configureCustomA11yActionIfNeeded(for: element)
         isSelected = element.isSelected
+        isTextButton = element.title != nil
+        hasCustomColor = element.hasCustomColor
+        hasHighlightedColor = element.hasHighlightedColor
+
         self.notificationCenter = notificationCenter
 
+        // TODO: FXIOS-13949 - To investigate if there's a better way to show loading spinner
+        if let isLoading = element.loadingConfig?.isLoading, isLoading {
+            makeLoadingButton()
+            loadingA11yLabel = element.loadingConfig?.a11yLabel
+        } else {
+            hideLoadingIcon()
+        }
         let image = imageConfiguredForRTL(for: element)
-        let action = UIAction(title: element.a11yLabel,
+        let action = UIAction(title: element.title ?? element.a11yLabel,
                               image: image,
                               handler: { [weak self] _ in
             guard let self else { return }
@@ -62,11 +94,26 @@ class ToolbarButton: UIButton, ThemeApplicable, UIGestureRecognizerDelegate {
         })
 
         config.image = image
+        config.title = element.title
+        config.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { incoming in
+            var outgoing = incoming
+            outgoing.font = FXFontStyles.Regular.callout.scaledFont()
+            return outgoing
+        }
+
+        if config.title != nil {
+            config.contentInsets = NSDirectionalEdgeInsets(top: UX.verticalInset,
+                                                           leading: UX.horizontalTextInset,
+                                                           bottom: UX.verticalInset,
+                                                           trailing: UX.horizontalTextInset)
+        }
+
         isEnabled = element.isEnabled
         isAccessibilityElement = true
         accessibilityIdentifier = element.a11yId
         accessibilityLabel = element.a11yLabel
         accessibilityHint = element.a11yHint
+
         // Remove all existing actions for .touchUpInside before adding the new one
         // This ensures that we do not accumulate multiple actions for the same event,
         // which can cause the action to be called multiple times when the button is tapped.
@@ -88,7 +135,7 @@ class ToolbarButton: UIButton, ThemeApplicable, UIGestureRecognizerDelegate {
         } else {
             // Remove badge & mask icons
             imageView?.subviews.forEach { view in
-                guard view as? UIImageView != nil else { return }
+                guard view is UIImageView else { return }
                 view.removeFromSuperview()
             }
         }
@@ -99,22 +146,20 @@ class ToolbarButton: UIButton, ThemeApplicable, UIGestureRecognizerDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        notificationCenter?.removeObserver(self)
-    }
-
     override public func updateConfiguration() {
         guard var updatedConfiguration = configuration else { return }
 
         switch state {
         case .highlighted:
-            updatedConfiguration.baseForegroundColor = foregroundColorHighlighted
+            updatedConfiguration.baseForegroundColor = isTextButton ?
+                                                        foregroundTitleColorHighlighted :
+                                                        foregroundColorHighlighted
         case .disabled:
             updatedConfiguration.baseForegroundColor = foregroundColorDisabled
         default:
-            updatedConfiguration.baseForegroundColor = isSelected ?
-                                                       foregroundColorHighlighted :
-                                                       foregroundColorNormal
+            let iconButtonColor = isSelected ? foregroundColorHighlighted : foregroundColorNormal
+            let textButtonColor = isSelected ? foregroundTitleColorHighlighted : foregroundTitleColorNormal
+            updatedConfiguration.baseForegroundColor = isTextButton ? textButtonColor : iconButtonColor
         }
 
         updatedConfiguration.background.backgroundColor = backgroundColorNormal
@@ -166,11 +211,10 @@ class ToolbarButton: UIButton, ThemeApplicable, UIGestureRecognizerDelegate {
         self.largeContentViewerInteraction = largeContentViewerInteraction
         addInteraction(largeContentViewerInteraction)
 
-        notificationCenter.addObserver(
-            self,
-            selector: #selector(largeContentViewerInteractionDidChange),
-            name: UILargeContentViewerInteraction.enabledStatusDidChangeNotification,
-            object: nil
+        startObservingNotifications(
+            withNotificationCenter: notificationCenter,
+            forObserver: self,
+            observing: [UILargeContentViewerInteraction.enabledStatusDidChangeNotification]
         )
     }
 
@@ -185,8 +229,49 @@ class ToolbarButton: UIButton, ThemeApplicable, UIGestureRecognizerDelegate {
     }
 
     private func imageConfiguredForRTL(for element: ToolbarElement) -> UIImage? {
-        let image = UIImage(named: element.iconName)?.withRenderingMode(.alwaysTemplate)
-        return element.isFlippedForRTL ? image?.imageFlippedForRightToLeftLayoutDirection() : image
+        // Avoid creating a new image if existing image exists and the icon name is the same
+        if element.iconName == lastIconName, let existingImage = configuration?.image {
+            return existingImage
+        }
+
+        guard let iconName = element.iconName, let baseImage = UIImage(named: iconName) else {
+            return nil
+        }
+        let image = element.templateModeForImage
+            ? baseImage.withRenderingMode(.alwaysTemplate)
+            : baseImage
+
+        lastIconName = element.iconName
+
+        return element.isFlippedForRTL ? image.imageFlippedForRightToLeftLayoutDirection() : image
+    }
+
+    // MARK: - Loading Icon for Translation Button
+    // TODO: FXIOS-13949 - To investigate if there's a better way to show loading spinner
+    private var spinner: UIActivityIndicatorView?
+    private var loadingA11yLabel: String?
+
+    private func makeLoadingButton(style: UIActivityIndicatorView.Style = .medium) {
+        if spinner == nil {
+            let loadingView = UIActivityIndicatorView(style: style)
+            loadingView.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(loadingView)
+            NSLayoutConstraint.activate([
+                loadingView.centerXAnchor.constraint(equalTo: centerXAnchor),
+                loadingView.centerYAnchor.constraint(equalTo: centerYAnchor)
+            ])
+            spinner = loadingView
+        }
+        spinner?.startAnimating()
+    }
+
+    private func hideLoadingIcon() {
+        if let loadingA11yLabel, spinner != nil && UIAccessibility.isVoiceOverRunning {
+            UIAccessibility.post(notification: .announcement, argument: loadingA11yLabel)
+        }
+        spinner?.stopAnimating()
+        spinner?.removeFromSuperview()
+        spinner = nil
     }
 
     private func removeLongPressGestureRecognizer() {
@@ -223,24 +308,30 @@ class ToolbarButton: UIButton, ThemeApplicable, UIGestureRecognizerDelegate {
         }
     }
 
-    @objc
-    private func largeContentViewerInteractionDidChange() {
-        setMinimumPressDuration()
+    // MARK: Notifiable
+    func handleNotifications(_ notification: Notification) {
+        guard notification.name == UILargeContentViewerInteraction.enabledStatusDidChangeNotification else { return }
+
+        ensureMainThread {
+            self.setMinimumPressDuration()
+        }
     }
 
     // MARK: - ThemeApplicable
     public func applyTheme(theme: Theme) {
         let colors = theme.colors
-        foregroundColorNormal = colors.iconPrimary
-        foregroundColorHighlighted = colors.actionPrimary
+        foregroundColorNormal = hasCustomColor ? colors.iconSecondary : colors.iconPrimary
+        foregroundColorHighlighted = hasHighlightedColor ? colors.actionPrimary : foregroundColorNormal
         foregroundColorDisabled = colors.iconDisabled
         backgroundColorNormal = .clear
+
+        foregroundTitleColorNormal = colors.textAccent
+        foregroundTitleColorHighlighted = colors.actionPrimaryHover
 
         badgeImageView?.layer.borderColor = colors.layer1.cgColor
         badgeImageView?.backgroundColor = maskImageView == nil ? colors.layer1 : .clear
         badgeImageView?.tintColor = maskImageView == nil ? .clear : colors.actionInformation
         maskImageView?.tintColor = colors.layer1
-
         setNeedsUpdateConfiguration()
     }
 

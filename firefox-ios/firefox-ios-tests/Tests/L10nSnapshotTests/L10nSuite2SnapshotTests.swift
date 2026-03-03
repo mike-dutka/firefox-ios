@@ -6,6 +6,7 @@ import XCTest
 import Common
 
 class L10nSuite2SnapshotTests: L10nBaseSnapshotTests {
+    @MainActor
     let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
     @MainActor
     func testPanelsEmptyState() {
@@ -14,9 +15,21 @@ class L10nSuite2SnapshotTests: L10nBaseSnapshotTests {
         navigator.goto(LibraryPanel_Bookmarks)
         snapshot("PanelsEmptyState-LibraryPanels.Bookmarks")
         // Tap on each of the library buttons
-        for i in 1...3 {
-            app.segmentedControls["librarySegmentControl"].buttons.element(boundBy: i).tap()
-            snapshot("PanelsEmptyState-\(i)")
+        if #unavailable(iOS 26) {
+            for i in 1...3 {
+                app.segmentedControls["librarySegmentControl"].buttons.element(boundBy: i).tap()
+                snapshot("PanelsEmptyState-\(i)")
+            }
+        } else {
+            // iOS 26: Unable to tap buttons under toolbar
+            app.navigationBars.buttons[AccessibilityIdentifiers.LibraryPanels.topRightButton].waitAndTap()
+            navigator.nowAt(NewTabScreen)
+            navigator.goto(LibraryPanel_History)
+            snapshot("PanelsEmptyState-1")
+            app.navigationBars.buttons[AccessibilityIdentifiers.LibraryPanels.topRightButton].waitAndTap()
+            navigator.nowAt(NewTabScreen)
+            navigator.goto(LibraryPanel_Downloads)
+            snapshot("PanelsEmptyState-2")
         }
     }
 
@@ -84,6 +97,8 @@ class L10nSuite2SnapshotTests: L10nBaseSnapshotTests {
         mozWaitForElementToExist(app.buttons[AccessibilityIdentifiers.Toolbar.settingsMenuButton])
         navigator.goto(BrowserTabMenu)
         snapshot("MenuOnWebPage-03")
+        navigator.goto(BrowserTabMenuMore)
+        snapshot("MenuOnWebPage-04")
     }
 
     @MainActor
@@ -121,6 +136,7 @@ class L10nSuite2SnapshotTests: L10nBaseSnapshotTests {
         navigator.goto(SettingsScreen)
         mozWaitForElementToExist(app.cells["Search"])
         app.cells["Search"].swipeUp()
+        app.cells["AutofillsPasswordsSettings"].waitAndTap(timeout: 15)
         app.cells["Logins"].waitAndTap(timeout: 15)
 
         // Press continue button on the password onboarding if it's shown
@@ -131,6 +147,7 @@ class L10nSuite2SnapshotTests: L10nBaseSnapshotTests {
         let passcodeInput = springboard.secureTextFields.firstMatch
         passcodeInput.waitAndTap(timeout: 30)
         passcodeInput.typeText("foo\n")
+        mozWaitForElementToNotExist(passcodeInput)
 
         mozWaitForElementToExist(app.tables["Login List"], timeout: 25)
         mozWaitForElementToExist(app.buttons["addCredentialButton"], timeout: 20)

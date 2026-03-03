@@ -3,19 +3,19 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import Foundation
-import Shared
 import Storage
 import XCTest
 
 @testable import Client
 
+@MainActor
 class SearchViewControllerTest: XCTestCase {
     var profile: MockProfile!
     var searchEnginesManager: SearchEnginesManager!
     var searchViewController: SearchViewController!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         DependencyHelperMock().bootstrapDependencies()
         profile = MockProfile(firefoxSuggest: MockRustFirefoxSuggest())
         LegacyFeatureFlagsManager.shared.initializeDeveloperFeatures(with: profile)
@@ -32,7 +32,9 @@ class SearchViewControllerTest: XCTestCase {
             isBottomSearchBar: false,
             profile: profile,
             model: searchEnginesManager,
-            tabManager: MockTabManager()
+            tabManager: MockTabManager(),
+            trendingSearchClient: MockTrendingSearchClient(),
+            recentSearchProvider: MockRecentSearchProvider()
         )
 
         searchViewController = SearchViewController(
@@ -42,9 +44,9 @@ class SearchViewControllerTest: XCTestCase {
         )
     }
 
-    override func tearDown() {
-        super.tearDown()
+    override func tearDown() async throws {
         profile = nil
+        try await super.tearDown()
     }
 
     func testHistoryAndBookmarksAreFilteredWhenShowSponsoredSuggestionsIsTrue() {

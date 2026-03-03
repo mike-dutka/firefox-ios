@@ -7,54 +7,59 @@ import Glean
 
 @testable import Client
 
+@MainActor
 class OnboardingTelemetryDelegationTests: XCTestCase {
     var nimbusUtility: NimbusOnboardingTestingConfigUtility!
     typealias cards = NimbusOnboardingTestingConfigUtility.CardOrder
 
-    override func setUp() {
-        super.setUp()
-        // Due to changes allow certain custom pings to implement their own opt-out
-        // independent of Glean, custom pings may need to be registered manually in
-        // tests in order to puth them in a state in which they can collect data.
-        Glean.shared.registerPings(GleanMetrics.Pings.shared)
-        Glean.shared.resetGlean(clearStores: true)
-        DependencyHelperMock().bootstrapDependencies()
+    override func setUp() async throws {
+        try await super.setUp()
+        Self.setupTelemetry(with: MockProfile())
         nimbusUtility = NimbusOnboardingTestingConfigUtility()
         nimbusUtility.setupNimbus(withOrder: cards.allCards)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         nimbusUtility = nil
-        DependencyHelperMock().reset()
-        super.tearDown()
+        Self.tearDownTelemetry()
+        try await super.tearDown()
     }
 
-    func testOnboardingCard_viewDidAppear_viewSendsCardView() {
+    func testOnboardingCard_viewDidAppear_viewSendsCardView() throws {
         let subject = createSubject()
-        guard let firstVC = subject.pageController.viewControllers?.first as? OnboardingBasicCardViewController else {
+        guard let firstVC = subject.pageController.viewControllers?.first
+            as? OnboardingBasicCardViewController<OnboardingKitCardInfoModel> else {
             XCTFail("expected a view controller, but got nothing")
             return
         }
-        firstVC.viewDidAppear(true)
 
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Onboarding.cardView)
+        // On iOS 17 and earlier, the system already triggers a viewDidAppear call,
+        // so calling it manually would cause the expected count to fail.
+        // In iOS 18 and later, this behavior changed and we must call viewDidAppear manually.
+        if #available(iOS 18, *) {
+            firstVC.viewDidAppear(true)
+        }
+
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Onboarding.cardView)
     }
 
-    func testOnboardingCard_callsPrimaryButtonTap() {
+    func testOnboardingCard_callsPrimaryButtonTap() throws {
         let subject = createSubject()
-        guard let firstVC = subject.pageController.viewControllers?.first as? OnboardingBasicCardViewController else {
+        guard let firstVC = subject.pageController.viewControllers?.first
+            as? OnboardingBasicCardViewController<OnboardingKitCardInfoModel> else {
             XCTFail("expected a view controller, but got nothing")
             return
         }
 
         firstVC.primaryAction()
 
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Onboarding.primaryButtonTap)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Onboarding.primaryButtonTap)
     }
 
-    func testOnboardingCard_callsSecondaryButtonTap() {
+    func testOnboardingCard_callsSecondaryButtonTap() throws {
         let subject = createSubject()
-        guard let firstVC = subject.pageController.viewControllers?.first as? OnboardingBasicCardViewController else {
+        guard let firstVC = subject.pageController.viewControllers?.first
+            as? OnboardingBasicCardViewController<OnboardingKitCardInfoModel> else {
             XCTFail("expected a view controller, but got nothing")
             return
         }
@@ -64,31 +69,32 @@ class OnboardingTelemetryDelegationTests: XCTestCase {
             completionIfLastCard: { })
         subject.pageChanged(from: firstVC.viewModel.name)
         guard let result = subject.pageController
-            .viewControllers?[subject.pageControl.currentPage] as? OnboardingBasicCardViewController else {
+            .viewControllers?[subject.pageControl.currentPage]
+            as? OnboardingBasicCardViewController<OnboardingKitCardInfoModel> else {
             XCTFail("expected a view controller, but got nothing")
             return
         }
 
         result.secondaryAction()
 
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Onboarding.secondaryButtonTap)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Onboarding.secondaryButtonTap)
     }
 
-    func testOnboardingCard_callsCloseTap() {
+    func testOnboardingCard_callsCloseTap() throws {
         let subject = createSubject()
 
         subject.closeOnboarding()
 
-        testEventMetricRecordingSuccess(metric: GleanMetrics.Onboarding.closeTap)
+        try testEventMetricRecordingSuccess(metric: GleanMetrics.Onboarding.closeTap)
     }
 
     // MARK: - Private Helpers
     func createSubject(
-        file: StaticString = #file,
+        file: StaticString = #filePath,
         line: UInt = #line
     ) -> IntroViewController {
         let onboardingViewModel = NimbusOnboardingFeatureLayer().getOnboardingModel(for: .freshInstall)
-        let telemetryUtility = OnboardingTelemetryUtility(with: onboardingViewModel)
+        let telemetryUtility = OnboardingTelemetryUtility(with: onboardingViewModel, onboardingReason: .newUser)
         let viewModel = IntroViewModel(profile: MockProfile(),
                                        model: onboardingViewModel,
                                        telemetryUtility: telemetryUtility)
