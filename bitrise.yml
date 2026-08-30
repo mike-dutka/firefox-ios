@@ -61,11 +61,11 @@ workflows:
     - 2_certificate_and_profile
     - 3_provisioning_and_npm_installation
     steps:
-    - activate-ssh-key@4:
+    - activate-ssh-key@4.1.1:
         run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
-    - restore-spm-cache@1:
+    - restore-spm-cache@3.0.1:
         is_always_run: true
-    - script@1.1:
+    - script@1.2.1:
         title: Build for Testing
         inputs:
         - content: |
@@ -118,10 +118,10 @@ workflows:
             echo "Files copied to $BITRISE_DEPLOY_DIR:"
             ls -lh "$BITRISE_DEPLOY_DIR"
 
-    - deploy-to-bitrise-io@2.9.2:
+    - deploy-to-bitrise-io@2.24.0:
         is_always_run: true
 
-    - slack@4.2.1:
+    - slack@4.3.0:
         is_always_run: true
         inputs:
         - title: ''
@@ -152,10 +152,10 @@ workflows:
     steps:
     - activate-ssh-key@4.1.1:
         run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
-    - restore-spm-cache@2.1.1:
+    - restore-spm-cache@3.0.1:
         is_always_run: true
-    - activate-build-cache-for-xcode@0: {}
-    - xcode-build-for-test@3:
+    - activate-build-cache-for-xcode@0.20.5: {}
+    - xcode-build-for-test@3.4.0:
         inputs:
         - scheme: Fennec
         - configuration: Fennec_Testing
@@ -216,7 +216,7 @@ workflows:
         - xcodebuild_options: '"COMPILER_INDEX_STORE_ENABLE=NO" "CODE_SIGN_IDENTITY=" "CODE_SIGNING_REQUIRED=NO" "CODE_SIGNING_ALLOWED=NO"'
         - xctestrun: $BITRISE_TEST_BUNDLE_PATH/Fennec_UnitTest_iphonesimulator26.2-arm64.xctestrun
         - maximum_test_repetitions: 2
-    - xcode-test-shard-calculation@0:
+    - xcode-test-shard-calculation@0.2.1:
         run_if: '{{enveq "BITRISE_TEST_BUNDLE_PATH" "" | not}}'
         inputs:
         - product_path: $BITRISE_XCTESTRUN_SMOKE_TEST_FILE_PATH
@@ -225,9 +225,9 @@ workflows:
         outputs:
         - BITRISE_TEST_SHARDS_PATH: BITRISE_TEST_SHARDS_PATH_FIREFOX
         is_always_run: true
-    - save-spm-cache@1.3.1:
+    - save-spm-cache@1.4.0:
         is_always_run: true
-    - script@1.1.1:
+    - script@1.2.1:
         title: Clean before deploying
         timeout: 360
         inputs:
@@ -244,7 +244,7 @@ workflows:
 
             echo "Removing unit test xcresult"
             rm -f "$BITRISE_DEPLOY_DIR/Test-Fennec_UnitTest_iphonesimulator18.6-arm64.xcresult.zip"
-    - deploy-to-bitrise-io@2.10.0:
+    - deploy-to-bitrise-io@2.24.0:
         run_if: '{{enveq "BITRISE_TEST_BUNDLE_PATH" "" | not}}'
         inputs:
         - pipeline_intermediate_files: |-
@@ -252,7 +252,7 @@ workflows:
             BITRISE_TEST_BUNDLE_PATH
             BITRISE_XCTESTRUN_SMOKE_TEST_FILE_PATH
         is_always_run: true
-    - script@1.1.1:
+    - script@1.2.1:
         title: Run Danger 2
         timeout: 360
         inputs:
@@ -277,7 +277,7 @@ workflows:
 
             echo "Running Danger"
             swift run danger-swift ci
-    - slack@4.2.1:
+    - slack@4.3.0:
         is_always_run: true
         inputs:
         - title: ''
@@ -299,7 +299,7 @@ workflows:
             App|${BITRISE_APP_URL}
             #mobile-testeng|https://mozilla.slack.com/archives/C02KDDS9QM9
             Mana|https://mana.mozilla.org/wiki/display/MTE/Mobile+Test+Engineering
-    - slack@4.2.1:
+    - slack@4.3.0:
         is_always_run: true
         run_if: '{{getenv "NEW_RC_VERSION" | eq "New_RC_Version" | and .IsBuildFailed}}'
         inputs:
@@ -312,7 +312,7 @@ workflows:
     - 1_git_clone_and_post_clone
     - 2_certificate_and_profile
     steps:
-    - pull-intermediate-files@1: {}
+    - pull-intermediate-files@1.3.7: {}
     - xcode-test-without-building@0.5.1:
         timeout: 1200
         inputs:
@@ -320,15 +320,15 @@ workflows:
         - destination: platform=iOS Simulator,name=iPhone 17,OS=26.2
         - xcodebuild_options: '"COMPILER_INDEX_STORE_ENABLE=NO"'
         - xctestrun: $BITRISE_TEST_BUNDLE_PATH/Fennec_Smoketest_iphonesimulator26.2-arm64.xctestrun
-    - deploy-to-bitrise-io@2.10.0: {}
+    - deploy-to-bitrise-io@2.24.0: {}
   firefox_scheme_build_for_test:
     description: Build Firefox scheme and shard XCUITests for parallel execution
     steps:
-    - activate-ssh-key@4:
+    - activate-ssh-key@4.1.1:
         run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
     - git-clone@6.2: {}
-    - certificate-and-profile-installer@1: {}
-    - restore-spm-cache@1:
+    - certificate-and-profile-installer@1.11.6: {}
+    - restore-spm-cache@3.0.1:
         is_always_run: true
     - script@1.2.1:
         title: Run bootstrap
@@ -338,7 +338,7 @@ workflows:
             set -e
             set -x
             ./bootstrap.sh
-    - xcode-build-for-test@3:
+    - xcode-build-for-test@3.4.0:
         inputs:
         - scheme: Firefox
         - configuration: Firefox
@@ -365,7 +365,7 @@ workflows:
 
             echo "Found Smoketest .xctestrun: $SMOKE_UI_XCTESTRUN"
             envman add --key BITRISE_XCTESTRUN_SMOKE_TEST_FILE_PATH --value "$SMOKE_UI_XCTESTRUN"
-    - xcode-test-shard-calculation@0:
+    - xcode-test-shard-calculation@0.2.1:
         run_if: '{{enveq "BITRISE_TEST_BUNDLE_PATH" "" | not}}'
         inputs:
         - product_path: $BITRISE_XCTESTRUN_SMOKE_TEST_FILE_PATH
@@ -374,7 +374,7 @@ workflows:
         outputs:
         - BITRISE_TEST_SHARDS_PATH: BITRISE_TEST_SHARDS_PATH_FIREFOX_SCHEME
         is_always_run: true
-    - deploy-to-bitrise-io@2.10.0:
+    - deploy-to-bitrise-io@2.24.0:
         run_if: '{{enveq "BITRISE_TEST_BUNDLE_PATH" "" | not}}'
         inputs:
         - pipeline_intermediate_files: |-
@@ -388,28 +388,28 @@ workflows:
     - 1_git_clone_and_post_clone
     - 2_certificate_and_profile
     steps:
-    - pull-intermediate-files@1: {}
+    - pull-intermediate-files@1.3.7: {}
     - xcode-test-without-building@0.5.1:
         inputs:
         - only_testing: $BITRISE_TEST_SHARDS_PATH_FIREFOX_SCHEME/$BITRISE_IO_PARALLEL_INDEX
         - destination: platform=iOS Simulator,name=iPhone 17,OS=26.2
         - xcodebuild_options: '"COMPILER_INDEX_STORE_ENABLE=NO"'
         - xctestrun: $BITRISE_TEST_BUNDLE_PATH/Firefox_Smoketest_iphonesimulator26.2-arm64-x86_64.xctestrun
-    - deploy-to-bitrise-io@2.10.0: {}
+    - deploy-to-bitrise-io@2.24.0: {}
   firefox_scheme_smoke_tests:
     description: Run XCUITests on Firefox scheme (non-parallelized, for standalone use)
     before_run:
     - firefox_scheme_build_for_test
     steps:
-    - pull-intermediate-files@1: {}
+    - pull-intermediate-files@1.3.7: {}
     - xcode-test-without-building@0.5.1:
         inputs:
         - destination: platform=iOS Simulator,name=iPhone 17,OS=26.2
         - xcodebuild_options: '"COMPILER_INDEX_STORE_ENABLE=NO" "CODE_SIGN_IDENTITY=" "CODE_SIGNING_REQUIRED=NO" "CODE_SIGNING_ALLOWED=NO"'
         - xctestrun: $BITRISE_XCTESTRUN_SMOKE_TEST_FILE_PATH
         - maximum_test_repetitions: 2
-    - deploy-to-bitrise-io@2.10.0: {}
-    - slack@4.2.1:
+    - deploy-to-bitrise-io@2.24.0: {}
+    - slack@4.3.0:
         run_if: ".IsBuildFailed"
         inputs:
         - channel: "#mobile-alerts-ios"
@@ -418,11 +418,11 @@ workflows:
   firefox_beta_scheme_build_for_test:
     description: Build FirefoxBeta scheme and shard XCUITests for parallel execution
     steps:
-    - activate-ssh-key@4:
+    - activate-ssh-key@4.1.1:
         run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
     - git-clone@6.2: {}
-    - certificate-and-profile-installer@1: {}
-    - restore-spm-cache@1:
+    - certificate-and-profile-installer@1.11.6: {}
+    - restore-spm-cache@3.0.1:
         is_always_run: true
     - script@1.2.1:
         title: Run bootstrap
@@ -432,7 +432,7 @@ workflows:
             set -e
             set -x
             ./bootstrap.sh
-    - xcode-build-for-test@3:
+    - xcode-build-for-test@3.4.0:
         inputs:
         - scheme: FirefoxBeta
         - configuration: FirefoxBeta
@@ -459,7 +459,7 @@ workflows:
 
             echo "Found Smoketest .xctestrun: $SMOKE_UI_XCTESTRUN"
             envman add --key BITRISE_XCTESTRUN_SMOKE_TEST_FILE_PATH --value "$SMOKE_UI_XCTESTRUN"
-    - xcode-test-shard-calculation@0:
+    - xcode-test-shard-calculation@0.2.1:
         run_if: '{{enveq "BITRISE_TEST_BUNDLE_PATH" "" | not}}'
         inputs:
         - product_path: $BITRISE_XCTESTRUN_SMOKE_TEST_FILE_PATH
@@ -468,7 +468,7 @@ workflows:
         outputs:
         - BITRISE_TEST_SHARDS_PATH: BITRISE_TEST_SHARDS_PATH_FIREFOX_BETA_SCHEME
         is_always_run: true
-    - deploy-to-bitrise-io@2.10.0:
+    - deploy-to-bitrise-io@2.24.0:
         run_if: '{{enveq "BITRISE_TEST_BUNDLE_PATH" "" | not}}'
         inputs:
         - pipeline_intermediate_files: |-
@@ -482,28 +482,28 @@ workflows:
     - 1_git_clone_and_post_clone
     - 2_certificate_and_profile
     steps:
-    - pull-intermediate-files@1: {}
+    - pull-intermediate-files@1.3.7: {}
     - xcode-test-without-building@0.5.1:
         inputs:
         - only_testing: $BITRISE_TEST_SHARDS_PATH_FIREFOX_BETA_SCHEME/$BITRISE_IO_PARALLEL_INDEX
         - destination: platform=iOS Simulator,name=iPhone 17,OS=26.2
         - xcodebuild_options: '"COMPILER_INDEX_STORE_ENABLE=NO"'
         - xctestrun: $BITRISE_TEST_BUNDLE_PATH/FirefoxBeta_Smoketest_iphonesimulator26.2-arm64-x86_64.xctestrun
-    - deploy-to-bitrise-io@2.10.0: {}
+    - deploy-to-bitrise-io@2.24.0: {}
   firefox_beta_scheme_smoke_tests:
     description: Run XCUITests on FirefoxBeta scheme (non-parallelized, for standalone use)
     before_run:
     - firefox_beta_scheme_build_for_test
     steps:
-    - pull-intermediate-files@1: {}
+    - pull-intermediate-files@1.3.7: {}
     - xcode-test-without-building@0.5.1:
         inputs:
         - destination: platform=iOS Simulator,name=iPhone 17,OS=26.2
         - xcodebuild_options: '"COMPILER_INDEX_STORE_ENABLE=NO" "CODE_SIGN_IDENTITY=" "CODE_SIGNING_REQUIRED=NO" "CODE_SIGNING_ALLOWED=NO"'
         - xctestrun: $BITRISE_XCTESTRUN_SMOKE_TEST_FILE_PATH
         - maximum_test_repetitions: 2
-    - deploy-to-bitrise-io@2.10.0: {}
-    - slack@4.2.1:
+    - deploy-to-bitrise-io@2.24.0: {}
+    - slack@4.3.0:
         run_if: ".IsBuildFailed"
         inputs:
         - channel: "#mobile-alerts-ios"
@@ -627,7 +627,7 @@ workflows:
             echo "BUILD_FOCUS_IOS: $BUILD_FOCUS_IOS"
             echo "BUILD_SAMPLE_BROWSER_IOS: $BUILD_SAMPLE_BROWSER_IOS"
 
-    - share-pipeline-variable@1:
+    - share-pipeline-variable@1.1.2:
         inputs:
         - variables: |-
             BUILD_FIREFOX_IOS
@@ -646,7 +646,7 @@ workflows:
 
   send_slack_notification:
     steps:
-    - slack@4.2.1:
+    - slack@4.3.0:
         inputs:
         - title: ''
         - author_name: ''
@@ -722,7 +722,7 @@ workflows:
     - cache-pull@2.7.2: {}
   2_certificate_and_profile:
     steps:
-    - certificate-and-profile-installer@1.11.4: {}
+    - certificate-and-profile-installer@1.11.6: {}
     - script@1.2.1:
         inputs:
         - content: |-
@@ -753,7 +753,7 @@ workflows:
         inputs:
         - linting_path: "$BITRISE_SOURCE_DIR"
         - lint_config_file: ""  # Don't pass a config file to make use of nested configurations
-    - deploy-to-bitrise-io@2.10.0: {}
+    - deploy-to-bitrise-io@2.24.0: {}
     - script@1.2.1:
         inputs:
         - content: |-
@@ -865,7 +865,7 @@ workflows:
             else
                 echo "Not Running UI Tests"
             fi
-    - share-pipeline-variable@1.1.1:
+    - share-pipeline-variable@1.1.2:
         inputs:
         - variables: RUN_UI_TESTS
   NewXcodeVersions:
@@ -904,7 +904,7 @@ workflows:
         run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
     - git-clone@6.2: {}
     - cache-pull@2.7.2: {}
-    - certificate-and-profile-installer@1.11.4: {}
+    - certificate-and-profile-installer@1.11.6: {}
     - script@1.2.1:
         run_if: '{{getenv "NEW_XCODE_VERSION" | eq "New_Version_Found" | or (getenv "RUN_ALL_STEPS" | eq "Run_All_Steps")}}'
         inputs:
@@ -940,19 +940,19 @@ workflows:
 
             npm install
             npm run build
-    - xcode-build-for-simulator@3.0.0:
+    - xcode-build-for-simulator@3.0.3:
         run_if: '{{getenv "NEW_XCODE_VERSION" | eq "New_Version_Found" | or (getenv "RUN_ALL_STEPS" | eq "Run_All_Steps")}}'
         inputs:
         - xcodebuild_options: CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
         - scheme: Fennec
         - simulator_device: iPhone 17
-    - xcode-test@6.0.0:
+    - xcode-test@6.3.0:
         run_if: '{{getenv "NEW_XCODE_VERSION" | eq "New_Version_Found" | or (getenv "RUN_ALL_STEPS" | eq "Run_All_Steps")}}'
         inputs:
         - scheme: Fennec
         - destination: platform=iOS Simulator,name=iPhone 17,OS=26.2
-    - deploy-to-bitrise-io@2.10.0: {}
-    - slack@4.2.1:
+    - deploy-to-bitrise-io@2.24.0: {}
+    - slack@4.3.0:
         run_if: '{{getenv "NEW_XCODE_VERSION" | eq "New_Version_Found" | or (getenv "RUN_ALL_STEPS" | eq "Run_All_Steps")}}'
         inputs:
         - channel: "#firefox-ios"
@@ -970,7 +970,7 @@ workflows:
         run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
     - git-clone@6.2: {}
     - cache-pull@2.7.2: {}
-    - certificate-and-profile-installer@1.11.4: {}
+    - certificate-and-profile-installer@1.11.6: {}
     - script@1.2.1:
         inputs:
         - content: |-
@@ -1002,11 +1002,11 @@ workflows:
 
             ./firefox-ios/l10n-screenshots.sh en-US
         title: Generate screenshots
-    - save-cache@1.4.0:
+    - save-cache@1.5.2:
         inputs:
         - key: l10n-screenshots-dd-$GIT_CLONE_COMMIT_HASH
         - paths: l10n-screenshots-dd
-    - deploy-to-bitrise-io@2.10.0:
+    - deploy-to-bitrise-io@2.24.0:
         inputs:
         - deploy_path: l10n-screenshots/en-US/en-US
         - is_compress: 'true'
@@ -1022,8 +1022,8 @@ workflows:
     - activate-ssh-key@4.1.1:
         run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
     - git-clone@6.2: {}
-    - certificate-and-profile-installer@1.11.4: {}
-    - restore-cache@2.5.0:
+    - certificate-and-profile-installer@1.11.6: {}
+    - restore-cache@3.0.1:
         inputs:
         - key: |-
             l10n-screenshots-dd-$GIT_CLONE_COMMIT_HASH
@@ -1049,7 +1049,7 @@ workflows:
               mv "$locale.zip" artifacts/
             done
         title: Generate screenshots
-    - deploy-to-bitrise-io@2.10.0:
+    - deploy-to-bitrise-io@2.24.0:
         inputs:
         - deploy_path: artifacts/
     envs:
@@ -1084,31 +1084,31 @@ workflows:
             set -x
 
             ./bootstrap.sh
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/Client/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/Extensions/NotificationService/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/Extensions/ShareTo/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/WidgetKit/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/CredentialProvider/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/sticker/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/Extensions/ActionExtension/Info.plist
@@ -1126,7 +1126,7 @@ workflows:
             echo "Setting Nimbus variables"
             /usr/libexec/PlistBuddy -c "Set NimbusURL $NIMBUS_URL" "firefox-ios/Client/Info.plist"
         title: Nimbus Variable Setup
-    - xcode-archive@4.0:
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: firefox-ios/Client.xcodeproj
         - compile_bitcode: 'no'
@@ -1137,8 +1137,8 @@ workflows:
         - distribution_method: app-store
         - export_development_team: 43AQ936H96
         - configuration: "$BITRISE_SCHEME"
-    - deploy-to-bitrise-io@2.9.2: {}
-    - deploy-to-itunesconnect-application-loader@1.3:
+    - deploy-to-bitrise-io@2.24.0: {}
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         inputs:
         - app_password: "$APPLE_ACCOUNT_PW"
         - password: "$APPLE_ACCOUNT_PW"
@@ -1161,10 +1161,10 @@ workflows:
             # sleep 9999
         is_always_run: true
         title: debug-sleep
-    - slack@3.2:
+    - slack@4.3.0:
         inputs:
         - webhook_url: "$WEBHOOK_SLACK_TOKEN"
-    - xcode-archive@4.0:
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: firefox-ios/Client.xcodeproj
         - compile_bitcode: 'no'
@@ -1177,7 +1177,7 @@ workflows:
         - distribution_method: app-store
         - configuration: FirefoxBeta
         title: 'FirefoxBeta: Xcode Archive & Export for iOS'
-    - deploy-to-itunesconnect-application-loader@1.3:
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         inputs:
         - app_password: "$APPLE_ACCOUNT_PW"
         - connection: 'off'
@@ -1213,31 +1213,31 @@ workflows:
             set -x
 
             ./bootstrap.sh
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_BETA_VERSION"
         - plist_path: firefox-ios/Client/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_BETA_VERSION"
         - plist_path: firefox-ios/Extensions/NotificationService/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_BETA_VERSION"
         - plist_path: firefox-ios/Extensions/ShareTo/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_BETA_VERSION"
         - plist_path: firefox-ios/WidgetKit/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_BETA_VERSION"
         - plist_path: firefox-ios/CredentialProvider/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_BETA_VERSION"
         - plist_path: firefox-ios/sticker/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_BETA_VERSION"
         - plist_path: firefox-ios/Extensions/ActionExtension/Info.plist
@@ -1254,7 +1254,7 @@ workflows:
             echo "Setting Nimbus variables"
             /usr/libexec/PlistBuddy -c "Set NimbusURL $NIMBUS_URL" "firefox-ios/Client/Info.plist"
         title: Nimbus Variable Setup
-    - xcode-archive@4.0:
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: firefox-ios/Client.xcodeproj
         - compile_bitcode: 'no'
@@ -1267,7 +1267,7 @@ workflows:
         - distribution_method: app-store
         - configuration: FirefoxBeta
         title: 'FirefoxBeta: Xcode Archive & Export for iOS'
-    - deploy-to-itunesconnect-application-loader@1.3:
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         inputs:
         - app_password: "$APPLE_ACCOUNT_PW"
         - connection: 'off'
@@ -1292,7 +1292,7 @@ workflows:
     - activate-ssh-key@4.1.1:
         run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
     - git-clone@6.2: {}
-    - certificate-and-profile-installer@1.11.4: {}
+    - certificate-and-profile-installer@1.11.6: {}
     - script@1.2.1:
         inputs:
         - content: |-
@@ -1315,31 +1315,31 @@ workflows:
             set -x
 
             ./bootstrap.sh
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_NIGHTLY_VERSION"
         - plist_path: firefox-ios/Client/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_NIGHTLY_VERSION"
         - plist_path: firefox-ios/Extensions/NotificationService/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_NIGHTLY_VERSION"
         - plist_path: firefox-ios/Extensions/ShareTo/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_NIGHTLY_VERSION"
         - plist_path: firefox-ios/WidgetKit/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_NIGHTLY_VERSION"
         - plist_path: firefox-ios/CredentialProvider/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_NIGHTLY_VERSION"
         - plist_path: firefox-ios/sticker/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_NIGHTLY_VERSION"
         - plist_path: firefox-ios/Extensions/ActionExtension/Info.plist
@@ -1357,7 +1357,7 @@ workflows:
             echo "Setting Nimbus variables"
             /usr/libexec/PlistBuddy -c "Set NimbusURL $NIMBUS_URL" "firefox-ios/Client/Info.plist"
         title: Nimbus Variable Setup
-    - xcode-archive@4.0:
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: firefox-ios/Client.xcodeproj
         - compile_bitcode: 'no'
@@ -1370,8 +1370,8 @@ workflows:
         - distribution_method: app-store
         - configuration: FirefoxBeta
         title: 'FirefoxBeta: Xcode Archive & Export for iOS'
-    - deploy-to-bitrise-io@2.9.2: {}
-    - deploy-to-itunesconnect-application-loader@1.3:
+    - deploy-to-bitrise-io@2.24.0: {}
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         inputs:
         - app_password: "$APPLE_ACCOUNT_PW"
         - connection: 'off'
@@ -1396,7 +1396,7 @@ workflows:
     - activate-ssh-key@4.1.1:
         run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
     - git-clone@6.2: {}
-    - certificate-and-profile-installer@1.11.4: {}
+    - certificate-and-profile-installer@1.11.6: {}
     - script@1.2.1:
         is_always_run: true
         title: Read version from version.txt file
@@ -1417,7 +1417,7 @@ workflows:
     steps:
     - cache-pull@2.7.2:
         is_always_run: true
-    - xcode-test@6.0.0:
+    - xcode-test@6.3.0:
         inputs:
         - project_path: firefox-ios/Client.xcodeproj
         - scheme: Fennec
@@ -1457,7 +1457,7 @@ workflows:
             python3 perfTestTransform.py
             mkdir -p "$BITRISE_DEPLOY_DIR"
             mv perfherder-data.json $BITRISE_DEPLOY_DIR
-    - deploy-to-bitrise-io@2.10.0: {}
+    - deploy-to-bitrise-io@2.24.0: {}
     before_run:
     - 1_git_clone_and_post_clone
     - 2_certificate_and_profile
@@ -1468,7 +1468,7 @@ workflows:
     - 2_certificate_and_profile
     - 3_provisioning_and_npm_installation
     steps:
-    - xcode-archive@5.4.0:
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: firefox-ios/Client.xcodeproj
         - compile_bitcode: 'no'
@@ -1480,7 +1480,7 @@ workflows:
         - output_tool: xcodebuild
         - scheme: Fennec_Enterprise
         - configuration: Fennec_Enterprise
-    - deploy-to-bitrise-io@2.10.0: {}
+    - deploy-to-bitrise-io@2.24.0: {}
     - script@1.2.1:
         title: Update Google Cloud SDK Components
         inputs:
@@ -1537,7 +1537,7 @@ workflows:
                 SLACK_MESSAGE_PRETEXT="*Firefox-iOS* :firefox: *Archive/Robo Test* :white_check_mark:"
             fi
             envman add --key SLACK_MESSAGE_PRETEXT --value "$SLACK_MESSAGE_PRETEXT"
-    - slack@4.2.1:
+    - slack@4.3.0:
         is_always_run: true
         inputs:
         - title: ''
@@ -1564,7 +1564,7 @@ workflows:
     - 2_certificate_and_profile
     - 3_provisioning_and_npm_installation
     steps:
-    - xcode-archive@5.4.0:
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: firefox-ios/Client.xcodeproj
         - compile_bitcode: 'no'
@@ -1577,7 +1577,7 @@ workflows:
         - scheme: Fennec_Enterprise
         - configuration: Fennec_Enterprise
         - xcconfig_content: ENABLE_DEBUG_DYLIB=NO
-    - deploy-to-bitrise-io@2.10.0: {}
+    - deploy-to-bitrise-io@2.24.0: {}
     - script@1.2.1:
         title: Firebase Build for Testing Physical Devices
         inputs:
@@ -1775,7 +1775,7 @@ workflows:
             python3 perfTestTransform.py
             mkdir -p "$BITRISE_DEPLOY_DIR"
             mv perfherder-data.json $BITRISE_DEPLOY_DIR
-    - deploy-to-bitrise-io@2.10.0: {}
+    - deploy-to-bitrise-io@2.24.0: {}
     meta:
       bitrise.io:
         stack: osx-xcode-16.2.x
@@ -1790,7 +1790,7 @@ workflows:
     - 2_certificate_and_profile
     - 3_provisioning_and_npm_installation
     steps:
-    - xcode-build-for-test@3:
+    - xcode-build-for-test@3.4.0:
         title: "Build for Testing"
         inputs:
         - scheme: Fennec
@@ -1838,7 +1838,7 @@ workflows:
         - destination: platform=iOS Simulator,name=iPhone 15,OS=17.5
         - xctestrun: $BITRISE_TEST_BUNDLE_PATH/Fennec_UnitTest_iphonesimulator17.5-arm64.xctestrun
         - xcodebuild_options: '"COMPILER_INDEX_STORE_ENABLE=NO" "CODE_SIGN_IDENTITY=" "CODE_SIGNING_REQUIRED=NO" "CODE_SIGNING_ALLOWED=NO"'
-    - deploy-to-bitrise-io@2.10.0: {}
+    - deploy-to-bitrise-io@2.24.0: {}
     - script@1.2.1:
         title: "Capture Xcode Version Info"
         is_always_run: true
@@ -1855,7 +1855,7 @@ workflows:
 
             # Export to environment for Slack notification
             envman add --key XCODE_VERSION_INFO --value "$XCODE_VER ($BUILD_VER)"
-    - slack@4.2.1:
+    - slack@4.3.0:
         inputs:
         - webhook_url: $WEBHOOK_SLACK_FIREFOX_IOS_UNIT_TESTS
         - author_name: ''
@@ -1887,7 +1887,7 @@ workflows:
     - 2_certificate_and_profile
     - 3_provisioning_and_npm_installation
     steps:
-    - xcode-test@6.0.1:
+    - xcode-test@6.3.0:
         timeout: 6000
         inputs:
         - project_path: firefox-ios/Client.xcodeproj
@@ -1898,7 +1898,7 @@ workflows:
         - test_repetition_mode: until_failure
         - maximum_test_repetitions: 3
         - xcodebuild_options: '"COMPILER_INDEX_STORE_ENABLE=NO" "CODE_SIGN_IDENTITY=" "CODE_SIGNING_REQUIRED=NO" "CODE_SIGNING_ALLOWED=NO" "-parallel-testing-enabled" "NO" "-parallel-testing-worker-count" "2"'
-    - deploy-to-bitrise-io@2.10.0: {}
+    - deploy-to-bitrise-io@2.24.0: {}
 
   #
   # *****%*****%***** FOCUS WORKFLOWS *****%*****%*****
@@ -1918,7 +1918,7 @@ workflows:
             #!/usr/bin/env bash
             set -x
             /usr/libexec/PlistBuddy -c "Add :com.apple.developer.web-browser bool true" Klar.entitlements
-    - xcode-build-for-test@3:
+    - xcode-build-for-test@3.4.0:
         inputs:
         - scheme: Focus
         - configuration: FocusDebug
@@ -1942,18 +1942,18 @@ workflows:
         - destination: platform=iOS Simulator,name=iPhone 17,OS=26.2
         - xcodebuild_options: '"COMPILER_INDEX_STORE_ENABLE=NO" "CODE_SIGN_IDENTITY=" "CODE_SIGNING_REQUIRED=NO" "CODE_SIGNING_ALLOWED=NO"'
         - xctestrun: $BITRISE_TEST_BUNDLE_PATH/Focus_UnitTests_iphonesimulator26.2-arm64.xctestrun
-    - xcode-test-shard-calculation@0:
+    - xcode-test-shard-calculation@0.2.1:
         inputs:
         - product_path: $BITRISE_XCTESTRUN_FOCUS_UI_TEST_FILE_PATH
         - shard_count: 1
         - destination: $BITRISE_DESTINATION
-    - deploy-to-bitrise-io@2.10.0:
+    - deploy-to-bitrise-io@2.24.0:
         inputs:
         - pipeline_intermediate_files: |-
             BITRISE_TEST_BUNDLE_PATH
             BITRISE_TEST_SHARDS_PATH
             BITRISE_XCTESTRUN_FOCUS_UI_TEST_FILE_PATH
-    - slack@4.2.1:
+    - slack@4.3.0:
         run_if: ".IsBuildFailed"
         inputs:
         - channel: "#mobile-alerts-ios"
@@ -1975,7 +1975,7 @@ workflows:
             #!/usr/bin/env bash
             set -x
             /usr/libexec/PlistBuddy -c "Add :com.apple.developer.web-browser bool true" Klar.entitlements
-    - xcode-build-for-test@3:
+    - xcode-build-for-test@3.4.0:
         inputs:
         - scheme: Klar
         - configuration: KlarDebug
@@ -1988,8 +1988,8 @@ workflows:
         - destination: platform=iOS Simulator,name=iPhone 17,OS=26.2
         - xcodebuild_options: '"COMPILER_INDEX_STORE_ENABLE=NO" "CODE_SIGN_IDENTITY=" "CODE_SIGNING_REQUIRED=NO" "CODE_SIGNING_ALLOWED=NO"'
         - xctestrun: $BITRISE_TEST_BUNDLE_PATH/Klar_UnitTests_iphonesimulator26.2-arm64.xctestrun
-    - deploy-to-bitrise-io@2.10.0: {}
-    - slack@4.2.1:
+    - deploy-to-bitrise-io@2.24.0: {}
+    - slack@4.3.0:
         run_if: ".IsBuildFailed"
         inputs:
         - channel: "#mobile-alerts-ios"
@@ -2017,7 +2017,7 @@ workflows:
                 envman add --key TEST_PLAN_NAME --value SmokeTest
             fi
         - title: Check if build is scheduled or regular to set the test plan
-    - pull-intermediate-files@1: {}
+    - pull-intermediate-files@1.3.7: {}
     - xcode-test-without-building@0.5.1:
         timeout: 1200
         inputs:
@@ -2025,11 +2025,11 @@ workflows:
         - destination: platform=iOS Simulator,name=iPhone 17,OS=26.2
         - xcodebuild_options: '"COMPILER_INDEX_STORE_ENABLE=NO" "CODE_SIGN_IDENTITY=" "CODE_SIGNING_REQUIRED=NO" "CODE_SIGNING_ALLOWED=NO"'
         - xctestrun: $BITRISE_TEST_BUNDLE_PATH/Focus_SmokeTest_iphonesimulator26.2-arm64.xctestrun
-    - deploy-to-bitrise-io@2.10.0: {}
+    - deploy-to-bitrise-io@2.24.0: {}
     - github-status@3.0.1:
         inputs:
         - status_identifier: "Focus-build"
-    - slack@4.2.1:
+    - slack@4.3.0:
         run_if: ".IsBuildFailed"
         inputs:
         - channel: "#mobile-alerts-ios"
@@ -2051,22 +2051,22 @@ workflows:
 
   focus-set-project-version:
     steps:
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: focus-ios/Blockzilla/Info.plist
         title: Set Blockzilla version numbers
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: focus-ios/ContentBlocker/Info.plist
         title: Set ContentBlocker version numbers
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: focus-ios/FocusIntentExtension/Info.plist
         title: Set FocusIntentExtension version numbers
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: focus-ios/OpenInFocus/Info.plist
@@ -2197,35 +2197,35 @@ workflows:
     - focus-configure-nimbus
     - focus-configure-sentry
     steps:
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_BETA_VERSION"
         - plist_path: focus-ios/Blockzilla/Info.plist
         title: Set Blockzilla version numbers
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_BETA_VERSION"
         - plist_path: focus-ios/ContentBlocker/Info.plist
         title: Set ContentBlocker version numbers
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_BETA_VERSION"
         - plist_path: focus-ios/FocusIntentExtension/Info.plist
         title: Set FocusIntentExtension version numbers
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_BETA_VERSION"
         - plist_path: focus-ios/OpenInFocus/Info.plist
         title: Set OpenInFocus version numbers
-    - certificate-and-profile-installer@1: {}
-    - xcode-archive@3:
+    - certificate-and-profile-installer@1.11.6: {}
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: focus-ios/Blockzilla.xcodeproj
         - scheme: Focus
         - team_id: 43AQ936H96
         - export_method: app-store
         title: Build Focus
-    - deploy-to-itunesconnect-application-loader@1:
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         inputs:
         - connection: 'off'
         - app_password: "$APPLE_ACCOUNT_PW"
@@ -2238,13 +2238,13 @@ workflows:
             set -x
             focus-ios/focus-ios-tests/tools/sentry-cli --auth-token "$SENTRY_AUTH_TOKEN" upload-dif \
               --org mozilla --project focus-ios "$BITRISE_DSYM_DIR_PATH"
-    - xcode-archive@3:
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: focus-ios/Blockzilla.xcodeproj
         - scheme: Klar
         - export_method: app-store
         title: Build Klar
-    - deploy-to-itunesconnect-application-loader@1:
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         inputs:
         - connection: 'off'
         - app_password: "$APPLE_ACCOUNT_PW"
@@ -2265,35 +2265,35 @@ workflows:
     - focus-configure-nimbus
     - focus-configure-sentry
     steps:
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_NIGHTLY_VERSION"
         - plist_path: focus-ios/Blockzilla/Info.plist
         title: Set Blockzilla version numbers
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_NIGHTLY_VERSION"
         - plist_path: focus-ios/ContentBlocker/Info.plist
         title: Set ContentBlocker version numbers
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_NIGHTLY_VERSION"
         - plist_path: focus-ios/FocusIntentExtension/Info.plist
         title: Set FocusIntentExtension version numbers
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_NIGHTLY_VERSION"
         - plist_path: focus-ios/OpenInFocus/Info.plist
         title: Set OpenInFocus version numbers
-    - certificate-and-profile-installer@1.11.4: {}
-    - xcode-archive@3:
+    - certificate-and-profile-installer@1.11.6: {}
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: focus-ios/Blockzilla.xcodeproj
         - scheme: Focus
         - team_id: 43AQ936H96
         - export_method: app-store
         title: Build Focus
-    - deploy-to-itunesconnect-application-loader@1:
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         inputs:
         - connection: 'off'
         - app_password: "$APPLE_ACCOUNT_PW"
@@ -2306,13 +2306,13 @@ workflows:
             set -x
             focus-ios/focus-ios-tests/tools/sentry-cli --auth-token "$SENTRY_AUTH_TOKEN" upload-dif \
               --org mozilla --project focus-ios "$BITRISE_DSYM_DIR_PATH"
-    - xcode-archive@3:
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: focus-ios/Blockzilla.xcodeproj
         - scheme: Klar
         - export_method: app-store
         title: Build Klar
-    - deploy-to-itunesconnect-application-loader@1:
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         inputs:
         - connection: 'off'
         - app_password: "$APPLE_ACCOUNT_PW"
@@ -2334,15 +2334,15 @@ workflows:
     - focus-configure-nimbus
     - focus-configure-sentry
     steps:
-    - certificate-and-profile-installer@1: {}
-    - xcode-archive@3:
+    - certificate-and-profile-installer@1.11.6: {}
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: focus-ios/Blockzilla.xcodeproj
         - scheme: Focus
         - team_id: 43AQ936H96
         - export_method: app-store
         title: Build Focus
-    - deploy-to-itunesconnect-application-loader@1:
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         inputs:
         - connection: 'off'
         - app_password: "$APPLE_ACCOUNT_PW"
@@ -2355,13 +2355,13 @@ workflows:
             set -x
             focus-ios/focus-ios-tests/tools/sentry-cli --auth-token "$SENTRY_AUTH_TOKEN" upload-dif \
               --org mozilla --project focus-ios "$BITRISE_DSYM_DIR_PATH"
-    - xcode-archive@3:
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: focus-ios/Blockzilla.xcodeproj
         - scheme: Klar
         - export_method: app-store
         title: Build Klar
-    - deploy-to-itunesconnect-application-loader@1:
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         inputs:
         - connection: 'off'
         - app_password: "$APPLE_ACCOUNT_PW"
@@ -2419,8 +2419,8 @@ workflows:
             envman add --key EXPORT_METHOD --value development
         run_if: |-
           {{enveq "BITRISE_APP_TITLE" "staging-firefox-ios"}}
-    - certificate-and-profile-installer@1: {}
-    - xcode-archive@5:
+    - certificate-and-profile-installer@1.11.6: {}
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: focus-ios/Blockzilla.xcodeproj
         - compile_bitcode: 'no'
@@ -2434,7 +2434,7 @@ workflows:
         - platform: "iOS"
         - scheme: ${BITRISE_SCHEME}
         title: Build Focus
-    - deploy-to-bitrise-io@2.9.2: {}
+    - deploy-to-bitrise-io@2.24.0: {}
     envs:
     - opts:
         is_expand: false
@@ -2466,12 +2466,12 @@ workflows:
             else
               envman add --key SENTRY_PROJECT --value "klar-ios"
             fi
-    - file-downloader@1:
+    - file-downloader@2.0.0:
         title: Download Artifact
         inputs:
         - destination: $IPA_PATH
         - source: https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/$BUILD_TASK_ID/artifacts/public%2Frelease_promotion_promote_focus%2FFirefox%20${BITRISE_SCHEME}.ipa
-    - file-downloader@1:
+    - file-downloader@2.0.0:
         title: Download symbols
         inputs:
         - destination: $DSYM_PATH
@@ -2506,7 +2506,7 @@ workflows:
             set -xe
             firefox-ios/ThirdParty/sentry-cli --auth-token "$SENTRY_AUTH_TOKEN" upload-dif \
               --org mozilla --project ${SENTRY_PROJECT} "$DSYM_PATH"
-    - deploy-to-itunesconnect-application-loader@1:
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         title: Deploy to AppStoreConnect
         run_if: |-
           {{enveq "BITRISE_APP_TITLE" "firefox-ios"}}
@@ -2567,31 +2567,31 @@ workflows:
             set -xe
 
             ./bootstrap.sh
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/Client/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/Extensions/NotificationService/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/Extensions/ShareTo/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/WidgetKit/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/CredentialProvider/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/sticker/Info.plist
-    - set-xcode-build-number@1:
+    - set-xcode-build-number@2.2.0:
         inputs:
         - build_short_version_string: "$BITRISE_RELEASE_VERSION"
         - plist_path: firefox-ios/Extensions/ActionExtension/Info.plist
@@ -2604,7 +2604,7 @@ workflows:
             echo "Setting Nimbus variables"
             /usr/libexec/PlistBuddy -c "Set NimbusURL $NIMBUS_URL" "firefox-ios/Client/Info.plist"
         title: Nimbus Variable Setup
-    - xcode-archive@5:
+    - xcode-archive@6.1.2:
         inputs:
         - project_path: firefox-ios/Client.xcodeproj
         - compile_bitcode: 'no'
@@ -2615,7 +2615,7 @@ workflows:
         - distribution_method: "$EXPORT_METHOD"
         - export_development_team: 43AQ936H96
         - configuration: "$BITRISE_SCHEME"
-    - deploy-to-bitrise-io@2.9.2: {}
+    - deploy-to-bitrise-io@2.24.0: {}
     envs:
     - opts:
         is_expand: false
@@ -2642,12 +2642,12 @@ workflows:
     - IPA_PATH: /tmp/Client.ipa
     - DSYM_PATH: /tmp/symbols.zip
     steps:
-    - file-downloader@1:
+    - file-downloader@2.0.0:
         title: Download Artifact
         inputs:
         - destination: $IPA_PATH
         - source: https://firefox-ci-tc.services.mozilla.com/api/queue/v1/task/$BUILD_TASK_ID/artifacts/public%2Frelease_promotion_promote%2FClient.ipa
-    - file-downloader@1:
+    - file-downloader@2.0.0:
         title: Download symbols
         inputs:
         - destination: $DSYM_PATH
@@ -2682,7 +2682,7 @@ workflows:
             set -xe
             firefox-ios/ThirdParty/sentry-cli --auth-token "$SENTRY_AUTH_TOKEN_FIREFOX" upload-dif \
               --org mozilla --project firefox-ios "$DSYM_PATH"
-    - deploy-to-itunesconnect-application-loader@1:
+    - deploy-to-itunesconnect-application-loader@2.1.0:
         title: Deploy to AppStoreConnect
         run_if: |-
           {{enveq "BITRISE_APP_TITLE" "firefox-ios"}}
